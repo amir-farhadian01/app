@@ -1,11 +1,13 @@
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Loader2, X } from 'lucide-react';
+import { LayoutList, Loader2, MessageCircle, X } from 'lucide-react';
 import { isServiceQuestionnaireV1, type ServiceFieldDef } from '../../../../lib/serviceDefinitionTypes';
 import { resolveMediaUrl } from '../../../lib/resolveMediaUrl';
 import type { ProviderInboxItem } from '../../../services/providerInbox';
 import { cn } from '../../../lib/utils';
 import type { LostFeedbackReason } from '../../../services/providerInbox';
 import { LostFeedbackPanel } from './LostFeedbackPanel';
+import { InboxDrawerChat } from './InboxDrawerChat';
 
 function fmtPrice(n: number, ccy: string) {
   try {
@@ -53,6 +55,111 @@ function answerText(field: ServiceFieldDef, value: unknown): string {
   return String(value);
 }
 
+function serviceBreadcrumb(item: ProviderInboxItem): string {
+  const cat = item.serviceCatalog?.category?.trim();
+  const svc = item.serviceCatalog?.name?.trim() || item.package.name;
+  if (cat && svc) {
+    if (cat.includes(svc)) return cat;
+    return `${cat} › ${svc}`;
+  }
+  return svc || 'Service';
+}
+
+function lifecycleStatusBadge(item: ProviderInboxItem): string {
+  if (item.order.status === 'completed') return 'COMPLETED';
+  if (item.status === 'invited') return 'INVITED';
+  if (item.status === 'matched') return 'MATCHED';
+  if (item.status === 'accepted') return 'ACKNOWLEDGED';
+  if (item.status === 'declined') return 'DECLINED';
+  if (item.status === 'expired') return 'EXPIRED';
+  if (item.status === 'superseded') return 'LOST';
+  return String(item.status).toUpperCase();
+}
+
+function timelineHint(item: ProviderInboxItem): string {
+  if (item.order.scheduledAt) {
+    return new Date(item.order.scheduledAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+  if (item.order.scheduleFlexibility === 'this_week') return 'This week';
+  if (item.order.scheduleFlexibility === 'asap') return 'As soon as possible';
+  return formatScheduleLabel(item.order.scheduleFlexibility, item.order.scheduledAt);
+}
+
+function pickStr(obj: Record<string, unknown> | null | undefined, key: string): string | undefined {
+  if (!obj) return undefined;
+  const v = obj[key];
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+function pickNum(obj: Record<string, unknown> | null | undefined, key: string): number | undefined {
+  if (!obj) return undefined;
+  const v = obj[key];
+  return typeof v === 'number' && !Number.isNaN(v) ? v : undefined;
+}
+
+function effectiveBookingMode(item: ProviderInboxItem): 'auto_appointment' | 'negotiation' | 'inherit' {
+  const bm = item.package.bookingMode;
+  if (bm === 'auto_appointment' || bm === 'negotiation') return bm;
+  const locked = item.package.serviceCatalog?.lockedBookingMode;
+  if (locked === 'auto_appointment' || locked === 'negotiation') return locked;
+  return 'inherit';
+}
+
+const TIME_PREF_LABELS: Record<string, string> = {
+  AS_SOON_AS_POSSIBLE: 'As soon as possible',
+  THIS_WEEK: 'This week',
+  NEXT_WEEK: 'Next week',
+  FLEXIBLE: 'Flexible',
+};
+
+function schedulingBlock(item: ProviderInboxItem): string {
+  const picks = item.order.customerPicks ?? undefined;
+  const mode = effectiveBookingMode(item);
+  if (mode === 'negotiation') {
+    const tp = pickStr(picks, 'wizardTimePreference') ?? pickStr(picks, 'timePreference');
+    if (tp && TIME_PREF_LABELS[tp]) return `Negotiation · ${TIME_PREF_LABELS[tp]}`;
+    return `Negotiation · ${formatScheduleLabel(item.order.scheduleFlexibility, item.order.scheduledAt)}`;
+  }
+  if (item.order.scheduledAt) {
+    return `Scheduled · ${new Date(item.order.scheduledAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`;
+  }
+  return `Auto booking · ${formatScheduleLabel(item.order.scheduleFlexibility, item.order.scheduledAt)}`;
+}
+
+function budgetLine(item: ProviderInboxItem): string | null {
+  const picks = item.order.customerPicks;
+  const min = pickNum(picks ?? undefined, 'budgetMin');
+  const max = pickNum(picks ?? undefined, 'budgetMax');
+  if (min == null && max == null) return null;
+  const ccy = item.package.currency || 'CAD';
+  if (min != null && max != null) return `${fmtPrice(min, ccy)} – ${fmtPrice(max, ccy)}`;
+  if (min != null) return `From ${fmtPrice(min, ccy)}`;
+  if (max != null) return `Up to ${fmtPrice(max, ccy)}`;
+  return null;
+}
+
+function structuredAddressLines(item: ProviderInboxItem): { street?: string; city?: string; postal?: string } {
+  const picks = item.order.customerPicks;
+  return {
+    street: pickStr(picks ?? undefined, 'addressStreet'),
+    city: pickStr(picks ?? undefined, 'addressCity'),
+    postal: pickStr(picks ?? undefined, 'addressPostal'),
+  };
+}
+
+function customerDisplayLabel(item: ProviderInboxItem, revealPii: boolean): string {
+  if (revealPii) {
+    return [item.customer.firstName, item.customer.lastName].filter(Boolean).join(' ') || item.customer.displayName || 'Customer';
+  }
+  const fn = item.customer.firstName?.trim();
+  const ln = item.customer.lastName?.trim();
+  if (fn && ln) return `${fn} ${ln.slice(0, 1).toUpperCase()}.`;
+  if (fn) return `${fn.slice(0, 1).toUpperCase()}.`;
+  const dn = item.customer.displayName?.trim();
+  if (dn) return `${dn.slice(0, 1).toUpperCase()}.`;
+  return 'Customer';
+}
+
 export function InboxDetailDrawer({
   open,
   item,
@@ -90,7 +197,17 @@ export function InboxDetailDrawer({
   }) => void;
   onMaybeLaterLostFeedback?: (attemptId: string) => void;
 }) {
-  const photos = item ? parsePhotos(item.order.photos) : [];
+  const [mainTab, setMainTab] = useState<'details' | 'chat'>('details');
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setMainTab('details');
+      setLightboxUrl(null);
+    }
+  }, [open, item?.id]);
+
+  const photos = item ? parsePhotos(item.order.photos).slice(0, 5) : [];
   const schema = item?.order.schemaSnapshot;
   const dynamicSchema = schema && isServiceQuestionnaireV1(schema) ? schema : null;
   const answerObj = item?.order.answers ?? {};
@@ -100,7 +217,12 @@ export function InboxDetailDrawer({
       : [];
   const fullName = [item?.customer.firstName, item?.customer.lastName].filter(Boolean).join(' ') || item?.customer.displayName || 'Customer';
   const matchedToThisProvider = item?.order.matchedProviderId && item.order.matchedProviderId === item.providerId;
-  const canRevealPii = item?.status === 'matched' && Boolean(matchedToThisProvider);
+  const isThisWorkspace = Boolean(activeWorkspaceId && item?.order.matchedWorkspaceId === activeWorkspaceId);
+  const canRevealPii =
+    Boolean(item?.status === 'matched' && matchedToThisProvider) ||
+    Boolean(item?.status === 'accepted' && isThisWorkspace) ||
+    Boolean(item?.order.status === 'contracted' && isThisWorkspace);
+  const customerLabel = item ? customerDisplayLabel(item, canRevealPii) : 'Customer';
   const countdown = (() => {
     if (!item?.expiresAt) return null;
     const ms = new Date(item.expiresAt).getTime() - Date.now();
@@ -118,6 +240,11 @@ export function InboxDetailDrawer({
     item!.order.matchedWorkspaceId === activeWorkspaceId &&
     item!.status === 'accepted';
 
+  const badge = item ? lifecycleStatusBadge(item) : '';
+  const addrParts = item ? structuredAddressLines(item) : {};
+  const budget = item ? budgetLine(item) : null;
+  const orderCompleted = item?.order.status === 'completed';
+
   return (
     <AnimatePresence>
       {open && item ? (
@@ -131,119 +258,233 @@ export function InboxDetailDrawer({
             onClick={onClose}
             aria-label="Close drawer"
           />
+          {lightboxUrl ? (
+            <button
+              type="button"
+              className="fixed inset-0 z-[160] flex items-center justify-center bg-black/80 p-4"
+              onClick={() => setLightboxUrl(null)}
+              aria-label="Close photo"
+            >
+              <img src={resolveMediaUrl(lightboxUrl)} alt="" className="max-h-[90vh] max-w-full rounded-lg object-contain" />
+            </button>
+          ) : null}
           <motion.aside
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="fixed right-0 top-0 z-[150] flex h-full w-full flex-col border-l border-app-border bg-app-card shadow-2xl md:max-w-[640px]"
+            className="fixed right-0 top-0 z-[150] flex h-full w-full flex-col border-l border-app-border bg-app-card shadow-2xl md:max-w-[720px]"
             role="dialog"
             aria-modal="true"
           >
-            <header className="flex items-start justify-between gap-2 border-b border-app-border p-5">
-              <div>
-                <h2 className="text-lg font-black text-app-text">Inbox offer detail</h2>
-                <p className="text-xs text-neutral-500">{item.id.slice(0, 10)}…</p>
-              </div>
-              <button type="button" className="rounded-xl p-2 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800" onClick={onClose}>
-                <X className="h-5 w-5" />
-              </button>
-            </header>
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
-              <section className="rounded-2xl border border-app-border p-4">
-                <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Customer</h3>
-                <div className="mt-2 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 text-sm font-black text-neutral-700 dark:bg-neutral-700 dark:text-neutral-100">
-                    {String(fullName).slice(0, 1).toUpperCase()}
+            <header className="shrink-0 space-y-4 border-b border-app-border p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Order</p>
+                  <h2 className="text-base font-black leading-snug text-app-text">{serviceBreadcrumb(item)}</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-app-border bg-app-input/50 px-2.5 py-0.5 text-[11px] font-black tracking-wide text-app-text">
+                      {badge}
+                    </span>
+                    <span className="text-xs text-neutral-500">{timelineHint(item)}</span>
                   </div>
-                  <div>
-                    <p className="font-semibold text-app-text">{fullName}</p>
-                    <p className="text-xs text-neutral-500">
-                      Email:{' '}
-                      {canRevealPii ? item.customer.email ?? '—' : item.customer.maskedEmailLabel ?? 'Available after matching'}
-                    </p>
-                    <p className="text-xs text-neutral-500">
-                      Phone:{' '}
-                      {canRevealPii ? item.customer.phone ?? '—' : item.customer.maskedPhoneLabel ?? 'Available after matching'}
-                    </p>
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-neutral-200 text-sm font-black text-neutral-800 dark:bg-neutral-700 dark:text-neutral-100">
+                        {item.customer.avatarUrl ? (
+                          <img src={resolveMediaUrl(item.customer.avatarUrl)} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          String(customerLabel).slice(0, 1).toUpperCase()
+                        )}
+                      </div>
+                      <span className="text-sm font-semibold text-app-text">{customerLabel}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-app-border px-3 text-sm font-bold text-app-text hover:bg-app-input/50"
+                      onClick={() => setMainTab('chat')}
+                    >
+                      <MessageCircle className="h-4 w-4" aria-hidden />
+                      Message
+                    </button>
                   </div>
                 </div>
-              </section>
+                <button type="button" className="rounded-xl p-2 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800" onClick={onClose}>
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="flex gap-2 rounded-xl border border-app-border bg-app-input/30 p-1">
+                <button
+                  type="button"
+                  className={cn(
+                    'flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-lg text-sm font-bold',
+                    mainTab === 'details' ? 'bg-app-card text-app-text shadow-sm' : 'text-neutral-500',
+                  )}
+                  onClick={() => setMainTab('details')}
+                >
+                  <LayoutList className="h-4 w-4" aria-hidden />
+                  Details
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-lg text-sm font-bold',
+                    mainTab === 'chat' ? 'bg-app-card text-app-text shadow-sm' : 'text-neutral-500',
+                  )}
+                  onClick={() => setMainTab('chat')}
+                >
+                  <MessageCircle className="h-4 w-4" aria-hidden />
+                  Chat
+                </button>
+              </div>
+            </header>
 
-              <section className="rounded-2xl border border-app-border p-4">
-                <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Service</h3>
-                <p className="mt-2 font-semibold text-app-text">{item.serviceCatalog?.name ?? 'Service'}</p>
-                <p className="text-xs text-neutral-500">
-                  {[item.serviceCatalog?.category, item.serviceCatalog?.name].filter(Boolean).join(' / ') || '—'}
-                </p>
-                {item.package.serviceCatalog?.lockedBookingMode ? (
-                  <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                    Locked booking mode: {item.package.serviceCatalog.lockedBookingMode}
-                  </p>
-                ) : null}
-              </section>
-
-              <section className="rounded-2xl border border-app-border p-4">
-                <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Schedule</h3>
-                <p className="mt-2 text-sm text-app-text">{formatScheduleLabel(item.order.scheduleFlexibility, item.order.scheduledAt)}</p>
-                <p className="text-xs text-neutral-500">Invited: {new Date(item.invitedAt).toLocaleString()}</p>
-              </section>
-
-              <section className="rounded-2xl border border-app-border p-4">
-                <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Address</h3>
-                <p className="mt-2 text-sm text-app-text">{item.order.address}</p>
-              </section>
-
-              <section className="rounded-2xl border border-app-border p-4">
-                <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Description</h3>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-app-text">{item.order.description || '—'}</p>
-              </section>
-
-              {photos.length > 0 ? (
-                <section className="rounded-2xl border border-app-border p-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Photos</h3>
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    {photos.map((p, idx) => (
-                      <a key={`${p.url}-${idx}`} href={resolveMediaUrl(p.url)} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-app-border">
-                        <img src={resolveMediaUrl(p.url)} alt={p.fileName ?? ''} className="h-20 w-full object-cover" />
-                      </a>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {dynamicSchema ? (
-                <section className="rounded-2xl border border-app-border p-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Dynamic answers</h3>
-                  <div className="mt-2 space-y-2">
-                    {[...dynamicSchema.fields].sort((a, b) => a.order - b.order).map((f) => (
-                      <div key={f.id} className="rounded-xl border border-app-border bg-app-input/30 p-2">
-                        <div className="text-[11px] font-black uppercase tracking-wider text-neutral-500">{f.label}</div>
-                        <div className="text-sm text-app-text">{answerText(f, answerObj[f.id])}</div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {mainTab === 'details' ? (
+                <div className="h-full space-y-5 overflow-y-auto p-5">
+                  <section className="rounded-2xl border border-app-border p-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Order details</h3>
+                    <div className="mt-3 space-y-3 text-sm text-app-text">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Scope & description</div>
+                        <p className="mt-1 whitespace-pre-wrap">{item.order.description || '—'}</p>
                       </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {breakdownEntries.length > 0 ? (
-                <section className="rounded-2xl border border-app-border p-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Score breakdown</h3>
-                  <div className="mt-2 overflow-hidden rounded-lg border border-app-border">
-                    {breakdownEntries.map(([k, v]) => (
-                      <div key={k} className="flex items-center justify-between border-b border-app-border px-3 py-2 text-sm last:border-b-0">
-                        <span className="text-neutral-600">{k}</span>
-                        <span className="tabular-nums text-app-text">{v.toFixed(3)}</span>
+                      {budget ? (
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Budget (CAD)</div>
+                          <p className="mt-1">{budget}</p>
+                        </div>
+                      ) : null}
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Location</div>
+                        <div className="mt-1 space-y-0.5">
+                          {addrParts.street || addrParts.city || addrParts.postal ? (
+                            <>
+                              {addrParts.street ? <p>{addrParts.street}</p> : null}
+                              <p>{[addrParts.city, addrParts.postal].filter(Boolean).join(', ') || '—'}</p>
+                            </>
+                          ) : (
+                            <p>{item.order.address || '—'}</p>
+                          )}
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Scheduling</div>
+                        <p className="mt-1">{schedulingBlock(item)}</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-app-border p-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Customer contact</h3>
+                    <div className="mt-2 text-sm">
+                      <p className="font-semibold text-app-text">{fullName}</p>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Email:{' '}
+                        {canRevealPii ? item.customer.email ?? '—' : item.customer.maskedEmailLabel ?? 'Available after matching'}
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        Phone:{' '}
+                        {canRevealPii ? item.customer.phone ?? '—' : item.customer.maskedPhoneLabel ?? 'Available after matching'}
+                      </p>
+                    </div>
+                  </section>
+
+                  {photos.length > 0 ? (
+                    <section className="rounded-2xl border border-app-border p-4">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Reference photos (max 5)</h3>
+                      <div className="mt-2 grid grid-cols-5 gap-2">
+                        {photos.map((p, idx) => (
+                          <button
+                            key={`${p.url}-${idx}`}
+                            type="button"
+                            className="block overflow-hidden rounded-lg border border-app-border"
+                            onClick={() => setLightboxUrl(p.url)}
+                          >
+                            <img src={resolveMediaUrl(p.url)} alt={p.fileName ?? ''} className="h-16 w-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  <section className="rounded-2xl border border-app-border p-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Package</h3>
+                    <p className="mt-2 font-semibold text-app-text">{item.package.name}</p>
+                    {item.package.description ? (
+                      <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">{item.package.description}</p>
+                    ) : null}
+                    <p className="mt-2 text-sm text-app-text">
+                      {fmtPrice(item.package.finalPrice, item.package.currency)}
+                      {item.package.durationMinutes != null ? ` · ${item.package.durationMinutes} min` : null}
+                    </p>
+                    {item.package.bom && item.package.bom.length > 0 ? (
+                      <div className="mt-3 overflow-hidden rounded-lg border border-app-border">
+                        <div className="bg-app-input/40 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-neutral-500">Bill of materials</div>
+                        {item.package.bom.map((line, i) => (
+                          <div key={i} className="flex flex-wrap items-baseline justify-between gap-2 border-t border-app-border px-3 py-2 text-xs">
+                            <span className="text-app-text">
+                              {line.snapshotProductName} × {line.quantity} {line.snapshotUnit}
+                            </span>
+                            <span className="tabular-nums text-neutral-600 dark:text-neutral-400">
+                              {fmtPrice(line.snapshotUnitPrice * line.quantity, line.snapshotCurrency)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {item.package.serviceCatalog?.lockedBookingMode ? (
+                      <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                        Catalog booking lock: {item.package.serviceCatalog.lockedBookingMode}
+                      </p>
+                    ) : null}
+                  </section>
+
+                  <section className="rounded-2xl border border-app-border p-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Match meta</h3>
+                    <p className="mt-2 text-xs text-neutral-500">Attempt: {item.id.slice(0, 12)}…</p>
+                    <p className="text-xs text-neutral-500">Invited: {new Date(item.invitedAt).toLocaleString()}</p>
+                  </section>
+
+                  {dynamicSchema ? (
+                    <section className="rounded-2xl border border-app-border p-4">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Dynamic answers</h3>
+                      <div className="mt-2 space-y-2">
+                        {[...dynamicSchema.fields].sort((a, b) => a.order - b.order).map((f) => (
+                          <div key={f.id} className="rounded-xl border border-app-border bg-app-input/30 p-2">
+                            <div className="text-[11px] font-black uppercase tracking-wider text-neutral-500">{f.label}</div>
+                            <div className="text-sm text-app-text">{answerText(f, answerObj[f.id])}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {breakdownEntries.length > 0 ? (
+                    <section className="rounded-2xl border border-app-border p-4">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Score breakdown</h3>
+                      <div className="mt-2 overflow-hidden rounded-lg border border-app-border">
+                        {breakdownEntries.map(([k, v]) => (
+                          <div key={k} className="flex items-center justify-between border-b border-app-border px-3 py-2 text-sm last:border-b-0">
+                            <span className="text-neutral-600">{k}</span>
+                            <span className="tabular-nums text-app-text">{v.toFixed(3)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="flex h-full min-h-0 flex-col overflow-y-auto p-5">
+                  <InboxDrawerChat orderId={item.order.id} customer={item.customer} />
+                </div>
+              )}
             </div>
-            <footer className="border-t border-app-border p-4">
-              {showPaymentBanner ? (
+
+            <footer className="shrink-0 border-t border-app-border p-4">
+              {showPaymentBanner || orderCompleted ? (
                 <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
-                  Payment will be processed here — Stripe integration coming soon.
+                  Payment will be processed here. Stripe integration coming soon.
                 </div>
               ) : null}
               {item.status === 'invited' ? (
@@ -270,7 +511,7 @@ export function InboxDetailDrawer({
                       {footerMutationBusy && footerMutationKind === 'ack' ? (
                         <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
                       ) : null}
-                      Accept invitation
+                      Accept
                     </button>
                     <button
                       type="button"
@@ -296,7 +537,7 @@ export function InboxDetailDrawer({
                     {footerMutationBusy && footerMutationKind === 'ack' ? (
                       <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
                     ) : null}
-                    Acknowledge & take this job
+                    Acknowledge — take this job
                   </button>
                   <button
                     type="button"
@@ -312,7 +553,11 @@ export function InboxDetailDrawer({
                 </div>
               ) : item.status === 'accepted' ? (
                 <div className="space-y-3">
-                  {item.order.status === 'matching' ? (
+                  {orderCompleted ? (
+                    <div className="rounded-xl border border-app-border bg-neutral-100 px-3 py-2 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200">
+                      This job is complete. Payment and payout steps will appear here next.
+                    </div>
+                  ) : item.order.status === 'matching' ? (
                     <div className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-800 dark:border-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-200">
                       Awaiting customer&apos;s pick — multiple providers may have accepted. We&apos;ll notify you of the outcome.
                     </div>
@@ -320,12 +565,8 @@ export function InboxDetailDrawer({
                     <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
                       You&apos;re on this job. Mark it complete when the work is finished.
                     </div>
-                  ) : item.order.status === 'completed' ? (
-                    <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
-                      This order is marked complete.
-                    </div>
                   ) : null}
-                  {canMarkComplete && onMarkComplete ? (
+                  {canMarkComplete && onMarkComplete && !orderCompleted ? (
                     <button
                       type="button"
                       disabled={Boolean(markCompleteBusy)}
@@ -359,7 +600,7 @@ export function InboxDetailDrawer({
                 />
               ) : null}
               <div className={cn('mt-2 text-xs text-neutral-500')}>
-                Price: {fmtPrice(item.package.finalPrice, item.package.currency)}
+                Package price: {fmtPrice(item.package.finalPrice, item.package.currency)}
               </div>
             </footer>
           </motion.aside>

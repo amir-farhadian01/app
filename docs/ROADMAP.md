@@ -214,21 +214,27 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
 - **Status:**
   | Customer | Provider | Admin |
   |----------|----------|-------|
-  | ✅ | 🚧 | ✅ |
+  | ✅ | ✅ | ✅ |
 - **Evidence (auto-discovered):** Prisma `Order`, `OrderStatus`, `OrderEntryPoint`, `OrderReview`;
   customer `routes/orders.ts` (`/api/orders`: draft upsert, autosave, submit with
   `validateServiceAnswers` + `snapshotSchemaForOrder`, cancel, `GET /me`, `GET /:id`,
   provider `POST /:id/complete`, customer `POST /:id/review` → `OrderStatus.closed` + NATS `orders.reviewed`);
   `GET /api/categories/search`; `GET /api/service-catalog/by-category/:categoryId`;
   public `GET /api/service-catalog/:id` (pricing/BOM snapshot for `Step3Review`);
+  public `GET /api/service-catalog/:id/packages` (wizard package cards + BOM margin);
+  customer `GET /api/orders/:id/matched-providers` (draft provider preview) + `POST /api/orders/:id/submit` (wizard finalize; `PUT /api/orders/draft/:id` accepts `customerPicks` for autosave restore);
   admin `routes/adminOrders.ts` (`/api/admin/orders`: list w/ facets, `GET /:id`,
   stats, platform cancel); `lib/orderSnapshot.ts`, `lib/adminOrdersList.ts`,
   `lib/orderPhotosForValidate.ts`, `lib/categoryBreadcrumbs.ts`; NATS
-  `orders.submitted`; `AuditLog` `ORDER_SUBMITTED` / `ORDER_CANCELLED` /
+  `orders.submitted`; `lib/bus.ts` `startNatsNotificationConsumers` writes customer
+  `Notification` rows on `orders.matched` (published with `orders.auto_matched` from
+  `lib/matching/orchestrator.ts`), `orders.completed`, and `contracts.approved`
+  (`lib/orderLifecycleNotifications.ts`); `AuditLog` `ORDER_SUBMITTED` / `ORDER_CANCELLED` /
   `ADMIN_CANCELLED_ORDER`. **Customer:**   `src/components/orders/*` (wizard,
   steps including `Step6Description` / `Step7Review`, `DynamicFieldRenderer`, AI coach, photos), `src/services/orders.ts`,
   `/orders/:id/confirmation` post-submit summary route,
-  `src/lib/orderDescriptionAi.ts`, `src/pages/MyOrders.tsx`, `src/pages/OrderDetail.tsx`,
+  `src/lib/orderDescriptionAi.ts`, `src/pages/MyOrders.tsx` (pipeline cards: provider block + ratings + cancel/rate actions + tab empty states),
+  `src/pages/OrderDetail.tsx` (Details / Contract / Chat tabs; dispute POST `/api/orders/:id/dispute`; contract review modal via `ContractPanel`),
   routes `/orders`, `/orders/new`, `/orders/:id` in `src/App.tsx`; entry wiring
   `ServiceDetails` (“Book this service”), `CustomerDashboard` (Book a service),
   `CustomerHome` → `/orders/new` deep links (`homeCategory`, `prefillProviderId`, `newOffer`),
@@ -237,7 +243,9 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
   `src/services/adminOrders.ts`, Orders tab + **Overview** live KPIs in `src/pages/AdminDashboard.tsx`
   (`GET /api/admin/stats`, `GET /api/admin/stats/orders-trend`, `GET /api/admin/audit-log` via `lib/adminOverviewStats.ts` + `routes/admin.ts`).
   **Sprint I append:** submit `matchOutcome` + matched summaries in `routes/orders.ts`,
-  provider Inbox UI (`src/components/provider/inbox/*`, `src/services/providerInbox.ts`), and
+  provider Inbox UI (`src/components/provider/inbox/*`, `src/services/providerInbox.ts`;
+  `InboxDetailDrawer` + `InboxDrawerChat` for full offer detail + order-scoped chat via `routes/orderChat.ts`;
+  workspace inbox list/detail returns `customerPicks` + package `bom` for BOM lines), and
   admin matching tab/eligibility/override wiring in order drawer + API.
 - **Done definition:** Single wizard; dynamic fields from service schema;
   admin order panel per ADMIN-PARITY; Phase segments shipped (Offers / Orders /
@@ -271,7 +279,7 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
     grep -q "computeAdminOverviewStats" routes/admin.ts
     grep -q "/stats/orders-trend" routes/admin.ts
     grep -q "audit-log" routes/admin.ts
-- **Last verified:** 2026-05-04 via `npm run docs:check` + customer completion / review flow
+- **Last verified:** 2026-05-04 via `npm run docs:check` + customer order wizard steps 3–7 + provider inbox drawer (detail + chat) + lint
 - **Open prompts:** ⏳ Flutter port of the order wizard (partial: `CreateOrderWizardScreen` + `HomeScreen` deep links).
 
 ### F6 — Matching engine MVP (auto_book vs round_robin_5)

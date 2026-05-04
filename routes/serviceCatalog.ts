@@ -3,6 +3,7 @@ import prisma from '../lib/db.js';
 import { categoryBreadcrumbs } from '../lib/categoryBreadcrumbs.js';
 import { authenticate, AuthRequest } from '../lib/auth.middleware.js';
 import { isServiceQuestionnaireV1 } from '../lib/serviceDefinitionTypes.js';
+import { computePackageMargin } from '../lib/packageMargin.js';
 
 const router = Router();
 
@@ -95,6 +96,64 @@ router.get('/:id/schema', authenticate, async (req: AuthRequest, res: Response) 
         lockedBookingMode: entry.lockedBookingMode,
       },
     });
+  } catch (err: unknown) {
+    console.error(err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+});
+
+// GET /api/service-catalog/:id/packages — active provider packages for wizard Step 3 (public; guest wizard).
+router.get('/:id/packages', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const catalog = await prisma.serviceCatalog.findUnique({
+      where: { id },
+      select: { id: true, isActive: true },
+    });
+    if (!catalog?.isActive) {
+      return res.status(404).json({ error: 'Service type not found or inactive' });
+    }
+    const packages = await prisma.providerServicePackage.findMany({
+      where: { serviceCatalogId: id, isActive: true, archivedAt: null },
+      orderBy: [{ sortOrder: 'asc' }, { finalPrice: 'asc' }],
+      include: {
+        bom: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            quantity: true,
+            snapshotUnitPrice: true,
+            snapshotCurrency: true,
+            snapshotProductName: true,
+          },
+        },
+      },
+    });
+    const rows = packages.map((pkg) => {
+      const bomLines = pkg.bom.map((b) => ({
+        productName: b.snapshotProductName,
+        quantity: b.quantity,
+        unitPrice: b.snapshotUnitPrice,
+        currency: b.snapshotCurrency,
+      }));
+      const marginInfo = computePackageMargin(
+        { finalPrice: pkg.finalPrice, currency: pkg.currency },
+        pkg.bom.map((b) => ({
+          quantity: b.quantity,
+          snapshotUnitPrice: b.snapshotUnitPrice,
+          snapshotCurrency: b.snapshotCurrency,
+        })),
+      );
+      return {
+        id: pkg.id,
+        name: pkg.name,
+        price: pkg.finalPrice,
+        duration: pkg.durationMinutes,
+        bookingMode: pkg.bookingMode,
+        bomLines,
+        margin: marginInfo.margin,
+      };
+    });
+    res.json(rows);
   } catch (err: unknown) {
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });

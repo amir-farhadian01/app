@@ -167,6 +167,7 @@ export default function App() {
             <Layout role={role} companyId={companyId}>
               <Routes>
             <Route path="/" element={<CustomerHome />} />
+            <Route path="/home" element={<Navigate to="/" replace />} />
             <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <Auth />} />
             <Route path="/service/:id" element={<ServiceDetails />} />
             <Route path="/services" element={<Services />} />

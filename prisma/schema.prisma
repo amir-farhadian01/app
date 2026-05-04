@@ -59,6 +59,7 @@ enum OrderStatus {
   paid
   in_progress
   completed
+  disputed
   closed
 }
 
@@ -180,6 +181,7 @@ model User {
   businessKycSubmissions BusinessKycSubmission[]
   ordersAsCustomer       Order[]                 @relation("CustomerOrders")
   customerOrderReviews   OrderReview[]           @relation("CustomerOrderReviews")
+  customerDisputes       Dispute[]               @relation("CustomerDisputes")
   providerPackages       ProviderServicePackage[]
   attemptsAsProvider     OfferMatchAttempt[]     @relation("ProviderAttempts")
   ordersAsMatchedProvider Order[]                @relation("OrderMatchedProvider")
@@ -405,6 +407,7 @@ model Order {
   chatThread            OrderChatThread?
   orderContract         OrderContract?
   customerReview        OrderReview?
+  dispute               Dispute?
 
   @@index([customerId])
   @@index([status])
@@ -422,6 +425,18 @@ model OrderReview {
 
   order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   customer User  @relation("CustomerOrderReviews", fields: [customerId], references: [id])
+
+  @@index([customerId])
+}
+
+model Dispute {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   User     @relation("CustomerDisputes", fields: [customerId], references: [id])
+  reason     String
+  createdAt  DateTime @default(now())
 
   @@index([customerId])
 }

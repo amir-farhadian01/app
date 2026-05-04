@@ -28,6 +28,21 @@ type WizardData = {
   referencePhotos?: OrderPhotoRow[];
   /** Free-text project description (wizard Step 6); mirrored from OrderWizard local state. */
   orderDescription?: string;
+  /** Leaf category id (from schema breadcrumbs) for submit payload. */
+  leafCategoryId?: string;
+  selectedPackageId?: string;
+  selectedPackageName?: string;
+  selectedPackagePrice?: number;
+  selectedPackageDuration?: number | null;
+  /** Resolved package booking mode for Step 4 scheduling branch. */
+  selectedPackageBookingMode?: string;
+  wizardTimePreference?: string;
+  wizardScheduledDate?: string | null;
+  wizardTimeSlot?: string;
+  addressStreet?: string;
+  addressCity?: string;
+  addressPostal?: string;
+  selectedProviderId?: string | null;
 };
 
 const emptyBookingFields: Partial<WizardData> = {
@@ -44,6 +59,19 @@ const emptyBookingFields: Partial<WizardData> = {
   guestSessionKey: undefined,
   referencePhotos: undefined,
   orderDescription: undefined,
+  leafCategoryId: undefined,
+  selectedPackageId: undefined,
+  selectedPackageName: undefined,
+  selectedPackagePrice: undefined,
+  selectedPackageDuration: undefined,
+  selectedPackageBookingMode: undefined,
+  wizardTimePreference: undefined,
+  wizardScheduledDate: undefined,
+  wizardTimeSlot: undefined,
+  addressStreet: undefined,
+  addressCity: undefined,
+  addressPostal: undefined,
+  selectedProviderId: undefined,
 };
 
 export type WizardStore = WizardData & {

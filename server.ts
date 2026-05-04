@@ -11,7 +11,7 @@ import "dotenv/config";
 
 import prisma from "./lib/db.js";
 import { getRedis } from "./lib/cache.js";
-import { getNats } from "./lib/bus.js";
+import { getNats, startNatsNotificationConsumers } from "./lib/bus.js";
 import { ensureMediaSchema } from "./lib/mediaDb.js";
 
 import authRoutes from "./routes/auth.js";
@@ -160,6 +160,7 @@ async function startServer() {
 
   try {
     await getNats();
+    await startNatsNotificationConsumers();
   } catch {
     console.warn("NATS not available (non-fatal)");
   }

@@ -119,15 +119,17 @@ export async function autoMatchOffer(
       return att;
     });
 
+    const matchedPayload = {
+      orderId,
+      attemptId: attempt.id,
+      packageId: pkg.id,
+      providerId: pkg.providerId,
+      workspaceId: pkg.workspaceId,
+      score: best.score,
+    };
     try {
-      await publish('orders.auto_matched', {
-        orderId,
-        attemptId: attempt.id,
-        packageId: pkg.id,
-        providerId: pkg.providerId,
-        workspaceId: pkg.workspaceId,
-        score: best.score,
-      });
+      await publish('orders.auto_matched', matchedPayload);
+      await publish('orders.matched', matchedPayload);
     } catch {
       /* optional NATS */
     }
@@ -229,15 +231,17 @@ export async function manualMatchOffer(
       return att;
     });
 
+    const matchedPayload = {
+      orderId,
+      attemptId: attempt.id,
+      packageId: pkg.id,
+      providerId: pkg.providerId,
+      workspaceId: pkg.workspaceId,
+      score: scored.score,
+    };
     try {
-      await publish('orders.auto_matched', {
-        orderId,
-        attemptId: attempt.id,
-        packageId: pkg.id,
-        providerId: pkg.providerId,
-        workspaceId: pkg.workspaceId,
-        score: scored.score,
-      });
+      await publish('orders.auto_matched', matchedPayload);
+      await publish('orders.matched', matchedPayload);
     } catch {
       /* optional NATS */
     }

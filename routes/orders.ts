@@ -10,7 +10,10 @@ import { isServiceQuestionnaireV1 } from '../lib/serviceDefinitionTypes.js';
 import { validateServiceAnswers } from '../lib/serviceQuestionnaireValidate.js';
 import { phaseFromStatus, phaseListWhere } from '../lib/orderPhase.js';
 import { countOrderPhaseFacets } from '../lib/orderPhaseFacets.js';
-import { findEligiblePackagesForOffer } from '../lib/matching/eligibility.js';
+import {
+  findEligiblePackagesForOffer,
+  findEligibleNegotiationPackagesForOffer,
+} from '../lib/matching/eligibility.js';
 import { autoMatchOffer } from '../lib/matching/orchestrator.js';
 import {
   expireStaleAttempts,
@@ -220,6 +223,289 @@ async function resolveWizardSchema(order: {
   return { schema: null, staleSnapshot: true };
 }
 
+/**
+ * Shared draft → submitted transition (questionnaire validation, audit, NATS, matching).
+ * Caller must not send a response after this returns (all paths call `res.*`).
+ */
+async function runSubmitDraftOrderFlow(
+  res: Response,
+  userId: string,
+  id: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const order = await prisma.order.findFirst({ where: { id, customerId: userId } });
+    if (!order) {
+      res.status(404).json({ error: 'Draft not found' });
+      return;
+    }
+    if (order.status !== OrderStatus.draft) {
+      if (order.status === OrderStatus.submitted) {
+        res.status(409).json({
+          error: 'Already submitted',
+          order: await orderToCustomerJson(order),
+        });
+        return;
+      }
+      res.status(400).json({ error: 'Order is not a draft' });
+      return;
+    }
+
+    let answers = asAnswersRecord(order.answers);
+    let photosRaw: unknown = order.photos;
+    let description = order.description;
+    let descriptionAiAssisted = order.descriptionAiAssisted;
+    let scheduledAt = order.scheduledAt;
+    let scheduleFlexibility = order.scheduleFlexibility;
+    let address = order.address;
+    let locationLat = order.locationLat;
+    let locationLng = order.locationLng;
+
+    if ('answers' in body && body.answers !== undefined) {
+      answers = { ...answers, ...asAnswersRecord(body.answers) };
+    }
+    if ('photos' in body) photosRaw = body.photos;
+    if (typeof body.description === 'string') description = body.description;
+    if (typeof body.descriptionAiAssisted === 'boolean') {
+      descriptionAiAssisted = body.descriptionAiAssisted;
+    }
+    if (body.scheduledAt !== undefined) {
+      const d = body.scheduledAt != null ? new Date(String(body.scheduledAt)) : null;
+      scheduledAt = d && !Number.isNaN(d.getTime()) ? d : null;
+    }
+    if (typeof body.scheduleFlexibility === 'string' && SCHEDULE_FLEX.has(body.scheduleFlexibility)) {
+      scheduleFlexibility = body.scheduleFlexibility;
+    }
+    if (typeof body.address === 'string') address = body.address;
+    if (body.locationLat !== undefined) {
+      locationLat =
+        typeof body.locationLat === 'number' && Number.isFinite(body.locationLat)
+          ? body.locationLat
+          : null;
+    }
+    if (body.locationLng !== undefined) {
+      locationLng =
+        typeof body.locationLng === 'number' && Number.isFinite(body.locationLng)
+          ? body.locationLng
+          : null;
+    }
+
+    const photosJson = normalizePhotosJson(photosRaw);
+
+    let schema;
+    try {
+      schema = await snapshotSchemaForOrder(order.serviceCatalogId);
+    } catch {
+      res.status(400).json({
+        error:
+          'This service type is unavailable or inactive. Please pick another service from the catalog or try again later.',
+      });
+      return;
+    }
+
+    const filesResult = photosJsonToUploadRows(photosJson, schema);
+    if (filesResult.ok === false) {
+      res.status(400).json({ error: filesResult.error });
+      return;
+    }
+
+    const validation = validateServiceAnswers(schema, answers, filesResult.rows);
+    if (!validation.valid) {
+      res.status(400).json({ error: 'Validation failed', errors: validation.errors });
+      return;
+    }
+
+    if (description.trim().length < 10) {
+      res.status(400).json({ error: 'description must be at least 10 characters' });
+      return;
+    }
+    if (description.length > 1000) {
+      res.status(400).json({ error: 'description must be at most 1000 characters' });
+      return;
+    }
+    if (!address.trim()) {
+      res.status(400).json({ error: 'address is required' });
+      return;
+    }
+    if (!SCHEDULE_FLEX.has(scheduleFlexibility)) {
+      res.status(400).json({ error: 'Invalid scheduleFlexibility' });
+      return;
+    }
+    if (scheduleFlexibility === 'specific') {
+      if (!scheduledAt) {
+        res.status(400).json({ error: 'scheduledAt is required when scheduleFlexibility is specific' });
+        return;
+      }
+      if (scheduledAt.getTime() <= Date.now()) {
+        res.status(400).json({ error: 'scheduledAt must be in the future' });
+        return;
+      }
+    }
+
+    const snapshot = schema as unknown as Prisma.InputJsonValue;
+
+    const submitted = await prisma.$transaction(async (tx) => {
+      const o = await tx.order.update({
+        where: { id },
+        data: {
+          answers: answersToJson(answers),
+          photos: photosJson,
+          description,
+          descriptionAiAssisted,
+          scheduledAt,
+          scheduleFlexibility,
+          address,
+          locationLat,
+          locationLng,
+          schemaSnapshot: snapshot,
+          status: OrderStatus.submitted,
+          phase: phaseFromStatus(OrderStatus.submitted),
+          submittedAt: new Date(),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'ORDER_SUBMITTED',
+          resourceType: 'order',
+          resourceId: id,
+        },
+      });
+      return o;
+    });
+
+    await publish('orders.submitted', {
+      orderId: submitted.id,
+      customerId: submitted.customerId,
+      serviceCatalogId: submitted.serviceCatalogId,
+    });
+
+    type SubmitMatchOutcome =
+      | {
+          mode: 'auto_matched';
+          attemptId?: string;
+          windowExpiresAt?: string | null;
+          reason?: string;
+        }
+      | {
+          mode: 'round_robin_invited';
+          invitedCount: number;
+          attemptIds: string[];
+          windowExpiresAt?: string | null;
+          reason?: string;
+        }
+      | {
+          mode: 'no_eligible_providers';
+          reason?: string;
+          windowExpiresAt?: string | null;
+        };
+
+    let matchOutcome: SubmitMatchOutcome = { mode: 'no_eligible_providers', reason: 'not_evaluated' };
+
+    try {
+      const pre = await findEligiblePackagesForOffer(submitted.id);
+      if (pre.length > 0) {
+        const mo = await autoMatchOffer(submitted.id, { depth: 0 });
+        if (mo.matched) {
+          const snap = await prisma.order.findUnique({
+            where: { id: submitted.id },
+            select: { matchingExpiresAt: true },
+          });
+          matchOutcome = {
+            mode: 'auto_matched',
+            ...(mo.attemptId != null ? { attemptId: mo.attemptId } : {}),
+            ...(mo.reason != null ? { reason: mo.reason } : {}),
+            windowExpiresAt: snap?.matchingExpiresAt?.toISOString() ?? null,
+          };
+        } else {
+          const rr = await roundRobinInviteOffer(submitted.id);
+          const snap = await prisma.order.findUnique({
+            where: { id: submitted.id },
+            select: { matchingExpiresAt: true },
+          });
+          if (rr.invitedCount > 0) {
+            matchOutcome = {
+              mode: 'round_robin_invited',
+              invitedCount: rr.invitedCount,
+              attemptIds: rr.attemptIds,
+              windowExpiresAt: snap?.matchingExpiresAt?.toISOString() ?? null,
+            };
+          } else {
+            matchOutcome = {
+              mode: 'no_eligible_providers',
+              reason: 'no_negotiation_eligible_packages',
+              windowExpiresAt: null,
+            };
+          }
+        }
+      } else {
+        const rr = await roundRobinInviteOffer(submitted.id);
+        const snap = await prisma.order.findUnique({
+          where: { id: submitted.id },
+          select: { matchingExpiresAt: true },
+        });
+        if (rr.invitedCount > 0) {
+          matchOutcome = {
+            mode: 'round_robin_invited',
+            invitedCount: rr.invitedCount,
+            attemptIds: rr.attemptIds,
+            windowExpiresAt: snap?.matchingExpiresAt?.toISOString() ?? null,
+          };
+        } else {
+          matchOutcome = {
+            mode: 'no_eligible_providers',
+            reason: 'no_negotiation_eligible_packages',
+            windowExpiresAt: null,
+          };
+        }
+      }
+    } catch (matchErr: unknown) {
+      if (matchErr instanceof RoundRobinValidationError) {
+        const o = await prisma.order.findUnique({ where: { id: submitted.id } });
+        res.status(400).json({
+          error: matchErr.message,
+          ...(o ? { order: await orderToCustomerJson(o) } : {}),
+        });
+        return;
+      }
+      console.error(matchErr);
+      matchOutcome = { mode: 'no_eligible_providers', reason: 'match_error' };
+    }
+
+    const finalOrder = await prisma.order.findUnique({
+      where: { id: submitted.id },
+      include: {
+        matchedProvider: {
+          select: { id: true, displayName: true, firstName: true, lastName: true, avatarUrl: true },
+        },
+        matchedWorkspace: { select: { id: true, name: true } },
+        matchedPackage: {
+          select: { id: true, name: true, finalPrice: true, currency: true, durationMinutes: true },
+        },
+      },
+    });
+    if (!finalOrder) {
+      res.status(500).json({ error: 'Order not found after submit' });
+      return;
+    }
+    res.json({
+      ...(await orderToCustomerJson(finalOrder)),
+      matchOutcome,
+      matchedSummary:
+        finalOrder.matchedProvider && finalOrder.matchedWorkspace && finalOrder.matchedPackage
+          ? {
+              provider: finalOrder.matchedProvider,
+              workspace: finalOrder.matchedWorkspace,
+              package: finalOrder.matchedPackage,
+            }
+          : null,
+    });
+  } catch (err: unknown) {
+    console.error(err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+}
+
 router.use(authenticate);
 
 router.post('/draft', async (req: AuthRequest, res: Response) => {
@@ -358,6 +644,11 @@ router.put('/draft/:id', async (req: AuthRequest, res: Response) => {
           ? body.locationLng
           : null;
     }
+    if ('customerPicks' in body && body.customerPicks != null && typeof body.customerPicks === 'object') {
+      const prev = asAnswersRecord(order.customerPicks);
+      const next = { ...prev, ...(body.customerPicks as Record<string, unknown>) };
+      data.customerPicks = answersToJson(next);
+    }
 
     const updated = await prisma.order.update({ where: { id }, data });
     return res.json(await orderToCustomerJson(updated));
@@ -368,263 +659,129 @@ router.put('/draft/:id', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/draft/:id/submit', async (req: AuthRequest, res: Response) => {
+  await runSubmitDraftOrderFlow(res, req.user!.userId, req.params.id, req.body as Record<string, unknown>);
+});
+
+/** F5 wizard final submit (same lifecycle as `/draft/:id/submit` with extra validation + body merge). */
+router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { id } = req.params;
     const body = req.body as Record<string, unknown>;
+
+    if (body.agreedToTerms !== true) {
+      return res.status(400).json({
+        error: 'Terms must be accepted',
+        errors: { agreedToTerms: 'You must agree to the Neighborly Terms of Service.' },
+      });
+    }
+
+    const scope = pickStr(body.scope);
+    if (!scope || scope.length < 10) {
+      return res.status(400).json({
+        error: 'scope must be at least 10 characters',
+        errors: { scope: 'Please describe your job (at least 10 characters).' },
+      });
+    }
 
     const order = await prisma.order.findFirst({ where: { id, customerId: userId } });
     if (!order) {
       return res.status(404).json({ error: 'Draft not found' });
     }
     if (order.status !== OrderStatus.draft) {
-      if (order.status === OrderStatus.submitted) {
-        return res.status(409).json({
-          error: 'Already submitted',
-          order: await orderToCustomerJson(order),
-        });
-      }
       return res.status(400).json({ error: 'Order is not a draft' });
     }
 
-    let answers = asAnswersRecord(order.answers);
-    let photosRaw: unknown = order.photos;
-    let description = order.description;
-    let descriptionAiAssisted = order.descriptionAiAssisted;
-    let scheduledAt = order.scheduledAt;
-    let scheduleFlexibility = order.scheduleFlexibility;
-    let address = order.address;
-    let locationLat = order.locationLat;
-    let locationLng = order.locationLng;
-
-    if ('answers' in body && body.answers !== undefined) {
-      answers = { ...answers, ...asAnswersRecord(body.answers) };
-    }
-    if ('photos' in body) photosRaw = body.photos;
-    if (typeof body.description === 'string') description = body.description;
-    if (typeof body.descriptionAiAssisted === 'boolean') {
-      descriptionAiAssisted = body.descriptionAiAssisted;
-    }
-    if (body.scheduledAt !== undefined) {
-      const d = body.scheduledAt != null ? new Date(String(body.scheduledAt)) : null;
-      scheduledAt = d && !Number.isNaN(d.getTime()) ? d : null;
-    }
-    if (typeof body.scheduleFlexibility === 'string' && SCHEDULE_FLEX.has(body.scheduleFlexibility)) {
-      scheduleFlexibility = body.scheduleFlexibility;
-    }
-    if (typeof body.address === 'string') address = body.address;
-    if (body.locationLat !== undefined) {
-      locationLat =
-        typeof body.locationLat === 'number' && Number.isFinite(body.locationLat)
-          ? body.locationLat
-          : null;
-    }
-    if (body.locationLng !== undefined) {
-      locationLng =
-        typeof body.locationLng === 'number' && Number.isFinite(body.locationLng)
-          ? body.locationLng
-          : null;
-    }
-
-    const photosJson = normalizePhotosJson(photosRaw);
-
-    let schema;
-    try {
-      schema = await snapshotSchemaForOrder(order.serviceCatalogId);
-    } catch {
+    const pkgCount = await prisma.providerServicePackage.count({
+      where: { serviceCatalogId: order.serviceCatalogId, isActive: true, archivedAt: null },
+    });
+    const packageId = pickStr(body.packageId);
+    if (pkgCount > 0 && !packageId) {
       return res.status(400).json({
-        error:
-          'This service type is unavailable or inactive. Please pick another service from the catalog or try again later.',
+        error: 'packageId required',
+        errors: { packageId: 'Please select a package for this service.' },
       });
     }
-
-    const filesResult = photosJsonToUploadRows(photosJson, schema);
-    if (filesResult.ok === false) {
-      return res.status(400).json({ error: filesResult.error });
-    }
-
-    const validation = validateServiceAnswers(schema, answers, filesResult.rows);
-    if (!validation.valid) {
-      return res.status(400).json({ error: 'Validation failed', errors: validation.errors });
-    }
-
-    if (description.trim().length < 10) {
-      return res.status(400).json({ error: 'description must be at least 10 characters' });
-    }
-    if (description.length > 1000) {
-      return res.status(400).json({ error: 'description must be at most 1000 characters' });
-    }
-    if (!address.trim()) {
-      return res.status(400).json({ error: 'address is required' });
-    }
-    if (!SCHEDULE_FLEX.has(scheduleFlexibility)) {
-      return res.status(400).json({ error: 'Invalid scheduleFlexibility' });
-    }
-    if (scheduleFlexibility === 'specific') {
-      if (!scheduledAt) {
-        return res.status(400).json({ error: 'scheduledAt is required when scheduleFlexibility is specific' });
-      }
-      if (scheduledAt.getTime() <= Date.now()) {
-        return res.status(400).json({ error: 'scheduledAt must be in the future' });
-      }
-    }
-
-    const snapshot = schema as unknown as Prisma.InputJsonValue;
-
-    const submitted = await prisma.$transaction(async (tx) => {
-      const o = await tx.order.update({
-        where: { id },
-        data: {
-          answers: answersToJson(answers),
-          photos: photosJson,
-          description,
-          descriptionAiAssisted,
-          scheduledAt,
-          scheduleFlexibility,
-          address,
-          locationLat,
-          locationLng,
-          schemaSnapshot: snapshot,
-          status: OrderStatus.submitted,
-          phase: phaseFromStatus(OrderStatus.submitted),
-          submittedAt: new Date(),
+    if (packageId) {
+      const pkgOk = await prisma.providerServicePackage.findFirst({
+        where: {
+          id: packageId,
+          serviceCatalogId: order.serviceCatalogId,
+          isActive: true,
+          archivedAt: null,
         },
       });
-      await tx.auditLog.create({
-        data: {
-          actorId: userId,
-          action: 'ORDER_SUBMITTED',
-          resourceType: 'order',
-          resourceId: id,
-        },
-      });
-      return o;
-    });
-
-    await publish('orders.submitted', {
-      orderId: submitted.id,
-      customerId: submitted.customerId,
-      serviceCatalogId: submitted.serviceCatalogId,
-    });
-
-    type SubmitMatchOutcome =
-      | {
-          mode: 'auto_matched';
-          attemptId?: string;
-          windowExpiresAt?: string | null;
-          reason?: string;
-        }
-      | {
-          mode: 'round_robin_invited';
-          invitedCount: number;
-          attemptIds: string[];
-          windowExpiresAt?: string | null;
-          reason?: string;
-        }
-      | {
-          mode: 'no_eligible_providers';
-          reason?: string;
-          windowExpiresAt?: string | null;
-        };
-
-    let matchOutcome: SubmitMatchOutcome = { mode: 'no_eligible_providers', reason: 'not_evaluated' };
-
-    try {
-      const pre = await findEligiblePackagesForOffer(submitted.id);
-      if (pre.length > 0) {
-        const mo = await autoMatchOffer(submitted.id, { depth: 0 });
-        if (mo.matched) {
-          const snap = await prisma.order.findUnique({
-            where: { id: submitted.id },
-            select: { matchingExpiresAt: true },
-          });
-          matchOutcome = {
-            mode: 'auto_matched',
-            ...(mo.attemptId != null ? { attemptId: mo.attemptId } : {}),
-            ...(mo.reason != null ? { reason: mo.reason } : {}),
-            windowExpiresAt: snap?.matchingExpiresAt?.toISOString() ?? null,
-          };
-        } else {
-          const rr = await roundRobinInviteOffer(submitted.id);
-          const snap = await prisma.order.findUnique({
-            where: { id: submitted.id },
-            select: { matchingExpiresAt: true },
-          });
-          if (rr.invitedCount > 0) {
-            matchOutcome = {
-              mode: 'round_robin_invited',
-              invitedCount: rr.invitedCount,
-              attemptIds: rr.attemptIds,
-              windowExpiresAt: snap?.matchingExpiresAt?.toISOString() ?? null,
-            };
-          } else {
-            matchOutcome = {
-              mode: 'no_eligible_providers',
-              reason: 'no_negotiation_eligible_packages',
-              windowExpiresAt: null,
-            };
-          }
-        }
-      } else {
-        const rr = await roundRobinInviteOffer(submitted.id);
-        const snap = await prisma.order.findUnique({
-          where: { id: submitted.id },
-          select: { matchingExpiresAt: true },
-        });
-        if (rr.invitedCount > 0) {
-          matchOutcome = {
-            mode: 'round_robin_invited',
-            invitedCount: rr.invitedCount,
-            attemptIds: rr.attemptIds,
-            windowExpiresAt: snap?.matchingExpiresAt?.toISOString() ?? null,
-          };
-        } else {
-          matchOutcome = {
-            mode: 'no_eligible_providers',
-            reason: 'no_negotiation_eligible_packages',
-            windowExpiresAt: null,
-          };
-        }
-      }
-    } catch (matchErr: unknown) {
-      if (matchErr instanceof RoundRobinValidationError) {
-        const o = await prisma.order.findUnique({ where: { id: submitted.id } });
+      if (!pkgOk) {
         return res.status(400).json({
-          error: matchErr.message,
-          ...(o ? { order: await orderToCustomerJson(o) } : {}),
+          error: 'Invalid package',
+          errors: { packageId: 'Package does not belong to this service.' },
         });
       }
-      console.error(matchErr);
-      matchOutcome = { mode: 'no_eligible_providers', reason: 'match_error' };
     }
 
-    const finalOrder = await prisma.order.findUnique({
-      where: { id: submitted.id },
-      include: {
-        matchedProvider: {
-          select: { id: true, displayName: true, firstName: true, lastName: true, avatarUrl: true },
-        },
-        matchedWorkspace: { select: { id: true, name: true } },
-        matchedPackage: {
-          select: { id: true, name: true, finalPrice: true, currency: true, durationMinutes: true },
-        },
+    const address = pickStr(body.address) ?? order.address;
+    const accessNotes = pickStr(body.accessNotes);
+    let desc = scope.slice(0, 1000);
+    if (accessNotes) {
+      desc = `${desc}\n\n--- Access ---\n${accessNotes}`.slice(0, 1000);
+    }
+
+    const scheduledRaw = body.scheduledFor;
+    let scheduledAt: Date | null = order.scheduledAt;
+    if (scheduledRaw != null && String(scheduledRaw).trim() !== '') {
+      const d = new Date(String(scheduledRaw));
+      scheduledAt = !Number.isNaN(d.getTime()) ? d : order.scheduledAt;
+    }
+
+    let scheduleFlex = order.scheduleFlexibility;
+    if (typeof body.scheduleFlexibility === 'string' && SCHEDULE_FLEX.has(body.scheduleFlexibility)) {
+      scheduleFlex = body.scheduleFlexibility;
+    } else {
+      const tp = pickStr(body.timePreference);
+      if (tp === 'AS_SOON_AS_POSSIBLE') scheduleFlex = 'asap';
+      else if (tp === 'THIS_WEEK' || tp === 'NEXT_WEEK') scheduleFlex = 'this_week';
+      else if (tp === 'FLEXIBLE') scheduleFlex = 'asap';
+    }
+
+    const prevPicks = asAnswersRecord(order.customerPicks);
+    const categoryId = pickStr(body.categoryId);
+    const serviceId = pickStr(body.serviceId) ?? order.serviceCatalogId;
+    const selectedProviderId = pickStr(body.selectedProviderId);
+    const customerPicks = {
+      ...prevPicks,
+      wizardSubmitAt: new Date().toISOString(),
+      packageId: packageId ?? null,
+      categoryId: categoryId ?? null,
+      serviceId,
+      agreedToTerms: true,
+      timePreference: pickStr(body.timePreference) ?? prevPicks.timePreference,
+      ...(selectedProviderId ? { selectedProviderId } : {}),
+    };
+
+    let photosJson = normalizePhotosJson(order.photos);
+    if (Array.isArray(body.photoIds) && body.photoIds.length > 0) {
+      const want = new Set(
+        body.photoIds.filter((x): x is string => typeof x === 'string' && x.trim().length > 0),
+      );
+      const arr = (photosJson as unknown as Record<string, unknown>[]).filter(
+        (p) => typeof p.url === 'string' && want.has(p.url),
+      );
+      photosJson = arr as unknown as Prisma.InputJsonValue;
+    }
+
+    await prisma.order.update({
+      where: { id },
+      data: {
+        description: desc,
+        address,
+        scheduledAt,
+        scheduleFlexibility: scheduleFlex,
+        photos: photosJson,
+        customerPicks: answersToJson(customerPicks),
       },
     });
-    if (!finalOrder) {
-      return res.status(500).json({ error: 'Order not found after submit' });
-    }
-    return res.json({
-      ...(await orderToCustomerJson(finalOrder)),
-      matchOutcome,
-      matchedSummary:
-        finalOrder.matchedProvider && finalOrder.matchedWorkspace && finalOrder.matchedPackage
-          ? {
-              provider: finalOrder.matchedProvider,
-              workspace: finalOrder.matchedWorkspace,
-              package: finalOrder.matchedPackage,
-            }
-          : null,
-    });
+
+    await runSubmitDraftOrderFlow(res, userId, id, {});
   } catch (err: unknown) {
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
@@ -669,6 +826,19 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
       countOrderPhaseFacets(whereFacetBase),
     ]);
 
+    const providerIdsForRatings = [...new Set(rows.map((r) => r.matchedProviderId).filter(Boolean))] as string[];
+    const ratingGroups =
+      providerIdsForRatings.length > 0
+        ? await prisma.service.groupBy({
+            by: ['providerId'],
+            where: { providerId: { in: providerIdsForRatings } },
+            _avg: { rating: true },
+          })
+        : [];
+    const ratingByProvider = new Map(
+      ratingGroups.map((g) => [g.providerId, g._avg.rating ?? null] as const),
+    );
+
     const uniqueCategoryIds = [
       ...new Set(rows.map((r) => r.serviceCatalog.categoryId).filter(Boolean)),
     ] as string[];
@@ -699,6 +869,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
                   package: r.matchedPackage,
                 }
               : null,
+          matchedProviderRating: r.matchedProviderId ? ratingByProvider.get(r.matchedProviderId) ?? null : null,
         };
       }),
     );
@@ -1022,6 +1193,93 @@ router.post('/:id/review', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/** F5 wizard Step 5: preview eligible providers before submit (draft orders only). */
+router.get('/:id/matched-providers', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+    const order = await prisma.order.findFirst({ where: { id, customerId: userId } });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (order.status !== OrderStatus.draft) {
+      return res.status(400).json({ error: 'Matched providers preview is only available for draft orders' });
+    }
+    const cat = await prisma.serviceCatalog.findUnique({
+      where: { id: order.serviceCatalogId },
+      select: { defaultMatchingMode: true },
+    });
+    const autoMatchEnabled = cat?.defaultMatchingMode === 'auto_book';
+    const [autoList, negList] = await Promise.all([
+      findEligiblePackagesForOffer(id),
+      findEligibleNegotiationPackagesForOffer(id),
+    ]);
+    const bestByProvider = new Map<
+      string,
+      (typeof autoList)[number]
+    >();
+    for (const row of [...autoList, ...negList]) {
+      const pid = row.package.providerId;
+      const prev = bestByProvider.get(pid);
+      if (!prev || row.score < prev.score) {
+        bestByProvider.set(pid, row);
+      }
+    }
+    const providerIds = [...bestByProvider.keys()];
+    const stats =
+      providerIds.length > 0
+        ? await prisma.service.groupBy({
+            by: ['providerId'],
+            where: { providerId: { in: providerIds } },
+            _avg: { rating: true },
+            _sum: { reviewsCount: true },
+          })
+        : [];
+    const statMap = new Map(
+      stats.map((s) => [
+        s.providerId,
+        {
+          rating: s._avg.rating ?? null,
+          reviewsCount: s._sum.reviewsCount ?? 0,
+        },
+      ]),
+    );
+    function providerDisplayName(p: {
+      displayName: string | null;
+      firstName: string | null;
+      lastName: string | null;
+    }): string {
+      if (p.displayName?.trim()) return p.displayName.trim();
+      const n = `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim();
+      return n || 'Provider';
+    }
+    const providers = [...bestByProvider.values()].map((row) => {
+      const p = row.package.provider;
+      const st = statMap.get(p.id);
+      return {
+        providerId: p.id,
+        name: providerDisplayName(p),
+        avatarUrl: p.avatarUrl ?? null,
+        rating: st?.rating ?? null,
+        reviewsCount: typeof st?.reviewsCount === 'number' ? st.reviewsCount : 0,
+        distanceKm: row.distanceKm,
+        packageId: row.package.id,
+        packageName: row.package.name,
+        workspaceName: row.package.workspace.name,
+      };
+    });
+    providers.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
+    return res.json({
+      autoMatchEnabled,
+      manualSelectionAvailable: !autoMatchEnabled && providers.length > 0,
+      providers,
+    });
+  } catch (err: unknown) {
+    console.error(err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+});
+
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
@@ -1038,6 +1296,12 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
           select: { id: true, name: true, finalPrice: true, currency: true, durationMinutes: true },
         },
         customerReview: true,
+        orderContract: {
+          select: {
+            id: true,
+            currentVersion: { select: { id: true, status: true } },
+          },
+        },
       },
     });
     if (!order) {
@@ -1070,6 +1334,17 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
             rating: order.customerReview.rating,
             reviewText: order.customerReview.reviewText,
             createdAt: order.customerReview.createdAt.toISOString(),
+          }
+        : null,
+      customerContract: order.orderContract
+        ? {
+            id: order.orderContract.id,
+            currentVersion: order.orderContract.currentVersion
+              ? {
+                  id: order.orderContract.currentVersion.id,
+                  status: order.orderContract.currentVersion.status,
+                }
+              : null,
           }
         : null,
     });
@@ -1277,6 +1552,58 @@ router.post('/:id/select-provider', async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.post('/:id/dispute', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+    const reason = pickStr((req.body as Record<string, unknown>)?.reason);
+    if (!reason || reason.length < 20) {
+      return res.status(400).json({ error: 'reason must be at least 20 characters' });
+    }
+    const order = await prisma.order.findFirst({ where: { id, customerId: userId } });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (order.status !== OrderStatus.completed) {
+      return res.status(400).json({ error: 'Disputes can only be opened after the job is marked complete' });
+    }
+    const existing = await prisma.dispute.findUnique({ where: { orderId: id } });
+    if (existing) {
+      return res.status(409).json({ error: 'A dispute already exists for this order' });
+    }
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.dispute.create({
+        data: {
+          orderId: id,
+          customerId: userId,
+          reason,
+        },
+      });
+      const o = await tx.order.update({
+        where: { id },
+        data: {
+          status: OrderStatus.disputed,
+          phase: phaseFromStatus(OrderStatus.disputed, order.phase),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'ORDER_DISPUTED',
+          resourceType: 'order',
+          resourceId: id,
+          metadata: { reason } as Prisma.InputJsonValue,
+        },
+      });
+      return o;
+    });
+    res.json(await orderToCustomerJson(updated));
+  } catch (err: unknown) {
+    console.error(err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+});
+
 router.post('/:id/cancel', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
@@ -1289,7 +1616,11 @@ router.post('/:id/cancel', async (req: AuthRequest, res: Response) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    if (order.status !== OrderStatus.draft && order.status !== OrderStatus.submitted) {
+    if (
+      order.status !== OrderStatus.draft &&
+      order.status !== OrderStatus.submitted &&
+      order.status !== OrderStatus.matching
+    ) {
       return res.status(400).json({ error: 'Order cannot be cancelled in its current state' });
     }
     const now = new Date();

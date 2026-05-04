@@ -12,17 +12,14 @@ import { TranslateToggle } from './TranslateToggle';
 
 type Props = {
   orderId: string;
-  enabled: boolean;
-  matchedProviderId: string | null | undefined;
   status: string;
+  /** When true, participant may send messages (role-specific rules set by parent). */
+  composeEnabled: boolean;
+  /** Optional banner (e.g. pre-match customer notice). */
+  notice?: string | null;
 };
 
-function canUseChat(status: string, matchedProviderId: string | null | undefined): boolean {
-  if (!matchedProviderId) return false;
-  return ['matched', 'contracted', 'paid', 'in_progress', 'completed'].includes(status);
-}
-
-export function OrderChatPanel({ orderId, enabled, matchedProviderId, status }: Props) {
+export function OrderChatPanel({ orderId, status, composeEnabled, notice }: Props) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<OrderChatMessage[]>([]);
@@ -32,10 +29,14 @@ export function OrderChatPanel({ orderId, enabled, matchedProviderId, status }: 
   const [translationCache, setTranslationCache] = useState<Record<string, string>>({});
   const listRef = useRef<HTMLDivElement | null>(null);
   const myLang = useMemo(() => (navigator.language?.slice(0, 2) || 'en').toLowerCase(), []);
-  const chatEnabled = enabled && canUseChat(status, matchedProviderId);
+
+  const shouldLoadThread = !['draft', 'cancelled'].includes(status);
 
   useEffect(() => {
-    if (!chatEnabled) return;
+    if (!shouldLoadThread) {
+      setMessages([]);
+      return;
+    }
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -43,6 +44,9 @@ export function OrderChatPanel({ orderId, enabled, matchedProviderId, status }: 
         const data = await getOrderChatThread(orderId);
         if (cancelled) return;
         setMessages(data.messages);
+      } catch {
+        if (cancelled) return;
+        setMessages([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -51,7 +55,9 @@ export function OrderChatPanel({ orderId, enabled, matchedProviderId, status }: 
     const timer = setInterval(() => {
       void getOrderChatThread(orderId)
         .then((data) => {
-          if (!cancelled) setMessages(data.messages);
+          if (!cancelled) {
+            setMessages(data.messages);
+          }
         })
         .catch(() => {
           /* keep last state */
@@ -61,10 +67,10 @@ export function OrderChatPanel({ orderId, enabled, matchedProviderId, status }: 
       cancelled = true;
       clearInterval(timer);
     };
-  }, [chatEnabled, orderId]);
+  }, [shouldLoadThread, orderId]);
 
   useEffect(() => {
-    if (!chatEnabled || !autoTranslate) return;
+    if (!shouldLoadThread || !autoTranslate) return;
     const incoming = messages.filter((m) => m.senderId !== user?.id);
     for (const msg of incoming) {
       const cacheKey = `${msg.id}:${myLang}`;
@@ -81,18 +87,18 @@ export function OrderChatPanel({ orderId, enabled, matchedProviderId, status }: 
           /* best effort */
         });
     }
-  }, [autoTranslate, chatEnabled, messages, myLang, orderId, translationCache, user?.id]);
+  }, [autoTranslate, shouldLoadThread, messages, myLang, orderId, translationCache, user?.id]);
 
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages]);
 
-  if (!chatEnabled) {
+  if (!shouldLoadThread) {
     return (
       <section className="rounded-2xl border border-app-border bg-app-card p-4">
         <h3 className="text-sm font-black uppercase tracking-wide text-app-text">Order chat</h3>
-        <p className="mt-2 text-sm text-neutral-500">Chat unlocks after provider selection.</p>
+        <p className="mt-2 text-sm text-neutral-500">Chat is available after you submit this request.</p>
       </section>
     );
   }
@@ -102,6 +108,11 @@ export function OrderChatPanel({ orderId, enabled, matchedProviderId, status }: 
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-black uppercase tracking-wide text-app-text">Order chat</h3>
       </div>
+      {notice ? (
+        <div className="rounded-xl border border-sky-300/50 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+          {notice}
+        </div>
+      ) : null}
       <TranslateToggle enabled={autoTranslate} language={myLang} onToggle={setAutoTranslate} />
       <div ref={listRef} className="max-h-[360px] space-y-2 overflow-y-auto rounded-xl border border-app-border bg-app-input/40 p-3">
         {loading ? (
@@ -127,6 +138,7 @@ export function OrderChatPanel({ orderId, enabled, matchedProviderId, status }: 
         defaultLanguage={myLang}
         busy={sendBusy}
         blockedWarning={blockedWarning}
+        disabled={!composeEnabled}
         onSend={async ({ text, sourceLang }) => {
           setSendBusy(true);
           setBlockedWarning(null);
@@ -151,4 +163,3 @@ export function OrderChatPanel({ orderId, enabled, matchedProviderId, status }: 
     </section>
   );
 }
-

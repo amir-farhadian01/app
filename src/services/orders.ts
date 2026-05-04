@@ -44,6 +44,7 @@ export type OrderRecord = {
   matchedWorkspaceId?: string | null;
   autoMatchExhausted?: boolean;
   matchingExpiresAt?: string | null;
+  customerPicks?: Record<string, unknown> | null;
   cancelReason: string | null;
   cancelledAt: string | null;
   submittedAt: string | null;
@@ -57,10 +58,16 @@ export type OrderCustomerReview = {
   createdAt: string;
 };
 
+export type OrderCustomerContractSummary = {
+  id: string;
+  currentVersion: { id: string; status: string } | null;
+};
+
 export type OrderWithSchema = OrderRecord & {
   schema?: unknown;
   staleSnapshot?: boolean;
   customerReview?: OrderCustomerReview | null;
+  customerContract?: OrderCustomerContractSummary | null;
   matchedSummary?: {
     provider: {
       id: string;
@@ -105,6 +112,7 @@ export type CategorySearchResponse = {
 
 export type MyOrderListItem = OrderRecord & {
   matchedSummary?: OrderWithSchema['matchedSummary'];
+  matchedProviderRating?: number | null;
   serviceCatalog: { id: string; name: string; breadcrumb: { id: string; name: string; parentId: string | null }[] };
 };
 
@@ -180,6 +188,10 @@ function normalizeOrder(raw: unknown): OrderRecord {
     matchedWorkspaceId: typeof o.matchedWorkspaceId === 'string' ? o.matchedWorkspaceId : null,
     autoMatchExhausted: Boolean(o.autoMatchExhausted),
     matchingExpiresAt: typeof o.matchingExpiresAt === 'string' ? o.matchingExpiresAt : null,
+    customerPicks:
+      o.customerPicks && typeof o.customerPicks === 'object' && !Array.isArray(o.customerPicks)
+        ? (o.customerPicks as Record<string, unknown>)
+        : null,
     cancelReason: typeof o.cancelReason === 'string' ? o.cancelReason : null,
     cancelledAt: typeof o.cancelledAt === 'string' ? o.cancelledAt : null,
     submittedAt: typeof o.submittedAt === 'string' ? o.submittedAt : null,
@@ -246,6 +258,133 @@ export type SubmitOrderResult =
     }
   | { ok: false; message: string; validationErrors?: Record<string, string> };
 
+export type ServiceCatalogPackageRow = {
+  id: string;
+  name: string;
+  price: number;
+  duration: number | null;
+  bookingMode: string;
+  bomLines: Array<{ productName: string; quantity: number; unitPrice: number; currency: string }>;
+  margin: number;
+};
+
+export async function getServiceCatalogPackages(serviceCatalogId: string): Promise<ServiceCatalogPackageRow[]> {
+  const res = await fetch(`/api/service-catalog/${encodeURIComponent(serviceCatalogId)}/packages`, {
+    credentials: 'include',
+  });
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || 'Failed to load packages');
+  }
+  if (!Array.isArray(data)) return [];
+  return data as ServiceCatalogPackageRow[];
+}
+
+export type MatchedProviderPreview = {
+  providerId: string;
+  name: string;
+  avatarUrl: string | null;
+  rating: number | null;
+  reviewsCount: number;
+  distanceKm: number | null;
+  packageId: string;
+  packageName: string;
+  workspaceName: string;
+};
+
+export async function getOrderMatchedProviders(orderId: string): Promise<{
+  autoMatchEnabled: boolean;
+  manualSelectionAvailable: boolean;
+  providers: MatchedProviderPreview[];
+}> {
+  const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/matched-providers`, {
+    headers: authHeaders(),
+    credentials: 'include',
+  });
+  const data = await parseJson(res);
+  if (res.status === 401) {
+    throw Object.assign(new Error('Unauthorized'), { code: 'UNAUTHORIZED' as const });
+  }
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || 'Failed to load providers');
+  }
+  const d = data as Record<string, unknown>;
+  return {
+    autoMatchEnabled: Boolean(d.autoMatchEnabled),
+    manualSelectionAvailable: Boolean(d.manualSelectionAvailable),
+    providers: Array.isArray(d.providers) ? (d.providers as MatchedProviderPreview[]) : [],
+  };
+}
+
+export type WizardSubmitBody = {
+  categoryId?: string;
+  serviceId?: string;
+  packageId?: string;
+  scheduledFor?: string | null;
+  scheduleFlexibility?: string;
+  timePreference?: string;
+  address: string;
+  scope: string;
+  accessNotes?: string;
+  photoIds?: string[];
+  agreedToTerms: boolean;
+  selectedProviderId?: string | null;
+};
+
+export async function submitWizardOrder(orderId: string, body: WizardSubmitBody): Promise<SubmitOrderResult> {
+  const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/submit`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+    credentials: 'include',
+  });
+  const data = (await parseJson(res)) as Record<string, unknown>;
+  if (res.status === 409) {
+    const ord = data.order;
+    if (ord && typeof ord === 'object') {
+      return { ok: true, alreadySubmitted: true, order: normalizeOrder(ord) };
+    }
+    return { ok: true, alreadySubmitted: true, order: normalizeOrder(data) };
+  }
+  if (res.status === 400) {
+    const errors = data.errors;
+    return {
+      ok: false,
+      message: typeof data.error === 'string' ? data.error : 'Validation failed',
+      validationErrors:
+        errors && typeof errors === 'object' && !Array.isArray(errors)
+          ? (errors as Record<string, string>)
+          : undefined,
+    };
+  }
+  if (res.status === 401) {
+    return { ok: false, message: 'Unauthorized', validationErrors: { _auth: 'sign_in_required' } };
+  }
+  if (!res.ok) {
+    return { ok: false, message: typeof data.error === 'string' ? data.error : 'Submit failed' };
+  }
+  return {
+    ok: true,
+    alreadySubmitted: false,
+    order: normalizeOrder(data),
+    matchOutcome:
+      data.matchOutcome && typeof data.matchOutcome === 'object'
+        ? (data.matchOutcome as {
+            mode: 'auto_matched' | 'round_robin_invited' | 'no_eligible_providers';
+            attemptId?: string;
+            invitedCount?: number;
+            attemptIds?: string[];
+            windowExpiresAt?: string | null;
+            reason?: string;
+          })
+        : undefined,
+    matchedSummary:
+      data.matchedSummary && typeof data.matchedSummary === 'object'
+        ? (data.matchedSummary as OrderWithSchema['matchedSummary'])
+        : null,
+  };
+}
+
 export async function submitOrderDraft(
   orderId: string,
   patch?: Record<string, unknown>,
@@ -303,6 +442,24 @@ export async function submitOrderDraft(
   };
 }
 
+export async function submitOrderDispute(orderId: string, reason: string): Promise<OrderRecord> {
+  const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/dispute`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ reason }),
+    credentials: 'include',
+  });
+  const data = await parseJson(res);
+  if (res.status === 401) {
+    window.location.href = '/auth';
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || 'Dispute submit failed');
+  }
+  return normalizeOrder(data);
+}
+
 export async function cancelOrder(orderId: string, reason: string): Promise<OrderRecord> {
   const res = await fetch(`/api/orders/${orderId}/cancel`, {
     method: 'POST',
@@ -328,12 +485,16 @@ function normalizeMyItem(raw: unknown): MyOrderListItem {
     o.matchedSummary && typeof o.matchedSummary === 'object'
       ? (o.matchedSummary as OrderWithSchema['matchedSummary'])
       : null;
+  const mr = o.matchedProviderRating;
+  const matchedProviderRating =
+    typeof mr === 'number' && Number.isFinite(mr) ? mr : mr === null ? null : undefined;
   const sc = o.serviceCatalog;
   if (sc && typeof sc === 'object' && !Array.isArray(sc)) {
     const s = sc as Record<string, unknown>;
     return {
       ...base,
       matchedSummary,
+      ...(matchedProviderRating !== undefined ? { matchedProviderRating } : {}),
       serviceCatalog: {
         id: String(s.id ?? base.serviceCatalogId),
         name: String(s.name ?? 'Service'),
@@ -346,6 +507,7 @@ function normalizeMyItem(raw: unknown): MyOrderListItem {
   return {
     ...base,
     matchedSummary,
+    ...(matchedProviderRating !== undefined ? { matchedProviderRating } : {}),
     serviceCatalog: { id: base.serviceCatalogId, name: 'Service', breadcrumb: [] },
   };
 }
@@ -419,6 +581,22 @@ function normalizeCustomerReview(raw: unknown): OrderCustomerReview | null {
   };
 }
 
+function normalizeCustomerContract(raw: unknown): OrderCustomerContractSummary | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const id = typeof o.id === 'string' ? o.id : '';
+  if (!id) return null;
+  const cv = o.currentVersion;
+  let currentVersion: { id: string; status: string } | null = null;
+  if (cv && typeof cv === 'object' && !Array.isArray(cv)) {
+    const c = cv as Record<string, unknown>;
+    if (typeof c.id === 'string' && typeof c.status === 'string') {
+      currentVersion = { id: c.id, status: c.status };
+    }
+  }
+  return { id, currentVersion };
+}
+
 export async function getOrder(orderId: string): Promise<OrderWithSchema> {
   const res = await fetch(`/api/orders/${orderId}`, {
     headers: authHeaders(),
@@ -439,6 +617,7 @@ export async function getOrder(orderId: string): Promise<OrderWithSchema> {
     schema: o.schema,
     staleSnapshot: Boolean(o.staleSnapshot),
     customerReview: normalizeCustomerReview(o.customerReview),
+    customerContract: normalizeCustomerContract(o.customerContract),
     matchedSummary:
       o.matchedSummary && typeof o.matchedSummary === 'object'
         ? (o.matchedSummary as OrderWithSchema['matchedSummary'])
@@ -475,6 +654,7 @@ export async function submitOrderReview(
     schema: o.schema,
     staleSnapshot: Boolean(o.staleSnapshot),
     customerReview: normalizeCustomerReview(o.customerReview),
+    customerContract: normalizeCustomerContract(o.customerContract),
     matchedSummary:
       o.matchedSummary && typeof o.matchedSummary === 'object'
         ? (o.matchedSummary as OrderWithSchema['matchedSummary'])

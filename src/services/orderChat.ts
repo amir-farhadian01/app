@@ -31,7 +31,8 @@ export type OrderChatThread = {
 export type OrderChatThreadResponse = {
   thread: OrderChatThread;
   messages: OrderChatMessage[];
-  role: 'customer' | 'provider' | 'admin';
+  role: 'customer' | 'provider' | 'admin' | 'invited_provider';
+  readOnly?: boolean;
 };
 
 export function isOrderChatEnabled(input: {
@@ -40,6 +41,11 @@ export function isOrderChatEnabled(input: {
 }): boolean {
   if (!input.matchedProviderId) return false;
   return ['matched', 'contracted', 'paid', 'in_progress', 'completed'].includes(input.status);
+}
+
+/** Customer can send order-scoped chat messages (read-only in chat tab until matched). */
+export function canCustomerComposeOrderChat(status: string): boolean {
+  return ['matched', 'contracted', 'paid', 'in_progress', 'completed'].includes(status);
 }
 
 type ApiError = Error & { status?: number; body?: unknown };

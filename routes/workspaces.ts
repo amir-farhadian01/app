@@ -267,10 +267,23 @@ async function getWorkspaceInboxAttemptsList(req: AuthRequest, res: Response) {
             select: {
               id: true,
               name: true,
+              description: true,
               finalPrice: true,
               currency: true,
               bookingMode: true,
+              durationMinutes: true,
               serviceCatalogId: true,
+              bom: {
+                orderBy: { sortOrder: 'asc' },
+                select: {
+                  quantity: true,
+                  snapshotUnitPrice: true,
+                  snapshotCurrency: true,
+                  snapshotProductName: true,
+                  snapshotUnit: true,
+                  notes: true,
+                },
+              },
             },
           },
           offer: {
@@ -298,6 +311,8 @@ async function getWorkspaceInboxAttemptsList(req: AuthRequest, res: Response) {
       pageSize,
       items: rows.map((a) => ({
         id: a.id,
+        providerId: a.providerId,
+        workspaceId: a.workspaceId,
         status: a.status,
         score: a.score,
         distanceKm: a.distanceKm,
@@ -328,6 +343,7 @@ async function getWorkspaceInboxAttemptsList(req: AuthRequest, res: Response) {
           locationLat: a.offer.locationLat,
           locationLng: a.offer.locationLng,
           submittedAt: a.offer.submittedAt?.toISOString() ?? null,
+          customerPicks: a.offer.customerPicks ?? null,
         },
         customer: a.offer.customer,
         serviceCatalog: a.offer.serviceCatalog,
@@ -363,6 +379,17 @@ router.get('/:id/inbox/:attemptId', async (req: AuthRequest, res: Response) => {
           include: {
             serviceCatalog: { select: { id: true, name: true, category: true, lockedBookingMode: true } },
             provider: { select: { id: true, email: true, displayName: true } },
+            bom: {
+              orderBy: { sortOrder: 'asc' },
+              select: {
+                quantity: true,
+                snapshotUnitPrice: true,
+                snapshotCurrency: true,
+                snapshotProductName: true,
+                snapshotUnit: true,
+                notes: true,
+              },
+            },
           },
         },
         offer: {
@@ -388,6 +415,8 @@ router.get('/:id/inbox/:attemptId', async (req: AuthRequest, res: Response) => {
     }
     res.json({
       id: row.id,
+      providerId: row.providerId,
+      workspaceId: row.workspaceId,
       status: row.status,
       score: row.score,
       distanceKm: row.distanceKm,
@@ -423,6 +452,7 @@ router.get('/:id/inbox/:attemptId', async (req: AuthRequest, res: Response) => {
         submittedAt: row.offer.submittedAt?.toISOString() ?? null,
         createdAt: row.offer.createdAt.toISOString(),
         updatedAt: row.offer.updatedAt.toISOString(),
+        customerPicks: row.offer.customerPicks ?? null,
       },
       customer: row.offer.customer,
       serviceCatalog: row.offer.serviceCatalog,

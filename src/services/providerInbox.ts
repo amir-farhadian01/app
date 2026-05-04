@@ -21,12 +21,21 @@ export type ProviderInboxItem = {
   package: {
     id: string;
     name: string;
+    description?: string | null;
     finalPrice: number;
     currency: string;
     bookingMode?: string;
     durationMinutes?: number | null;
     serviceCatalogId?: string;
     serviceCatalog?: { id: string; name: string; category?: string; lockedBookingMode?: string | null };
+    bom?: Array<{
+      quantity: number;
+      snapshotUnitPrice: number;
+      snapshotCurrency: string;
+      snapshotProductName: string;
+      snapshotUnit: string;
+      notes?: string | null;
+    }>;
   };
   order: {
     id: string;
@@ -50,6 +59,7 @@ export type ProviderInboxItem = {
     submittedAt: string | null;
     createdAt?: string;
     updatedAt?: string;
+    customerPicks?: Record<string, unknown> | null;
   };
   customer: {
     id: string;
@@ -94,6 +104,7 @@ function normalizeItem(raw: unknown): ProviderInboxItem {
     package: {
       id: String(packageRaw.id ?? ''),
       name: typeof packageRaw.name === 'string' ? packageRaw.name : 'Package',
+      description: typeof packageRaw.description === 'string' ? packageRaw.description : null,
       finalPrice: typeof packageRaw.finalPrice === 'number' ? packageRaw.finalPrice : 0,
       currency: typeof packageRaw.currency === 'string' ? packageRaw.currency : 'CAD',
       bookingMode: typeof packageRaw.bookingMode === 'string' ? packageRaw.bookingMode : undefined,
@@ -103,6 +114,19 @@ function normalizeItem(raw: unknown): ProviderInboxItem {
         packageRaw.serviceCatalog && typeof packageRaw.serviceCatalog === 'object'
           ? (packageRaw.serviceCatalog as ProviderInboxItem['package']['serviceCatalog'])
           : undefined,
+      bom: Array.isArray(packageRaw.bom)
+        ? (packageRaw.bom as unknown[]).map((row) => {
+            const b = row as Record<string, unknown>;
+            return {
+              quantity: typeof b.quantity === 'number' ? b.quantity : 0,
+              snapshotUnitPrice: typeof b.snapshotUnitPrice === 'number' ? b.snapshotUnitPrice : 0,
+              snapshotCurrency: typeof b.snapshotCurrency === 'string' ? b.snapshotCurrency : 'CAD',
+              snapshotProductName: typeof b.snapshotProductName === 'string' ? b.snapshotProductName : 'Item',
+              snapshotUnit: typeof b.snapshotUnit === 'string' ? b.snapshotUnit : 'each',
+              notes: typeof b.notes === 'string' ? b.notes : null,
+            };
+          })
+        : undefined,
     },
     order: {
       id: String(orderRaw.id ?? ''),
@@ -129,6 +153,10 @@ function normalizeItem(raw: unknown): ProviderInboxItem {
       submittedAt: typeof orderRaw.submittedAt === 'string' ? orderRaw.submittedAt : null,
       createdAt: typeof orderRaw.createdAt === 'string' ? orderRaw.createdAt : undefined,
       updatedAt: typeof orderRaw.updatedAt === 'string' ? orderRaw.updatedAt : undefined,
+      customerPicks:
+        orderRaw.customerPicks && typeof orderRaw.customerPicks === 'object' && !Array.isArray(orderRaw.customerPicks)
+          ? (orderRaw.customerPicks as Record<string, unknown>)
+          : null,
     },
     customer: {
       id: String(customerRaw.id ?? ''),

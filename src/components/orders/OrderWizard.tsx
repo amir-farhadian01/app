@@ -5,8 +5,9 @@ import { WizardShell } from './WizardShell';
 import { Step1ServicePicker } from './Step1ServicePicker';
 import type { ScheduleChoice } from './Step2When';
 import Step2BookingForm from './Step2BookingForm';
-import { Step3Where } from './Step3Where';
-import Step3Review from './Step3Review';
+import { Step3PackageAndLocation, composeWizardAddress } from './Step3PackageAndLocation';
+import { Step4Scheduling } from './Step4Scheduling';
+import { Step5MatchedProviders } from './Step5MatchedProviders';
 import { Step4Details } from './Step4Details';
 import { PhotoUploader } from './PhotoUploader';
 import { Step6Description } from './Step6Description';
@@ -19,7 +20,8 @@ import { photosJsonToUploadRows } from '@/lib/orderPhotosForValidate';
 import {
   postOrderDraft,
   putOrderDraft,
-  submitOrderDraft,
+  submitWizardOrder,
+  getOrder,
   getServiceCatalogSchema,
   normalizePhotos,
   searchCategoriesAndCatalogs,
@@ -31,6 +33,7 @@ import {
 } from '../../services/orders';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/AuthContext';
+import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { resolveHomeCategoryPathIds, type CategoryTreeNode } from '../../lib/homeOrderDeepLink';
 import { resolveMediaUrl } from '../../lib/resolveMediaUrl';
@@ -104,6 +107,8 @@ export default function OrderWizard() {
   const [locationLat, setLocationLat] = useState<number | null>(null);
   const [locationLng, setLocationLng] = useState<number | null>(null);
   const [autoMatchExhausted, setAutoMatchExhausted] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [packageOfferCount, setPackageOfferCount] = useState<number | null>(null);
 
   const [schema, setSchema] = useState<ServiceQuestionnaireV1 | null>(null);
   const [serviceName, setServiceName] = useState('Service');
@@ -142,6 +147,33 @@ export default function OrderWizard() {
     setLocationLat(o.locationLat);
     setLocationLng(o.locationLng);
     setAutoMatchExhausted(Boolean(o.autoMatchExhausted));
+    const picks = o.customerPicks;
+    if (picks && typeof picks === 'object' && !Array.isArray(picks)) {
+      const p = picks as Record<string, unknown>;
+      if (typeof p.wizardStep === 'number' && p.wizardStep >= 1 && p.wizardStep <= 7) {
+        setStep(p.wizardStep);
+      }
+      useWizardStore.getState().setBookingForm({
+        leafCategoryId: typeof p.categoryId === 'string' ? p.categoryId : undefined,
+        selectedPackageId: typeof p.selectedPackageId === 'string' ? p.selectedPackageId : undefined,
+        selectedPackageName: typeof p.selectedPackageName === 'string' ? p.selectedPackageName : undefined,
+        selectedPackagePrice: typeof p.selectedPackagePrice === 'number' ? p.selectedPackagePrice : undefined,
+        selectedPackageDuration:
+          typeof p.selectedPackageDuration === 'number' ? p.selectedPackageDuration : undefined,
+        selectedPackageBookingMode:
+          typeof p.selectedPackageBookingMode === 'string' ? p.selectedPackageBookingMode : undefined,
+        wizardTimePreference: typeof p.wizardTimePreference === 'string' ? p.wizardTimePreference : undefined,
+        wizardScheduledDate: typeof p.wizardScheduledDate === 'string' ? p.wizardScheduledDate : undefined,
+        wizardTimeSlot: typeof p.wizardTimeSlot === 'string' ? p.wizardTimeSlot : undefined,
+        addressStreet: typeof p.addressStreet === 'string' ? p.addressStreet : undefined,
+        addressCity: typeof p.addressCity === 'string' ? p.addressCity : undefined,
+        addressPostal: typeof p.addressPostal === 'string' ? p.addressPostal : undefined,
+        selectedProviderId:
+          typeof p.selectedProviderId === 'string' || p.selectedProviderId === null
+            ? (p.selectedProviderId as string | null)
+            : undefined,
+      });
+    }
   }, []);
 
   const catFromUrl = searchParams.get('serviceCatalogId');
@@ -151,12 +183,16 @@ export default function OrderWizard() {
   const isNewOffer = searchParams.get('newOffer') === '1';
   const prefillProviderId = searchParams.get('prefillProviderId');
 
-  const storeHomeCategory = useWizardStore((s) => s.homeCategory);
   const storeServiceCatalogId = useWizardStore((s) => s.serviceCatalogId);
   const storePrefillProviderId = useWizardStore((s) => s.prefillProviderId);
   const storePrefillProviderName = useWizardStore((s) => s.prefillProviderName);
   const storeBookingMode = useWizardStore((s) => s.bookingMode);
   const storeServiceAddress = useWizardStore((s) => s.serviceAddress);
+  const pkgSchedMode = useWizardStore((s) => s.selectedPackageBookingMode);
+  const selectedPkgName = useWizardStore((s) => s.selectedPackageName);
+  const selectedPkgPrice = useWizardStore((s) => s.selectedPackagePrice);
+  const accessNotesLive = useWizardStore((s) => s.accessNotes ?? '');
+  const selectedProvId = useWizardStore((s) => s.selectedProviderId);
 
   const authReturnTo = useMemo(() => `${location.pathname}${location.search}`, [location.pathname, location.search]);
 
@@ -236,6 +272,35 @@ export default function OrderWizard() {
       cancelled = true;
     };
   }, [homeCategory]);
+
+  // Restore wizard draft when returning to /orders/new (no deep-link catalog override).
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user?.id) return;
+    if (catFromUrl?.trim()) return;
+    let cancelled = false;
+    let stored: { orderId?: string } | null = null;
+    try {
+      stored = JSON.parse(localStorage.getItem(LS_DRAFT) || 'null') as { orderId?: string } | null;
+    } catch {
+      stored = null;
+    }
+    const rid = typeof stored?.orderId === 'string' ? stored.orderId : '';
+    if (!rid) return;
+    void (async () => {
+      try {
+        const o = await getOrder(rid);
+        if (cancelled) return;
+        if (o.status !== 'draft') return;
+        applyFromOrder(o);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id, catFromUrl, applyFromOrder]);
 
   // ADR-0054: do not call authenticated APIs on mount for guests (avoids api.request 401 → hard /auth redirect).
   useEffect(() => {
@@ -342,6 +407,7 @@ export default function OrderWizard() {
         mergeAnswersForNewCatalogFields(parsed, setAnswers);
         setServiceName(r.serviceCatalog.name);
         setBreadcrumbNames(r.breadcrumbs.map((b) => b.name));
+        const leafId = r.breadcrumbs.length ? r.breadcrumbs[r.breadcrumbs.length - 1]!.id : undefined;
         useWizardStore.getState().setServiceFromCatalog({
           serviceCatalogId,
           serviceCatalogName: r.serviceCatalog.name,
@@ -351,6 +417,9 @@ export default function OrderWizard() {
             lockedBookingMode: r.serviceCatalog.lockedBookingMode ?? null,
           }),
         });
+        if (leafId) {
+          useWizardStore.getState().setBookingForm({ leafCategoryId: leafId });
+        }
         if (r.schema == null || !isServiceQuestionnaireV1(r.schema)) {
           setSchemaFetchWarning(
             'No custom questions for this service. Add your address and any notes, then continue.',
@@ -417,6 +486,7 @@ export default function OrderWizard() {
     const t = setTimeout(() => {
       void (async () => {
         try {
+          const w = useWizardStore.getState();
           await putOrderDraft(orderId, {
             answers,
             photos,
@@ -427,6 +497,22 @@ export default function OrderWizard() {
             address,
             locationLat,
             locationLng,
+            customerPicks: {
+              wizardStep: step,
+              categoryId: w.leafCategoryId,
+              selectedPackageId: w.selectedPackageId,
+              selectedPackageName: w.selectedPackageName ?? null,
+              selectedPackagePrice: w.selectedPackagePrice ?? null,
+              selectedPackageDuration: w.selectedPackageDuration,
+              selectedPackageBookingMode: w.selectedPackageBookingMode,
+              wizardTimePreference: w.wizardTimePreference,
+              wizardScheduledDate: w.wizardScheduledDate,
+              wizardTimeSlot: w.wizardTimeSlot,
+              addressStreet: w.addressStreet,
+              addressCity: w.addressCity,
+              addressPostal: w.addressPostal,
+              selectedProviderId: w.selectedProviderId ?? null,
+            },
           });
           setSavedFlash(true);
           setTimeout(() => setSavedFlash(false), 3000);
@@ -438,6 +524,7 @@ export default function OrderWizard() {
     return () => clearTimeout(t);
   }, [
     orderId,
+    step,
     answers,
     photos,
     description,
@@ -449,6 +536,45 @@ export default function OrderWizard() {
     locationLng,
   ]);
 
+  const wizDate = useWizardStore((s) => s.wizardScheduledDate);
+  const wizSlot = useWizardStore((s) => s.wizardTimeSlot);
+  const wizTp = useWizardStore((s) => s.wizardTimePreference);
+
+  useEffect(() => {
+    if (!pkgSchedMode) return;
+    if (pkgSchedMode === 'negotiation') {
+      const pref = wizTp ?? 'AS_SOON_AS_POSSIBLE';
+      setScheduleFlexibility(pref === 'THIS_WEEK' || pref === 'NEXT_WEEK' ? 'this_week' : 'asap');
+      setScheduledAt(null);
+      return;
+    }
+    if (wizDate?.trim()) {
+      const t =
+        wizSlot === 'afternoon' ? '14:00:00' : wizSlot === 'evening' ? '18:00:00' : '09:00:00';
+      const dt = new Date(`${wizDate.trim()}T${t}`);
+      if (!Number.isNaN(dt.getTime()) && dt.getTime() > Date.now() + 55 * 60 * 1000) {
+        setScheduleFlexibility('specific');
+        setScheduledAt(dt.toISOString());
+      }
+    }
+  }, [pkgSchedMode, wizDate, wizSlot, wizTp]);
+
+  const scheduleDetailForReview = useMemo(() => {
+    if (pkgSchedMode === 'negotiation') {
+      const m: Record<string, string> = {
+        AS_SOON_AS_POSSIBLE: 'As soon as possible',
+        THIS_WEEK: 'This week',
+        NEXT_WEEK: 'Next week',
+        FLEXIBLE: 'Flexible',
+      };
+      return m[wizTp ?? ''] ?? wizTp ?? null;
+    }
+    if (wizDate?.trim()) {
+      return `${wizDate.trim()}${wizSlot ? ` · ${wizSlot}` : ''}`;
+    }
+    return null;
+  }, [pkgSchedMode, wizTp, wizDate, wizSlot]);
+
   useEffect(() => {
     const ref = photos.filter((p) => p.fieldId === WIZARD_GALLERY_FIELD_ID);
     useWizardStore.getState().setBookingForm({ referencePhotos: ref });
@@ -459,6 +585,7 @@ export default function OrderWizard() {
   }, [description]);
 
   const onSelectCatalog = async (catalogId: string, meta?: CatalogSelectionMeta) => {
+    setPackageOfferCount(null);
     setInitError(null);
     useWizardStore.getState().setServiceFromCatalog({
       serviceCatalogId: catalogId,
@@ -487,6 +614,7 @@ export default function OrderWizard() {
           mergeAnswersForNewCatalogFields(parsed, setAnswers);
           setServiceName(r.serviceCatalog.name);
           setBreadcrumbNames(r.breadcrumbs.map((b) => b.name));
+          const leafId = r.breadcrumbs.length ? r.breadcrumbs[r.breadcrumbs.length - 1]!.id : undefined;
           useWizardStore.getState().setServiceFromCatalog({
             serviceCatalogId: catalogId,
             serviceCatalogName: r.serviceCatalog.name,
@@ -499,6 +627,9 @@ export default function OrderWizard() {
             prefillProviderId: prefillProviderId?.trim() || undefined,
             prefillProviderName: prefillProviderLabel ?? undefined,
           });
+          if (leafId) {
+            useWizardStore.getState().setBookingForm({ leafCategoryId: leafId });
+          }
           if (r.schema == null || !isServiceQuestionnaireV1(r.schema)) {
             setSchemaFetchWarning(
               'No custom questions for this service. Add your address and any notes, then continue.',
@@ -543,7 +674,15 @@ export default function OrderWizard() {
     });
   };
 
-  const validateStep4 = (): boolean => {
+  useEffect(() => {
+    if (step !== 3) return;
+    const w = useWizardStore.getState();
+    if (!w.addressCity?.trim()) {
+      useWizardStore.getState().setBookingForm({ addressCity: 'Vaughan, ON' });
+    }
+  }, [step]);
+
+  const validateQuestionnaire = (): boolean => {
     const eff = schema ?? minimalFallbackQuestionnaire();
     if (eff.fields.length === 0) {
       setErrors({});
@@ -581,15 +720,36 @@ export default function OrderWizard() {
         }
         return true;
       }
-      case 3:
-        return address.trim().length > 0;
-      case 4:
+      case 3: {
+        if (packageOfferCount === null) return false;
+        const w = useWizardStore.getState();
+        const city = (w.addressCity ?? 'Vaughan, ON').trim();
+        const line = composeWizardAddress(w.addressStreet ?? '', city, w.addressPostal ?? '');
+        if (line.trim().length < 8) return false;
+        if (packageOfferCount > 0 && !w.selectedPackageId?.trim()) return false;
         return true;
+      }
+      case 4: {
+        const w = useWizardStore.getState();
+        const mode = w.selectedPackageBookingMode;
+        if (mode === 'negotiation') return true;
+        if (!w.wizardScheduledDate?.trim()) return false;
+        const t =
+          w.wizardTimeSlot === 'afternoon' ? '14:00:00' : w.wizardTimeSlot === 'evening' ? '18:00:00' : '09:00:00';
+        const dt = new Date(`${w.wizardScheduledDate.trim()}T${t}`);
+        return !Number.isNaN(dt.getTime()) && dt.getTime() > Date.now() + 55 * 60 * 1000;
+      }
       case 5:
-        return !schemaLoading;
+        return true;
       case 6: {
         const t = description.trim();
-        return t.length >= 10 && t.length <= 1000;
+        if (t.length < 10 || t.length > 1000) return false;
+        const eff = schema ?? minimalFallbackQuestionnaire();
+        if (eff.fields.length === 0) return true;
+        const files = photosJsonToUploadRows(photos, eff);
+        if (files.ok === false) return false;
+        const v = validateServiceAnswers(eff, answers, files.rows);
+        return v.valid;
       }
       default:
         return true;
@@ -597,7 +757,13 @@ export default function OrderWizard() {
   };
 
   const goNext = () => {
-    if (step === 5 && !validateStep4()) return;
+    if (step === 3) {
+      const w = useWizardStore.getState();
+      const city = (w.addressCity ?? 'Vaughan, ON').trim();
+      const line = composeWizardAddress(w.addressStreet ?? '', city, w.addressPostal ?? '');
+      setAddress(line);
+    }
+    if (step === 6 && !validateQuestionnaire()) return;
     if (step === 6) {
       const t = description.trim();
       if (t.length < 10) {
@@ -669,6 +835,10 @@ export default function OrderWizard() {
   const doSubmit = async () => {
     setSubmitAttempted(true);
     setSubmitInlineError(null);
+    if (!agreedToTerms) {
+      setSubmitInlineError('Please accept the Terms of Service to continue.');
+      return;
+    }
     if (!orderId) {
       setPhase('wizard');
       goAuthWithReturn();
@@ -701,7 +871,23 @@ export default function OrderWizard() {
         /* continue to submit with prior description */
       }
     }
-    const r = await submitOrderDraft(orderId, {});
+    const wz = useWizardStore.getState();
+    const galleryUrls = photos.filter((p) => p.fieldId === WIZARD_GALLERY_FIELD_ID).map((p) => p.url);
+    const submitBody = {
+      ...(wz.leafCategoryId ? { categoryId: wz.leafCategoryId } : {}),
+      serviceId: serviceCatalogId ?? undefined,
+      ...((packageOfferCount ?? 0) > 0 && wz.selectedPackageId ? { packageId: wz.selectedPackageId } : {}),
+      scheduledFor: scheduledAt,
+      scheduleFlexibility,
+      timePreference: wz.wizardTimePreference,
+      address: address.trim(),
+      scope: nextDesc.trim(),
+      accessNotes: (wz.accessNotes ?? '').trim(),
+      photoIds: galleryUrls,
+      agreedToTerms,
+      selectedProviderId: wz.selectedProviderId ?? null,
+    };
+    const r = await submitWizardOrder(orderId, submitBody);
     if (r.ok === false) {
       if (r.validationErrors?._auth === 'sign_in_required') {
         setPhase('wizard');
@@ -786,19 +972,26 @@ export default function OrderWizard() {
         ) : null
       }
       footer={
-        step === 1 || step === 4 || step === 7 ? null : (
+        step === 1 || step === 7 ? null : (
           <button
             type="button"
             disabled={nextDisabled}
             onClick={goNext}
             aria-label="Go to next wizard step"
             className={cn(
-              'w-full min-h-[48px] rounded-2xl font-bold text-[15px]',
+              'w-full min-h-[48px] rounded-2xl font-bold text-[15px] inline-flex items-center justify-center gap-2',
               'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900',
               'disabled:opacity-50 disabled:pointer-events-none',
             )}
           >
-            Next
+            {step === 3 && packageOfferCount === null ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
+                Loading…
+              </>
+            ) : (
+              'Next'
+            )}
           </button>
         )
       }
@@ -882,50 +1075,26 @@ export default function OrderWizard() {
         </div>
       ) : null}
 
-      {step === 3 ? (
-        <Step3Where
-          address={address}
-          savedAddress={savedProfileAddress}
-          onChange={(addr, lat, lng) => {
-            setAddress(addr);
-            setLocationLat(lat);
-            setLocationLng(lng);
+      {step === 3 && (serviceCatalogId ?? storeServiceCatalogId) ? (
+        <Step3PackageAndLocation
+          serviceCatalogId={(serviceCatalogId ?? storeServiceCatalogId)!}
+          savedProfileAddress={savedProfileAddress}
+          onUseSavedAddress={() => {
+            if (!savedProfileAddress?.trim()) return;
+            setAddress(savedProfileAddress.trim());
+            useWizardStore.getState().setBookingForm({
+              addressStreet: savedProfileAddress.trim(),
+              addressCity: '',
+              addressPostal: '',
+            });
           }}
+          onPackagesCount={setPackageOfferCount}
         />
       ) : null}
 
-      {step === 4 ? (
-        <Step3Review
-          homeCategory={storeHomeCategory ?? (homeCategory?.trim() || undefined)}
-          prefillCategoryPath={breadcrumbNames.length > 0 ? breadcrumbNames : undefined}
-          serviceCatalogId={serviceCatalogId ?? storeServiceCatalogId ?? undefined}
-          serviceCatalogName={serviceName}
-          prefillProviderId={storePrefillProviderId ?? (prefillProviderId?.trim() || undefined)}
-          prefillProviderName={storePrefillProviderName ?? undefined}
-          bookingMode={storeBookingMode ?? undefined}
-          description={description.trim() || undefined}
-          serviceAddress={
-            [storeServiceAddress, address].find((a) => typeof a === 'string' && a.trim().length > 0)?.trim() ||
-            undefined
-          }
-          onBack={() => setStep(3)}
-          onNext={() => setStep(5)}
-        />
-      ) : null}
+      {step === 4 ? <Step4Scheduling bookingMode={pkgSchedMode} /> : null}
 
-      {step === 5 ? (
-        <Step4Details
-          schema={schema}
-          answers={answers}
-          photos={photos}
-          onAnswer={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))}
-          onPhotosForField={onPhotosForField}
-          errors={errors}
-          showErrors={showStepErrors || step === 5}
-          isSchemaLoading={schemaLoading}
-          schemaFetchWarning={schemaFetchWarning}
-        />
-      ) : null}
+      {step === 5 && orderId ? <Step5MatchedProviders orderId={orderId} /> : null}
 
       {step === 6 ? (
         <Step6Description
@@ -936,6 +1105,28 @@ export default function OrderWizard() {
           coachInput={coachInput}
           errors={errors}
           showErrors={showStepErrors}
+          accessNotes={accessNotesLive}
+          onAccessNotes={(v) => useWizardStore.getState().setBookingForm({ accessNotes: v || undefined })}
+          galleryPhotos={photos.filter((p) => p.fieldId === WIZARD_GALLERY_FIELD_ID)}
+          onGalleryChange={(rows) => {
+            setPhotos((prev) => {
+              const rest = prev.filter((p) => p.fieldId !== WIZARD_GALLERY_FIELD_ID);
+              return [...rest, ...rows.map((r) => ({ ...r, fieldId: WIZARD_GALLERY_FIELD_ID }))];
+            });
+          }}
+          questionnaireSlot={
+            <Step4Details
+              schema={schema}
+              answers={answers}
+              photos={photos}
+              onAnswer={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))}
+              onPhotosForField={onPhotosForField}
+              errors={errors}
+              showErrors={showStepErrors || step === 6}
+              isSchemaLoading={schemaLoading}
+              schemaFetchWarning={schemaFetchWarning}
+            />
+          }
         />
       ) : null}
 
@@ -951,6 +1142,21 @@ export default function OrderWizard() {
           description={description}
           photos={photos}
           bookingPreferencesSummary={buildWizardBookingSummary()}
+          packageName={selectedPkgName ?? null}
+          packagePriceCad={
+            typeof selectedPkgPrice === 'number'
+              ? selectedPkgPrice.toLocaleString('en-CA', {
+                  style: 'currency',
+                  currency: 'CAD',
+                  maximumFractionDigits: 2,
+                })
+              : null
+          }
+          scheduleDetail={scheduleDetailForReview}
+          providerSummary={
+            selectedProvId ? `Selected provider id: ${selectedProvId.slice(0, 8)}…` : null
+          }
+          accessNotes={accessNotesLive || null}
           onEdit={(s) => {
             setSubmitInlineError(null);
             setStep(s);
@@ -959,6 +1165,8 @@ export default function OrderWizard() {
           isSubmitting={phase === 'submitting'}
           submitError={submitInlineError}
           onBackFromReview={handleBack}
+          agreedToTerms={agreedToTerms}
+          onAgreedTermsChange={setAgreedToTerms}
         />
       ) : null}
 

@@ -48,6 +48,7 @@ export function ContractPanel({ orderId, viewer, orderStatus, onContractApproved
   const [mobileSeg, setMobileSeg] = useState<'document' | 'timeline'>('document');
   const [modal, setModal] = useState<'reject' | 'request_edit' | null>(null);
   const [note, setNote] = useState('');
+  const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
 
   const reload = useCallback(async () => {
     const b = await fetchContractBundle(orderId);
@@ -219,6 +220,14 @@ export function ContractPanel({ orderId, viewer, orderStatus, onContractApproved
         </button>
       </div>
 
+      {viewer === 'customer' && bundle?.contract ? (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-app-border bg-neutral-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100">
+            Status · {(heroSent?.status ?? bundle.contract.currentVersion?.status ?? 'draft').replace(/_/g, ' ')}
+          </span>
+        </div>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_minmax(200px,260px)]">
         <div className={cn('space-y-4', mobileSeg === 'timeline' && 'hidden md:block')}>
           {viewer === 'customer' && heroSent && selected?.id === heroSent.id ? (
@@ -227,6 +236,15 @@ export function ContractPanel({ orderId, viewer, orderStatus, onContractApproved
                 Awaiting your decision
               </p>
               <p className="mt-1 text-sm font-semibold text-app-text">Version v{heroSent.versionNumber} is with you for approval.</p>
+              {heroSent.status === 'sent' ? (
+                <button
+                  type="button"
+                  className="mt-3 min-h-[44px] w-full rounded-xl border border-sky-700 bg-white px-4 text-sm font-bold text-sky-950 dark:border-sky-500 dark:bg-sky-950 dark:text-sky-50"
+                  onClick={() => setReviewSheetOpen(true)}
+                >
+                  Review contract
+                </button>
+              ) : null}
             </div>
           ) : null}
 
@@ -402,6 +420,89 @@ export function ContractPanel({ orderId, viewer, orderStatus, onContractApproved
                   className="min-h-[48px] flex-1 rounded-2xl bg-neutral-900 font-bold text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
                 >
                   {busy === 'reject' ? '…' : 'Submit'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {reviewSheetOpen && viewer === 'customer' && heroSent ? (
+          <div className="fixed inset-0 z-[60] flex items-end justify-center p-4 sm:items-center">
+            <motion.button
+              type="button"
+              aria-label="Close"
+              className="absolute inset-0 bg-black/50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setReviewSheetOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-app-border bg-app-card p-6 shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="contract-review-title"
+            >
+              <h3 id="contract-review-title" className="text-lg font-black text-app-text">
+                Review contract
+              </h3>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Version v{heroSent.versionNumber} · Read-only
+              </p>
+              <div className="mt-4 rounded-2xl border border-app-border bg-app-card p-4">
+                <ContractViewer
+                  title={heroSent.title}
+                  termsMarkdown={heroSent.termsMarkdown}
+                  policiesMarkdown={heroSent.policiesMarkdown}
+                  scopeSummary={heroSent.scopeSummary}
+                  amount={heroSent.amount}
+                  currency={heroSent.currency}
+                  startDate={heroSent.startDate}
+                  endDate={heroSent.endDate}
+                />
+              </div>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  disabled={!!busy}
+                  className="min-h-[48px] flex-1 rounded-2xl bg-emerald-600 px-4 text-sm font-bold text-white disabled:opacity-50"
+                  onClick={() => {
+                    void run('approve', async () => {
+                      if (!heroSent) return;
+                      await postApproveContract(orderId, heroSent.id);
+                      setApprovedBanner(true);
+                      await reload();
+                      onContractApproved?.();
+                      showToast('Contract approved');
+                      setReviewSheetOpen(false);
+                    });
+                  }}
+                >
+                  {busy === 'approve' ? '…' : 'Approve'}
+                </button>
+                <button
+                  type="button"
+                  disabled={!!busy}
+                  className="min-h-[48px] flex-1 rounded-2xl border border-app-border px-4 text-sm font-bold text-app-text disabled:opacity-50"
+                  onClick={() => {
+                    setReviewSheetOpen(false);
+                    setModal('request_edit');
+                    setNote('');
+                  }}
+                >
+                  Request changes
+                </button>
+                <button
+                  type="button"
+                  className="min-h-[48px] flex-1 rounded-2xl border border-app-border px-4 text-sm font-bold text-app-text"
+                  onClick={() => setReviewSheetOpen(false)}
+                >
+                  Close
                 </button>
               </div>
             </motion.div>

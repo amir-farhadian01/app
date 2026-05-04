@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, CircleHelp, FileText, LayoutList, Star, X } from 'lucide-react';
+import { ArrowLeft, CircleHelp, FileText, LayoutList, MessageCircle, Star, X } from 'lucide-react';
 import {
   getOrder,
   cancelOrder,
@@ -10,6 +10,7 @@ import {
   getOrderCandidates,
   selectOrderProvider,
   submitOrderReview,
+  submitOrderDispute,
   type OrderCandidate,
   type OrderWithSchema,
 } from '../services/orders';
@@ -21,7 +22,7 @@ import { isServiceQuestionnaireV1 } from '@/lib/serviceDefinitionTypes';
 import { cn } from '../lib/utils';
 import { useSoftToast } from '../lib/SoftToastContext';
 import { OrderChatPanel } from '../components/orders/chat/OrderChatPanel';
-import { isOrderChatEnabled } from '../services/orderChat';
+import { canCustomerComposeOrderChat } from '../services/orderChat';
 import { ContractPanel } from '../components/orders/contracts/ContractPanel';
 import { OrderStatusTimeline } from '../components/orders/OrderStatusTimeline';
 import { useAuth } from '../lib/AuthContext';
@@ -49,7 +50,10 @@ export default function OrderDetail() {
   const [savePriorityTemplate, setSavePriorityTemplate] = useState(false);
   const [weights, setWeights] = useState({ price: 5, distance: 5, rating: 5, responseTime: 5 });
   const [pickModal, setPickModal] = useState<{ attemptId: string; providerName: string; price: string } | null>(null);
-  const [detailTab, setDetailTab] = useState<'details' | 'contract'>('details');
+  const [detailTab, setDetailTab] = useState<'details' | 'contract' | 'chat'>('details');
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [disputeBusy, setDisputeBusy] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<OrderPaymentStatus | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
@@ -74,16 +78,31 @@ export default function OrderDetail() {
   }, [id]);
 
   useEffect(() => {
-    if (!order) return;
-    if (searchParams.get('tab') !== 'contract') return;
-    const show =
-      Boolean(order.matchedProviderId) &&
-      !['draft', 'cancelled'].includes(order.status) &&
-      (user?.id === order.customerId ||
-        user?.id === order.matchedProviderId ||
-        Boolean(user?.companyId && order.matchedWorkspaceId && user.companyId === order.matchedWorkspaceId));
-    if (show) setDetailTab('contract');
-  }, [order, searchParams, user?.id, user?.companyId]);
+    const t = searchParams.get('tab');
+    if (t === 'chat') {
+      setDetailTab('chat');
+      return;
+    }
+    if (t === 'contract') {
+      setDetailTab(order?.customerContract ? 'contract' : 'details');
+      return;
+    }
+    if (t === 'details' || t === null) setDetailTab('details');
+  }, [order?.id, order?.customerContract, searchParams]);
+
+  useEffect(() => {
+    if (searchParams.get('rate') === '1' && order?.status === 'completed' && user?.id === order.customerId) {
+      setCompletionModal('rating');
+      setSearchParams(
+        (prev) => {
+          const n = new URLSearchParams(prev);
+          n.delete('rate');
+          return n;
+        },
+        { replace: true },
+      );
+    }
+  }, [order?.id, order?.status, order?.customerId, searchParams, user?.id, setSearchParams]);
 
   useEffect(() => {
     if (!order?.serviceCatalogId) return;
@@ -157,7 +176,7 @@ export default function OrderDetail() {
 
   useEffect(() => {
     if (!order || user?.id !== order.customerId) return;
-    if (order.status === 'closed') {
+    if (order.status === 'closed' || order.status === 'disputed') {
       setCompletionModal(null);
       return;
     }
@@ -204,7 +223,7 @@ export default function OrderDetail() {
     order.scheduledAt,
   );
 
-  const canCancel = order.status === 'draft' || order.status === 'submitted';
+  const canCancel = order.status === 'draft' || order.status === 'submitted' || order.status === 'matching';
   const matchedProviderName =
     [order.matchedSummary?.provider.firstName, order.matchedSummary?.provider.lastName].filter(Boolean).join(' ') ||
     order.matchedSummary?.provider.displayName ||
@@ -229,10 +248,20 @@ export default function OrderDetail() {
   const isMatchedProvider = user?.id === order.matchedProviderId;
   const workspaceAligned =
     Boolean(user?.companyId && order.matchedWorkspaceId && user.companyId === order.matchedWorkspaceId);
-  const showContractTab =
-    Boolean(order.matchedProviderId) &&
-    !['draft', 'cancelled'].includes(order.status) &&
-    (isCustomer || isMatchedProvider || workspaceAligned);
+  const hasContractTab = Boolean(order.customerContract);
+
+  const chatComposeEnabled =
+    order.status === 'draft' || order.status === 'cancelled'
+      ? false
+      : isCustomer
+        ? canCustomerComposeOrderChat(order.status)
+        : (isMatchedProvider || workspaceAligned) &&
+          ['matched', 'contracted', 'paid', 'in_progress', 'completed'].includes(order.status);
+
+  const chatNotice =
+    isCustomer && (order.status === 'submitted' || order.status === 'matching')
+      ? 'Your provider will be able to message you once matched.'
+      : null;
 
   const contractViewerRole: 'customer' | 'provider' = isCustomer ? 'customer' : 'provider';
   const showPaymentCard = isCustomer && ['contracted', 'paid', 'in_progress', 'completed', 'closed'].includes(order.status);
@@ -241,7 +270,7 @@ export default function OrderDetail() {
     <div
       className={cn(
         'mx-auto space-y-6 pb-24',
-        detailTab === 'contract' && showContractTab ? 'max-w-4xl' : 'max-w-2xl',
+        detailTab === 'contract' && hasContractTab ? 'max-w-4xl' : 'max-w-2xl',
       )}
     >
       <button
@@ -309,6 +338,11 @@ export default function OrderDetail() {
             Order closed
           </div>
         ) : null}
+        {order.status === 'disputed' ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+            Dispute opened — our team will review your case.
+          </div>
+        ) : null}
       </div>
 
       {isCustomer && order.status === 'closed' && order.customerReview && order.matchedSummary ? (
@@ -337,45 +371,44 @@ export default function OrderDetail() {
         </section>
       ) : null}
 
-      <OrderStatusTimeline order={order} />
-
-      {showContractTab ? (
-        <div
-          className="sticky top-0 z-20 -mx-1 flex gap-1 rounded-2xl border border-app-border bg-app-card/95 p-1 shadow-sm backdrop-blur-sm"
-          role="tablist"
-          aria-label="Order views"
+      <div
+        className="sticky top-0 z-20 -mx-1 flex flex-wrap gap-1 rounded-2xl border border-app-border bg-app-card/95 p-1 shadow-sm backdrop-blur-sm"
+        role="tablist"
+        aria-label="Order views"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={detailTab === 'details'}
+          className={cn(
+            'flex min-h-[48px] min-w-[100px] flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition-colors',
+            detailTab === 'details'
+              ? 'bg-app-text text-white dark:bg-white dark:text-neutral-900'
+              : 'text-neutral-500 hover:text-app-text',
+          )}
+          onClick={() => {
+            setDetailTab('details');
+            setSearchParams(
+              (prev) => {
+                const n = new URLSearchParams(prev);
+                n.delete('tab');
+                n.delete('rate');
+                return n;
+              },
+              { replace: true },
+            );
+          }}
         >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={detailTab === 'details'}
-            className={cn(
-              'flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition-colors',
-              detailTab === 'details'
-                ? 'bg-app-text text-white dark:bg-white dark:text-neutral-900'
-                : 'text-neutral-500 hover:text-app-text',
-            )}
-            onClick={() => {
-              setDetailTab('details');
-              setSearchParams(
-                (prev) => {
-                  const n = new URLSearchParams(prev);
-                  n.delete('tab');
-                  return n;
-                },
-                { replace: true },
-              );
-            }}
-          >
-            <LayoutList className="h-4 w-4 shrink-0" aria-hidden />
-            Details
-          </button>
+          <LayoutList className="h-4 w-4 shrink-0" aria-hidden />
+          Details
+        </button>
+        {hasContractTab ? (
           <button
             type="button"
             role="tab"
             aria-selected={detailTab === 'contract'}
             className={cn(
-              'flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition-colors',
+              'flex min-h-[48px] min-w-[100px] flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition-colors',
               detailTab === 'contract'
                 ? 'bg-app-text text-white dark:bg-white dark:text-neutral-900'
                 : 'text-neutral-500 hover:text-app-text',
@@ -386,6 +419,7 @@ export default function OrderDetail() {
                 (prev) => {
                   const n = new URLSearchParams(prev);
                   n.set('tab', 'contract');
+                  n.delete('rate');
                   return n;
                 },
                 { replace: true },
@@ -395,10 +429,36 @@ export default function OrderDetail() {
             <FileText className="h-4 w-4 shrink-0" aria-hidden />
             Contract
           </button>
-        </div>
-      ) : null}
+        ) : null}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={detailTab === 'chat'}
+          className={cn(
+            'flex min-h-[48px] min-w-[100px] flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition-colors',
+            detailTab === 'chat'
+              ? 'bg-app-text text-white dark:bg-white dark:text-neutral-900'
+              : 'text-neutral-500 hover:text-app-text',
+          )}
+          onClick={() => {
+            setDetailTab('chat');
+            setSearchParams(
+              (prev) => {
+                const n = new URLSearchParams(prev);
+                n.set('tab', 'chat');
+                n.delete('rate');
+                return n;
+              },
+              { replace: true },
+            );
+          }}
+        >
+          <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
+          Chat
+        </button>
+      </div>
 
-      {showContractTab && detailTab === 'contract' ? (
+      {detailTab === 'contract' && hasContractTab ? (
         <ContractPanel
           orderId={order.id}
           viewer={contractViewerRole}
@@ -416,7 +476,28 @@ export default function OrderDetail() {
         />
       ) : null}
 
-      {showPaymentCard && !(showContractTab && detailTab === 'contract') ? (
+      {detailTab === 'chat' ? (
+        <OrderChatPanel
+          orderId={order.id}
+          status={order.status}
+          composeEnabled={chatComposeEnabled}
+          notice={chatNotice}
+        />
+      ) : null}
+
+      {detailTab === 'details' ? (
+        <>
+          <OrderStatusTimeline order={order} />
+
+          {!order.customerContract && order.matchedProviderId ? (
+            <section className="rounded-2xl border border-dashed border-app-border bg-app-card/60 p-4 text-sm text-neutral-600 dark:text-neutral-300">
+              Contract will be generated after the provider acknowledges the job.
+            </section>
+          ) : null}
+        </>
+      ) : null}
+
+      {detailTab === 'details' && showPaymentCard ? (
         <section className="rounded-2xl border border-app-border bg-app-card p-4">
           <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Payment</h3>
           {paymentLoading ? (
@@ -467,7 +548,7 @@ export default function OrderDetail() {
         </section>
       ) : null}
 
-      {!(showContractTab && detailTab === 'contract') && order.matchedProviderId && order.matchedSummary ? (
+      {detailTab === 'details' && order.matchedProviderId && order.matchedSummary ? (
         <section className="rounded-2xl border border-app-border bg-app-card p-4">
           <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Matched provider</h3>
           <div className="mt-2 flex items-center gap-3">
@@ -511,7 +592,7 @@ export default function OrderDetail() {
         </section>
       ) : null}
 
-      {!(showContractTab && detailTab === 'contract') && order.status === 'matching' ? (
+      {detailTab === 'details' && order.status === 'matching' ? (
         <section className="rounded-2xl border border-app-border bg-app-card p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -640,16 +721,7 @@ export default function OrderDetail() {
         </section>
       ) : null}
 
-      {!(showContractTab && detailTab === 'contract') ? (
-        <OrderChatPanel
-          orderId={order.id}
-          enabled={isOrderChatEnabled({ status: order.status, matchedProviderId: order.matchedProviderId })}
-          matchedProviderId={order.matchedProviderId}
-          status={order.status}
-        />
-      ) : null}
-
-      {!(showContractTab && detailTab === 'contract') ? (
+      {detailTab === 'details' ? (
       <Step7Review
         serviceName={serviceLabel}
         categoryTrail={categoryBreadcrumbNames}
@@ -664,7 +736,7 @@ export default function OrderDetail() {
       />
       ) : null}
 
-      {!(showContractTab && detailTab === 'contract') && canCancel ? (
+      {detailTab === 'details' && canCancel ? (
         <button
           type="button"
           onClick={() => setCancelOpen(true)}
@@ -726,9 +798,9 @@ export default function OrderDetail() {
                       type="button"
                       className="min-h-[48px] flex-1 rounded-2xl border border-app-border font-bold"
                       onClick={() => {
-                        showToast('Dispute process coming soon. Contact support.');
                         skipAutoCompletionModalRef.current = true;
                         setCompletionModal(null);
+                        setDisputeOpen(true);
                       }}
                     >
                       Dispute
@@ -1013,6 +1085,86 @@ export default function OrderDetail() {
                   }}
                 >
                   {cancelBusy ? '…' : 'Confirm cancel'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        ) : null}
+        {disputeOpen ? (
+          <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center p-4">
+            <motion.button
+              type="button"
+              aria-label="Close"
+              className="absolute inset-0 bg-black/50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDisputeOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="relative w-full max-w-md rounded-3xl border border-app-border bg-app-card p-6 shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="dispute-title"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h2 id="dispute-title" className="text-lg font-black text-app-text">
+                  Open a dispute
+                </h2>
+                <button
+                  type="button"
+                  className="flex min-h-[48px] min-w-[48px] items-center justify-center rounded-xl text-neutral-500"
+                  onClick={() => setDisputeOpen(false)}
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="mt-2 text-sm text-neutral-500">
+                Describe what went wrong (at least 20 characters). Our team will review your submission.
+              </p>
+              <textarea
+                value={disputeReason}
+                onChange={(e) => setDisputeReason(e.target.value)}
+                rows={5}
+                className="mt-3 w-full rounded-2xl border border-app-border bg-app-input px-3 py-2 text-[15px] text-app-text"
+                placeholder="Explain the issue in detail…"
+              />
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  className="min-h-[48px] flex-1 rounded-2xl border border-app-border font-bold"
+                  onClick={() => setDisputeOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={disputeReason.trim().length < 20 || disputeBusy}
+                  className="min-h-[48px] flex-1 rounded-2xl bg-neutral-900 font-bold text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+                  onClick={() => {
+                    void (async () => {
+                      if (!order || disputeReason.trim().length < 20) return;
+                      setDisputeBusy(true);
+                      try {
+                        await submitOrderDispute(order.id, disputeReason.trim());
+                        const next = await getOrder(order.id);
+                        setOrder(next);
+                        setDisputeOpen(false);
+                        setDisputeReason('');
+                        showToast('Dispute submitted. We will follow up soon.');
+                      } catch (e: unknown) {
+                        showToast(e instanceof Error ? e.message : 'Could not submit dispute');
+                      } finally {
+                        setDisputeBusy(false);
+                      }
+                    })();
+                  }}
+                >
+                  {disputeBusy ? 'Submitting…' : 'Submit dispute'}
                 </button>
               </div>
             </motion.div>

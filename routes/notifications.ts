@@ -43,6 +43,9 @@ function getNotificationCategory(type: string): 'reminder' | 'security' | 'payme
     case 'request':
     case 'contract':
     case 'service':
+    case 'order_matched':
+    case 'order_completed':
+    case 'contract_approved':
       return 'request';
     default:
       return 'system';

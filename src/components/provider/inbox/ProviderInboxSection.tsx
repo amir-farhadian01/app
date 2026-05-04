@@ -141,6 +141,7 @@ export function ProviderInboxSection() {
       await completeOrder(orderId);
       setPaymentBannerByOrderId((prev) => ({ ...prev, [orderId]: true }));
       showToast('Order marked complete.');
+      setSegment('accepted');
       await load();
       if (openId && activeWorkspaceId) {
         const d = await getInboxItem(activeWorkspaceId, openId);

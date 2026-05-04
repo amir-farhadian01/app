@@ -16,6 +16,7 @@ export function phaseFromStatus(
     case 'paid':
     case 'in_progress':
     case 'completed':
+    case 'disputed':
     case 'closed':
       return 'job';
     case 'cancelled':

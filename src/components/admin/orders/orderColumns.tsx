@@ -3,7 +3,7 @@ import type { CrmColumnDef } from '../../crm/types';
 import type { AdminOrderListItem } from '../../../../lib/adminOrdersList';
 import { cn } from '../../../lib/utils.js';
 
-export type AdminOrdersSegment = 'offer' | 'order' | 'job' | 'cancelled';
+export type AdminOrdersSegment = 'all' | 'offer' | 'order' | 'job' | 'cancelled';
 
 const STATUS_OPTS = [
   { value: 'draft', label: 'Draft' },
@@ -15,6 +15,7 @@ const STATUS_OPTS = [
   { value: 'paid', label: 'Paid' },
   { value: 'in_progress', label: 'In progress' },
   { value: 'completed', label: 'Completed' },
+  { value: 'closed', label: 'Closed' },
 ];
 
 const ENTRY_OPTS = [
@@ -25,6 +26,7 @@ const ENTRY_OPTS = [
 
 /** Default visible column ids per lifecycle segment (CrmTable column manager can override). */
 const SEGMENT_DEFAULT_VISIBLE: Record<AdminOrdersSegment, string[]> = {
+  all: ['customer', 'serviceCatalog', 'status', 'provider', 'workspace', 'scheduledAt', 'updatedAt', 'wasPhase'],
   offer: ['customer', 'serviceCatalog', 'scheduledAt', 'createdAt', 'photos', 'address', 'entryPoint'],
   order: ['customer', 'serviceCatalog', 'provider', 'workspace', 'status', 'scheduledAt', 'updatedAt'],
   job: ['customer', 'provider', 'workspace', 'status', 'scheduledAt', 'finalPrice', 'updatedAt'],
@@ -48,6 +50,7 @@ function statusPillClass(status: string) {
   if (status === 'draft') return 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300';
   if (status === 'cancelled') return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200';
   if (status === 'completed') return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200';
+  if (status === 'closed') return 'bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-slate-100';
   if (status === 'in_progress' || status === 'paid' || status === 'contracted' || status === 'matched') {
     return 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200';
   }
@@ -73,6 +76,26 @@ function defaultHiddenFor(segment: AdminOrdersSegment, colId: string, hideable: 
 }
 
 function orderColumnIdsForSegment(segment: AdminOrdersSegment): string[] {
+  if (segment === 'all') {
+    return [
+      'customer',
+      'serviceCatalog',
+      'status',
+      'provider',
+      'workspace',
+      'scheduledAt',
+      'updatedAt',
+      'createdAt',
+      'photos',
+      'address',
+      'entryPoint',
+      'finalPrice',
+      'wasPhase',
+      'cancelledAt',
+      'cancelReason',
+      'id',
+    ];
+  }
   if (segment === 'offer') {
     return ['customer', 'serviceCatalog', 'scheduledAt', 'createdAt', 'photos', 'address', 'entryPoint', 'status', 'provider', 'workspace', 'updatedAt', 'finalPrice', 'wasPhase', 'cancelledAt', 'cancelReason', 'id'];
   }

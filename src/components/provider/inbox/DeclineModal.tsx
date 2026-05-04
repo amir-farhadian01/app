@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Loader2 } from 'lucide-react';
 
 const REASON_CHIPS = [
   'price',
@@ -116,8 +117,9 @@ export function DeclineModal({
                       : {}),
                   })
                 }
-                className="min-h-[46px] flex-1 rounded-2xl bg-amber-600 font-bold text-white disabled:opacity-60"
+                className="flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-600 font-bold text-white disabled:opacity-60"
               >
+                {busy ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden /> : null}
                 {busy ? 'Declining…' : 'Decline'}
               </button>
             </div>

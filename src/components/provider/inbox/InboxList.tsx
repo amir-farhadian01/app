@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { CrmTable } from '../../crm/CrmTable';
 import type { CrmColumnDef, FilterValue, Sort } from '../../crm/types';
 import type { InboxStatus, ProviderInboxItem } from '../../../services/providerInbox';
@@ -65,6 +66,8 @@ type Props = {
   onPageChange: (p: number) => void;
   onPageSizeChange: (s: number) => void;
   onOpen: (row: ProviderInboxItem) => void;
+  pendingAttemptId?: string | null;
+  pendingAction?: 'ack' | 'decline' | null;
   onAcknowledge: (row: ProviderInboxItem) => void;
   onDecline: (row: ProviderInboxItem) => void;
 };
@@ -77,6 +80,8 @@ export function InboxList({
   onPageChange,
   onPageSizeChange,
   onOpen,
+  pendingAttemptId = null,
+  pendingAction = null,
   onAcknowledge,
   onDecline,
 }: Props) {
@@ -229,39 +234,44 @@ export function InboxList({
         sortable: false,
         width: 220,
         accessor: (r) => r.id,
-        cell: (r) => (
-          <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              disabled={!canRespond(r)}
-              onClick={() => onAcknowledge(r)}
-              className={cn(
-                'min-h-[40px] rounded-xl px-3 text-xs font-black uppercase tracking-wide',
-                canRespond(r)
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  : 'cursor-not-allowed bg-neutral-200 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400',
-              )}
-            >
-              Accept
-            </button>
-            <button
-              type="button"
-              disabled={!canRespond(r)}
-              onClick={() => onDecline(r)}
-              className={cn(
-                'min-h-[40px] rounded-xl px-3 text-xs font-black uppercase tracking-wide',
-                canRespond(r)
-                  ? 'border border-amber-600 text-amber-800 hover:bg-amber-50 dark:border-amber-500 dark:text-amber-200 dark:hover:bg-amber-950/40'
-                  : 'cursor-not-allowed border border-neutral-200 text-neutral-400 dark:border-neutral-700',
-              )}
-            >
-              Decline
-            </button>
-          </div>
-        ),
+        cell: (r) => {
+          const rowBusy = pendingAttemptId === r.id && pendingAction != null;
+          return (
+            <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                disabled={!canRespond(r) || rowBusy}
+                onClick={() => onAcknowledge(r)}
+                className={cn(
+                  'flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black uppercase tracking-wide',
+                  canRespond(r)
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'cursor-not-allowed bg-neutral-200 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400',
+                )}
+              >
+                {rowBusy && pendingAction === 'ack' ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+                Accept
+              </button>
+              <button
+                type="button"
+                disabled={!canRespond(r) || rowBusy}
+                onClick={() => onDecline(r)}
+                className={cn(
+                  'flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black uppercase tracking-wide',
+                  canRespond(r)
+                    ? 'border border-amber-600 text-amber-800 hover:bg-amber-50 dark:border-amber-500 dark:text-amber-200 dark:hover:bg-amber-950/40'
+                    : 'cursor-not-allowed border border-neutral-200 text-neutral-400 dark:border-neutral-700',
+                )}
+              >
+                {rowBusy && pendingAction === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+                Decline
+              </button>
+            </div>
+          );
+        },
       },
     ],
-    [onAcknowledge, onDecline],
+    [onAcknowledge, onDecline, pendingAction, pendingAttemptId],
   );
 
   return (

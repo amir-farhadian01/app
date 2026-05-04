@@ -57,3 +57,22 @@
 .dark ::-webkit-scrollbar-thumb {
   @apply bg-neutral-800 hover:bg-neutral-700;
 }
+
+@keyframes order-timeline-pulse-ring {
+  0% {
+    transform: scale(0.88);
+    opacity: 0.75;
+  }
+  60% {
+    transform: scale(1.65);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.65);
+    opacity: 0;
+  }
+}
+
+.order-timeline-pulse-ring {
+  animation: order-timeline-pulse-ring 1.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}

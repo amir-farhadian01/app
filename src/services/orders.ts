@@ -51,9 +51,16 @@ export type OrderRecord = {
   updatedAt: string;
 };
 
+export type OrderCustomerReview = {
+  rating: number;
+  reviewText: string | null;
+  createdAt: string;
+};
+
 export type OrderWithSchema = OrderRecord & {
   schema?: unknown;
   staleSnapshot?: boolean;
+  customerReview?: OrderCustomerReview | null;
   matchedSummary?: {
     provider: {
       id: string;
@@ -400,6 +407,18 @@ export async function getMyOrders(params?: {
   };
 }
 
+function normalizeCustomerReview(raw: unknown): OrderCustomerReview | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating);
+  if (!Number.isFinite(rating)) return null;
+  return {
+    rating,
+    reviewText: typeof r.reviewText === 'string' ? r.reviewText : null,
+    createdAt: typeof r.createdAt === 'string' ? r.createdAt : '',
+  };
+}
+
 export async function getOrder(orderId: string): Promise<OrderWithSchema> {
   const res = await fetch(`/api/orders/${orderId}`, {
     headers: authHeaders(),
@@ -419,6 +438,43 @@ export async function getOrder(orderId: string): Promise<OrderWithSchema> {
     ...base,
     schema: o.schema,
     staleSnapshot: Boolean(o.staleSnapshot),
+    customerReview: normalizeCustomerReview(o.customerReview),
+    matchedSummary:
+      o.matchedSummary && typeof o.matchedSummary === 'object'
+        ? (o.matchedSummary as OrderWithSchema['matchedSummary'])
+        : null,
+    payment:
+      o.payment && typeof o.payment === 'object'
+        ? (o.payment as OrderWithSchema['payment'])
+        : { status: 'none', lastTransactionId: null, lastAmount: null, currency: null, lastCreatedAt: null },
+  };
+}
+
+export async function submitOrderReview(
+  orderId: string,
+  body: { rating: number; review: string },
+): Promise<OrderWithSchema> {
+  const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/review`, {
+    method: 'POST',
+    headers: authHeaders(),
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+  const data = await parseJson(res);
+  if (res.status === 401) {
+    window.location.href = '/auth';
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || 'Review submit failed');
+  }
+  const o = data as Record<string, unknown>;
+  const base = normalizeOrder(o);
+  return {
+    ...base,
+    schema: o.schema,
+    staleSnapshot: Boolean(o.staleSnapshot),
+    customerReview: normalizeCustomerReview(o.customerReview),
     matchedSummary:
       o.matchedSummary && typeof o.matchedSummary === 'object'
         ? (o.matchedSummary as OrderWithSchema['matchedSummary'])

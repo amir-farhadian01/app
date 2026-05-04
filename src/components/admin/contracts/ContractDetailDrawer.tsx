@@ -46,6 +46,8 @@ export function ContractDetailDrawer({ detail, open, loading, onClose, onRefresh
     return detail.versions.find((v) => v.id === selectedVid) ?? null;
   }, [detail, selectedVid]);
 
+  const paymentGateUnlocked = detail?.currentVersion?.status === 'approved';
+
   if (!open) return null;
   if (loading || !detail) {
     return (
@@ -96,9 +98,21 @@ export function ContractDetailDrawer({ detail, open, loading, onClose, onRefresh
         <div className="flex-1 space-y-6 p-6 text-sm">
           {err ? <p className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">{err}</p> : null}
 
+          <div
+            className={cn(
+              'rounded-xl border px-4 py-3 text-xs font-bold',
+              paymentGateUnlocked
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100'
+                : 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100',
+            )}
+            role="status"
+          >
+            {paymentGateUnlocked ? 'Payment gate unlocked' : 'Payment gate locked — contract approval required'}
+          </div>
+
           <div className="grid gap-2 text-xs text-neutral-500 sm:grid-cols-2">
             <p>
-              <span className="font-bold uppercase tracking-wider text-neutral-400">Contract</span>{' '}
+              <span className="font-bold uppercase tracking-wider text-neutral-400">Contract ID</span>{' '}
               <span className="font-mono text-app-text">{detail.id}</span>
             </p>
             <p>
@@ -113,9 +127,35 @@ export function ContractDetailDrawer({ detail, open, loading, onClose, onRefresh
             ) : null}
           </div>
 
+          <section>
+            <h3 className="mb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Version history</h3>
+            <ol className="space-y-2 rounded-xl border border-app-border bg-neutral-50/50 p-3 dark:bg-neutral-900/40">
+              {[...versionsAsc].reverse().map((v) => {
+                const who =
+                  v.sentBy != null
+                    ? [v.sentBy.firstName, v.sentBy.lastName].filter(Boolean).join(' ').trim() ||
+                      v.sentBy.displayName?.trim() ||
+                      v.sentBy.email
+                    : null;
+                const ts = v.sentAt ?? v.createdAt;
+                return (
+                  <li key={v.id} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-app-border pb-2 text-xs last:border-0 last:pb-0">
+                    <span className="font-black text-app-text">v{v.versionNumber}</span>
+                    <span className="text-neutral-500">
+                      {who ? <>Sent by {who}</> : <>Not sent</>}
+                      {ts ? <> · {new Date(ts).toLocaleString()}</> : null}
+                    </span>
+                    <span className="w-full font-mono text-[10px] uppercase text-neutral-400 sm:w-auto">{v.status}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+
           <section className="grid gap-6 lg:grid-cols-[220px_1fr]">
             <VersionTimeline versionsAsc={versionsAsc} selectedId={selectedVid} onSelect={setSelectedVid} />
             <div className="space-y-4">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Contract body</h3>
               {selected && parseMismatchWarnings(selected.mismatchWarnings).length ? (
                 <MismatchWarnings warnings={parseMismatchWarnings(selected.mismatchWarnings)} />
               ) : null}
@@ -155,17 +195,49 @@ export function ContractDetailDrawer({ detail, open, loading, onClose, onRefresh
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void run(async () => {
-                  await markContractReviewed(detail.id);
-                })}
+                onClick={() =>
+                  void run(async () => {
+                    await markContractReviewed(detail.id);
+                  })
+                }
                 className="min-h-[44px] rounded-xl bg-emerald-700 px-4 text-xs font-bold text-white disabled:opacity-50 dark:bg-emerald-600"
               >
-                Mark reviewed
+                Mark Reviewed
               </button>
             </div>
-            <div className="space-y-2">
+            <form
+              className="flex flex-wrap items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (internalNote.trim().length < 3) return;
+                void run(async () => {
+                  await addContractInternalNote(detail.id, internalNote.trim());
+                  setInternalNote('');
+                });
+              }}
+            >
+              <label className="min-w-0 flex-1 text-xs font-bold text-neutral-500">
+                Add internal note
+                <input
+                  type="text"
+                  value={internalNote}
+                  onChange={(e) => setInternalNote(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-text"
+                  placeholder="At least 3 characters"
+                  minLength={3}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={busy || internalNote.trim().length < 3}
+                className="min-h-[44px] shrink-0 rounded-xl bg-neutral-900 px-4 text-xs font-bold text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+              >
+                Add note
+              </button>
+            </form>
+            <div className="space-y-2 border-t border-app-border pt-3">
               <label className="block text-xs font-bold text-neutral-500">
-                Force supersede version (draft or sent)
+                Override supersede (draft or sent version)
                 <select
                   value={supersedeTarget}
                   onChange={(e) => setSupersedeTarget(e.target.value)}
@@ -184,37 +256,22 @@ export function ContractDetailDrawer({ detail, open, loading, onClose, onRefresh
               <button
                 type="button"
                 disabled={busy || !supersedeTarget}
-                onClick={() =>
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      'Mark this version as SUPERSEDED? Customers cannot approve a superseded version. This action is logged for audit.',
+                    )
+                  ) {
+                    return;
+                  }
                   void run(async () => {
                     await overrideSupersedeVersion(detail.id, supersedeTarget);
                     setSupersedeTarget('');
-                  })
-                }
+                  });
+                }}
                 className="w-full min-h-[44px] rounded-xl border border-amber-500 bg-amber-50 text-xs font-bold text-amber-950 disabled:opacity-50 dark:bg-amber-950/30 dark:text-amber-100"
               >
-                Force supersede
-              </button>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-neutral-500">Internal note (min 3 chars)</label>
-              <textarea
-                value={internalNote}
-                onChange={(e) => setInternalNote(e.target.value)}
-                rows={3}
-                className="w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-text"
-              />
-              <button
-                type="button"
-                disabled={busy || internalNote.trim().length < 3}
-                onClick={() =>
-                  void run(async () => {
-                    await addContractInternalNote(detail.id, internalNote.trim());
-                    setInternalNote('');
-                  })
-                }
-                className="w-full min-h-[44px] rounded-xl bg-neutral-900 text-xs font-bold text-white dark:bg-white dark:text-neutral-900"
-              >
-                Add internal note
+                Override Supersede
               </button>
             </div>
           </section>

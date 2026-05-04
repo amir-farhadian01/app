@@ -14,15 +14,30 @@ export type ContractVersionTimelineFields = {
   amount: number | null;
   currency: string | null;
   reviewNote?: string | null;
+  sentAt?: string | null;
+  sentBy?: {
+    id: string;
+    email: string;
+    displayName: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+  } | null;
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  draft: 'bg-neutral-200 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-100',
+  draft: 'bg-neutral-200 text-neutral-700 dark:bg-neutral-600 dark:text-neutral-100',
   sent: 'bg-sky-200 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100',
   approved: 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100',
   rejected: 'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-100',
-  superseded: 'bg-neutral-100 text-neutral-500 line-through dark:bg-neutral-800 dark:text-neutral-400',
+  superseded: 'bg-neutral-100 text-neutral-500 opacity-80 dark:bg-neutral-800 dark:text-neutral-400',
 };
+
+function partyLabel(p: NonNullable<ContractVersionTimelineFields['sentBy']>) {
+  const n = [p.firstName, p.lastName].filter(Boolean).join(' ').trim();
+  if (n) return n;
+  if (p.displayName?.trim()) return p.displayName.trim();
+  return p.email;
+}
 
 export function diffVersionBadges(prev: ContractVersionTimelineFields | null, curr: ContractVersionTimelineFields): string[] {
   if (!prev) return [];
@@ -76,6 +91,14 @@ export function VersionTimeline({ versionsAsc, selectedId, onSelect }: Props) {
                     {v.status}
                   </span>
                 </div>
+                {v.sentAt || v.sentBy ? (
+                  <p className="mt-1 text-[11px] text-neutral-500">
+                    {v.sentBy ? <span>Sent by {partyLabel(v.sentBy)}</span> : <span>Sent</span>}
+                    {v.sentAt ? (
+                      <span className="text-neutral-400"> · {new Date(v.sentAt).toLocaleString()}</span>
+                    ) : null}
+                  </p>
+                ) : null}
                 {badges.length ? (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {badges.map((b) => (

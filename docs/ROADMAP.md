@@ -214,10 +214,11 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
 - **Status:**
   | Customer | Provider | Admin |
   |----------|----------|-------|
-  | ✅ | ⏳ | ✅ |
-- **Evidence (auto-discovered):** Prisma `Order`, `OrderStatus`, `OrderEntryPoint`;
+  | ✅ | 🚧 | ✅ |
+- **Evidence (auto-discovered):** Prisma `Order`, `OrderStatus`, `OrderEntryPoint`, `OrderReview`;
   customer `routes/orders.ts` (`/api/orders`: draft upsert, autosave, submit with
-  `validateServiceAnswers` + `snapshotSchemaForOrder`, cancel, `GET /me`, `GET /:id`);
+  `validateServiceAnswers` + `snapshotSchemaForOrder`, cancel, `GET /me`, `GET /:id`,
+  provider `POST /:id/complete`, customer `POST /:id/review` → `OrderStatus.closed` + NATS `orders.reviewed`);
   `GET /api/categories/search`; `GET /api/service-catalog/by-category/:categoryId`;
   public `GET /api/service-catalog/:id` (pricing/BOM snapshot for `Step3Review`);
   admin `routes/adminOrders.ts` (`/api/admin/orders`: list w/ facets, `GET /:id`,
@@ -233,7 +234,8 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
   `CustomerHome` → `/orders/new` deep links (`homeCategory`, `prefillProviderId`, `newOffer`),
   guest wizard without mount redirect to `/auth` (sign-in at submit via `returnTo` query). **Admin UI:**
   `src/components/admin/orders/*` (`AdminOrdersSection`, `OrdersTable`, `OrderDetailDrawer`),
-  `src/services/adminOrders.ts`, Orders tab + overview tile in `src/pages/AdminDashboard.tsx`.
+  `src/services/adminOrders.ts`, Orders tab + **Overview** live KPIs in `src/pages/AdminDashboard.tsx`
+  (`GET /api/admin/stats`, `GET /api/admin/stats/orders-trend`, `GET /api/admin/audit-log` via `lib/adminOverviewStats.ts` + `routes/admin.ts`).
   **Sprint I append:** submit `matchOutcome` + matched summaries in `routes/orders.ts`,
   provider Inbox UI (`src/components/provider/inbox/*`, `src/services/providerInbox.ts`), and
   admin matching tab/eligibility/override wiring in order drawer + API.
@@ -258,12 +260,18 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
     grep -q "/orders/new" src/App.tsx
     test -f src/pages/MyOrders.tsx
     test -f src/pages/OrderDetail.tsx
+    grep -q "^model OrderReview" prisma/schema.prisma
+    grep -q "orders.reviewed" routes/orders.ts
     test -f src/components/admin/orders/AdminOrdersSection.tsx
     test -f src/components/admin/orders/OrdersTable.tsx
     test -f src/components/admin/orders/OrderDetailDrawer.tsx
     test -f src/services/adminOrders.ts
     grep -q "AdminOrdersSection" src/pages/AdminDashboard.tsx
-- **Last verified:** 2026-05-03 via `npm run docs:check` + Sprint N (Home → Order wiring, guest wizard)
+    test -f lib/adminOverviewStats.ts
+    grep -q "computeAdminOverviewStats" routes/admin.ts
+    grep -q "/stats/orders-trend" routes/admin.ts
+    grep -q "audit-log" routes/admin.ts
+- **Last verified:** 2026-05-04 via `npm run docs:check` + customer completion / review flow
 - **Open prompts:** ⏳ Flutter port of the order wizard (partial: `CreateOrderWizardScreen` + `HomeScreen` deep links).
 
 ### F6 — Matching engine MVP (auto_book vs round_robin_5)
@@ -326,7 +334,7 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
 - **Status:**
   | Customer | Provider | Admin |
   |----------|----------|-------|
-  | 🚧 | 🚧 | 🚧 |
+  | 🚧 | 🚧 | ✅ |
 - **Evidence (auto-discovered):** `routes/contracts.ts`, `Contract` model,
   `routes/transactions.ts`; **Sprint L:** `routes/orderContracts.ts`, `routes/adminContracts.ts`,
   `lib/contractDraft.ts`, `lib/contractMismatchGuard.ts`, `lib/contractEvents.ts`,
@@ -334,12 +342,18 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
   Prisma `OrderContract` / `ContractVersion` / `ContractEvent` + enums; NATS
   `contracts.sent` / `contracts.approved` / `contracts.rejected`; web `ContractPanel` +
   `src/services/orderContracts.ts`; admin **Contracts** tab (`AdminContractsSection`,
-  `src/services/adminContracts.ts`). **Sprint M:** payment gate/session via
+  `ContractsTable`, `ContractDetailDrawer`, `src/services/adminContracts.ts`: queue wired to
+  `GET /api/admin/contracts/queue`, table columns + status badges, filters status/order ID,
+  drawer with formatted contract body, version sent-by history, payment gate badges,
+  `POST .../reviewed` + `mark-reviewed`, `POST .../note` + `internal-note`, override-supersede + confirm).
+  **Sprint M:** payment gate/session via
   `routes/orderPayments.ts` (`POST /api/orders/:orderId/payments/session` returns
   `409 { code: CONTRACT_APPROVAL_REQUIRED }` unless order is contracted from the approved
   contract version), customer order detail payment status (`routes/orders.ts` + `OrderDetail`),
-  admin minimal payment ledger/detail (`routes/adminPayments.ts`, `AdminPaymentsSection`,
-  `src/services/adminPayments.ts`), and audit actions `PAYMENT_SESSION_CREATED` / `PAYMENT_CAPTURED`.
+  admin payment ledger/detail (`routes/adminPayments.ts` — `GET /api/admin/payments` paginated,
+  `GET /api/admin/payments/orders/:orderId`, `GET /api/admin/payments/ledger`, `GET /api/admin/payments/ledger/:transactionId`),
+  **Payments** tab (`AdminPaymentsSection`, `PaymentDetailDrawer`, `src/services/adminPayments.ts`, `tab=payments` in `AdminDashboard.tsx`),
+  and audit actions `PAYMENT_SESSION_CREATED` / `PAYMENT_CAPTURED`.
   **Deferred:** templates/disputes expansion + settlement automation.
 - **Done definition:** Templates, disputes, payment ledger in admin (remaining); Sprint L contract loop shipped; Sprint M payment gate/session + minimal admin ledger shipped.
 - **Drift checks (commands):**
@@ -350,7 +364,7 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
     test -f lib/contractMismatchGuard.ts
     test -f lib/contractEvents.ts
     test -f src/components/admin/contracts/AdminContractsSection.tsx
-- **Last verified:** 2026-04-27 via `npm run docs:check` + Sprint M backend/web blocker pass
+- **Last verified:** 2026-05-04 via `npm run docs:check` + admin Contracts UI completion + admin Payments UI (ledger table + detail drawer; Stripe deferred)
 - **Open prompts:** F8 templates/dispute queue + settlement automation depth.
 
 ### F9 — Lost-deal analytics + provider scorecards

@@ -160,7 +160,7 @@ Authenticated domains (typical pattern: authenticate on router or per-route):
 - /api/admin/service-definitions — catalog CRUD, preview
 - /api/admin/categories-tree — reorder, create category/service, archive helpers
 - /api/admin/orders — list, stats, detail, eligibility, match-override, cancel, etc.
-- /api/admin/contracts — queue, detail, mark-reviewed, override-supersede, internal-note
+- /api/admin/contracts — queue, detail, mark-reviewed or /reviewed, override-supersede, internal-note or /note
 - /api/admin/payments — ledger list and detail
 - /api/admin/chat — moderation flags review/escalate/note
 - /api/admin/service-packages — list/detail/create/update tied to catalog

@@ -59,6 +59,7 @@ enum OrderStatus {
   paid
   in_progress
   completed
+  closed
 }
 
 enum OrderPhase {
@@ -178,6 +179,7 @@ model User {
   kycPersonalSubmissions KycPersonalSubmission[]
   businessKycSubmissions BusinessKycSubmission[]
   ordersAsCustomer       Order[]                 @relation("CustomerOrders")
+  customerOrderReviews   OrderReview[]           @relation("CustomerOrderReviews")
   providerPackages       ProviderServicePackage[]
   attemptsAsProvider     OfferMatchAttempt[]     @relation("ProviderAttempts")
   ordersAsMatchedProvider Order[]                @relation("OrderMatchedProvider")
@@ -402,11 +404,26 @@ model Order {
   matchAttempts         OfferMatchAttempt[] @relation("OfferAttempts")
   chatThread            OrderChatThread?
   orderContract         OrderContract?
+  customerReview        OrderReview?
 
   @@index([customerId])
   @@index([status])
   @@index([phase])
   @@index([serviceCatalogId])
+}
+
+model OrderReview {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  customerId  String
+  rating      Int
+  reviewText  String?
+  createdAt   DateTime @default(now())
+
+  order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer User  @relation("CustomerOrderReviews", fields: [customerId], references: [id])
+
+  @@index([customerId])
 }
 
 model OrderChatThread {

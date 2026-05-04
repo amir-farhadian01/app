@@ -62,6 +62,7 @@ export async function evaluateOrderPaymentGate(orderId: string): Promise<Payment
     OrderStatus.paid,
     OrderStatus.in_progress,
     OrderStatus.completed,
+    OrderStatus.closed,
   ]).has(order.status);
   if (!statusOk || current.status !== ContractVersionStatus.approved) {
     return {

@@ -327,6 +327,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
             description: true,
           },
         },
+        customerReview: true,
       },
     });
     if (!order) {
@@ -352,6 +353,17 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
         },
       },
     });
+
+    const auditRows = auditLog.map((a) => ({
+      id: a.id,
+      action: a.action,
+      resourceType: a.resourceType,
+      resourceId: a.resourceId,
+      actorId: a.actorId,
+      actor: a.actor,
+      timestamp: a.timestamp.toISOString(),
+      metadata: a.metadata,
+    }));
 
     res.json({
       order: {
@@ -381,6 +393,13 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
         matchedWorkspaceId: order.matchedWorkspaceId ?? null,
         autoMatchExhausted: order.autoMatchExhausted ?? false,
       },
+      customerReview: order.customerReview
+        ? {
+            rating: order.customerReview.rating,
+            reviewText: order.customerReview.reviewText,
+            createdAt: order.customerReview.createdAt.toISOString(),
+          }
+        : null,
       customer: order.customer,
       serviceCatalog: {
         id: order.serviceCatalog.id,
@@ -391,16 +410,8 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
       },
       schema: resolvedSchema.schema,
       staleSnapshot: resolvedSchema.staleSnapshot,
-      auditLog: auditLog.map((a) => ({
-        id: a.id,
-        action: a.action,
-        resourceType: a.resourceType,
-        resourceId: a.resourceId,
-        actorId: a.actorId,
-        actor: a.actor,
-        timestamp: a.timestamp.toISOString(),
-        metadata: a.metadata,
-      })),
+      auditLog: auditRows,
+      auditLogs: auditRows,
     });
   } catch (err: unknown) {
     console.error(err);

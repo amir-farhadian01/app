@@ -43,6 +43,7 @@ export type ProviderInboxItem = {
     phase: string | null;
     status: string;
     matchedProviderId?: string | null;
+    matchedWorkspaceId?: string | null;
     locationLat: number | null;
     locationLng: number | null;
     entryPoint?: string;
@@ -121,6 +122,7 @@ function normalizeItem(raw: unknown): ProviderInboxItem {
       phase: typeof orderRaw.phase === 'string' ? orderRaw.phase : null,
       status: typeof orderRaw.status === 'string' ? orderRaw.status : 'submitted',
       matchedProviderId: typeof orderRaw.matchedProviderId === 'string' ? orderRaw.matchedProviderId : null,
+      matchedWorkspaceId: typeof orderRaw.matchedWorkspaceId === 'string' ? orderRaw.matchedWorkspaceId : null,
       locationLat: typeof orderRaw.locationLat === 'number' ? orderRaw.locationLat : null,
       locationLng: typeof orderRaw.locationLng === 'number' ? orderRaw.locationLng : null,
       entryPoint: typeof orderRaw.entryPoint === 'string' ? orderRaw.entryPoint : undefined,
@@ -176,8 +178,13 @@ export async function acknowledge(workspaceId: string, attemptId: string): Promi
   return api.post<{ success: boolean; orderId: string }>(`/api/workspaces/${workspaceId}/inbox/${attemptId}/acknowledge`, {});
 }
 
+/** @deprecated Prefer {@link acknowledge}; server routes invited + matched through acknowledge. */
 export async function accept(workspaceId: string, attemptId: string): Promise<ProviderInboxItem> {
   return normalizeItem(await api.post<unknown>(`/api/workspaces/${workspaceId}/inbox/${attemptId}/accept`, {}));
+}
+
+export async function completeOrder(orderId: string): Promise<{ success: boolean; order: unknown }> {
+  return api.post<{ success: boolean; order: unknown }>(`/api/orders/${encodeURIComponent(orderId)}/complete`, {});
 }
 
 export async function decline(

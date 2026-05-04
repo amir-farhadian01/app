@@ -17,8 +17,13 @@ import {
   type AdminOrderDetailResponse,
   type AdminRoundRobinState,
 } from '../../../services/adminOrders';
+import { fetchAdminOrderChatThread, type AdminOrderChatThreadResponse } from '../../../services/adminOrderChat';
+import {
+  fetchAdminContractsByOrderId,
+  type AdminContractVersionByOrderRow,
+} from '../../../services/adminContracts';
 
-type TabId = 'overview' | 'answers' | 'photos' | 'audit' | 'matching';
+type TabId = 'overview' | 'answers' | 'photos' | 'timeline' | 'matching' | 'chat' | 'contract' | 'payment';
 
 function entryLabel(ep: string) {
   if (ep === 'explorer') return 'Explorer';
@@ -31,6 +36,7 @@ function statusBannerClass(status: string) {
   if (status === 'submitted') return 'bg-sky-500/15 text-sky-800 dark:text-sky-200 border-sky-500/30';
   if (status === 'draft') return 'bg-neutral-500/10 text-neutral-800 dark:text-neutral-200 border-neutral-500/20';
   if (status === 'cancelled') return 'bg-red-500/15 text-red-800 dark:text-red-200 border-red-500/30';
+  if (status === 'closed') return 'bg-slate-500/15 text-slate-900 dark:text-slate-100 border-slate-500/30';
   return 'bg-violet-500/10 text-violet-900 dark:text-violet-200 border-violet-500/25';
 }
 
@@ -121,15 +127,24 @@ export function OrderDetailDrawer({
   const [rrState, setRrState] = useState<AdminRoundRobinState | null>(null);
   const [rrBusy, setRrBusy] = useState(false);
   const [extendHours, setExtendHours] = useState(24);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [chatPayload, setChatPayload] = useState<AdminOrderChatThreadResponse | null | 'none'>(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [contractVersions, setContractVersions] = useState<AdminContractVersionByOrderRow[] | null>(null);
+  const [contractLoading, setContractLoading] = useState(false);
 
   useEffect(() => {
     if (!open || !orderId) {
       setDetail(null);
+      setChatPayload(null);
+      setContractVersions(null);
       return;
     }
     setTab('overview');
     setLoading(true);
     setEligibility(null);
+    setChatPayload(null);
+    setContractVersions(null);
     void fetchAdminOrderDetail(orderId)
       .then(setDetail)
       .catch((e) => {
@@ -138,6 +153,30 @@ export function OrderDetailDrawer({
       })
       .finally(() => setLoading(false));
   }, [open, orderId]);
+
+  useEffect(() => {
+    if (!open || !orderId || tab !== 'chat') return;
+    setChatLoading(true);
+    void fetchAdminOrderChatThread(orderId)
+      .then((data) => setChatPayload(data))
+      .catch((e: Error & { status?: number }) => {
+        if (e.status === 404) setChatPayload('none');
+        else onNotifyRef.current(e instanceof Error ? e.message : 'Failed to load chat', 'error');
+      })
+      .finally(() => setChatLoading(false));
+  }, [open, orderId, tab]);
+
+  useEffect(() => {
+    if (!open || !orderId || tab !== 'contract') return;
+    setContractLoading(true);
+    void fetchAdminContractsByOrderId(orderId)
+      .then((r) => setContractVersions(r.versions))
+      .catch((e) => {
+        onNotifyRef.current(e instanceof Error ? e.message : 'Failed to load contracts', 'error');
+        setContractVersions([]);
+      })
+      .finally(() => setContractLoading(false));
+  }, [open, orderId, tab]);
 
   useEffect(() => {
     if (!open || !orderId || tab !== 'matching') return;
@@ -175,6 +214,7 @@ export function OrderDetailDrawer({
       await cancelAdminOrder(orderId, reason);
       onNotifyRef.current('Order cancelled.', 'success');
       setCancelReason('');
+      setCancelDialogOpen(false);
       onOrderUpdated();
       const next = await fetchAdminOrderDetail(orderId);
       setDetail(next);
@@ -184,6 +224,12 @@ export function OrderDetailDrawer({
       setCancelling(false);
     }
   };
+
+  const timelineEntries = detail
+    ? [...(detail.auditLogs ?? detail.auditLog)].sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+      )
+    : [];
 
   const runForceMatch = async (packageId: string) => {
     if (!orderId || !detail) return;
@@ -283,14 +329,17 @@ export function OrderDetailDrawer({
                 </button>
               </header>
 
-              <div className="flex gap-1 border-b border-app-border px-4 pt-2">
+              <div className="flex flex-wrap gap-1 border-b border-app-border px-2 pt-2 sm:px-4">
                 {(
                   [
                     ['overview', 'Overview'],
                     ['answers', 'Answers'],
                     ['photos', 'Photos'],
-                    ['audit', 'Audit'],
+                    ['timeline', 'Timeline'],
                     ['matching', 'Matching'],
+                    ['chat', 'Chat'],
+                    ['contract', 'Contract'],
+                    ['payment', 'Payment'],
                   ] as const
                 ).map(([id, label]) => (
                   <button
@@ -298,7 +347,7 @@ export function OrderDetailDrawer({
                     type="button"
                     onClick={() => setTab(id)}
                     className={cn(
-                      'rounded-t-lg px-3 py-2 text-[11px] font-black uppercase tracking-wider transition-colors',
+                      'rounded-t-lg px-2 py-2 text-[10px] font-black uppercase tracking-wider transition-colors sm:px-3 sm:text-[11px]',
                       tab === id
                         ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
                         : 'text-neutral-500 hover:text-app-text'
@@ -350,6 +399,22 @@ export function OrderDetailDrawer({
                         </p>
                       ) : null}
                     </div>
+                    {detail.customerReview ? (
+                      <div className="rounded-xl border border-app-border bg-app-card p-3 text-sm">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Customer review</p>
+                        <p className="mt-1 font-bold text-app-text">{detail.customerReview.rating} / 5</p>
+                        {detail.customerReview.reviewText ? (
+                          <p className="mt-2 whitespace-pre-wrap text-neutral-700 dark:text-neutral-300">
+                            {detail.customerReview.reviewText}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-xs text-neutral-500">No written review.</p>
+                        )}
+                        <p className="mt-2 text-xs text-neutral-500">
+                          {new Date(detail.customerReview.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                    ) : null}
                     <div className="grid gap-4 text-sm">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Customer</p>
@@ -459,12 +524,12 @@ export function OrderDetailDrawer({
                     )}
                   </div>
                 )}
-                {!loading && detail && tab === 'audit' && (
+                {!loading && detail && tab === 'timeline' && (
                   <ul className="space-y-3">
-                    {detail.auditLog.length === 0 ? (
-                      <li className="text-sm text-neutral-500">No audit entries for this order.</li>
+                    {timelineEntries.length === 0 ? (
+                      <li className="text-sm text-neutral-500">No audit events for this order.</li>
                     ) : (
-                      detail.auditLog.map((a) => (
+                      timelineEntries.map((a) => (
                         <li
                           key={a.id}
                           className="rounded-xl border border-app-border bg-neutral-50/50 p-4 text-sm dark:bg-neutral-900/30"
@@ -485,6 +550,86 @@ export function OrderDetailDrawer({
                       ))
                     )}
                   </ul>
+                )}
+                {!loading && detail && tab === 'chat' && (
+                  <div className="space-y-4">
+                    {chatLoading ? <p className="text-sm text-neutral-500">Loading chat…</p> : null}
+                    {!chatLoading && chatPayload === 'none' ? (
+                      <p className="text-sm text-neutral-500">No chat yet</p>
+                    ) : null}
+                    {!chatLoading && chatPayload && chatPayload !== 'none' ? (
+                      <ul className="space-y-3">
+                        {chatPayload.messages.length === 0 ? (
+                          <li className="text-sm text-neutral-500">Thread exists but has no messages.</li>
+                        ) : (
+                          chatPayload.messages.map((m) => (
+                            <li
+                              key={m.id}
+                              className="rounded-xl border border-app-border bg-neutral-50/50 p-3 text-sm dark:bg-neutral-900/30"
+                            >
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                                {m.senderRole} · {new Date(m.createdAt).toLocaleString()}
+                              </p>
+                              <p className="mt-2 whitespace-pre-wrap text-neutral-800 dark:text-neutral-200">
+                                {m.displayText || m.originalText}
+                              </p>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    ) : null}
+                  </div>
+                )}
+                {!loading && detail && tab === 'contract' && (
+                  <div className="space-y-3">
+                    {contractLoading ? <p className="text-sm text-neutral-500">Loading contracts…</p> : null}
+                    {!contractLoading && contractVersions && contractVersions.length === 0 ? (
+                      <p className="text-sm text-neutral-500">No contract on file for this order.</p>
+                    ) : null}
+                    {!contractLoading && contractVersions && contractVersions.length > 0 ? (
+                      <ul className="space-y-2">
+                        {contractVersions.map((v) => (
+                          <li
+                            key={v.id}
+                            className="rounded-xl border border-app-border bg-neutral-50/50 p-4 text-sm dark:bg-neutral-900/30"
+                          >
+                            <p className="font-bold text-app-text">
+                              v{v.versionNumber} · {v.status.replace(/_/g, ' ')}
+                            </p>
+                            <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">{v.title}</p>
+                            <p className="mt-1 text-[10px] text-neutral-400">
+                              Updated {new Date(v.updatedAt).toLocaleString()}
+                              {v.amount != null && v.currency ? (
+                                <span>
+                                  {' '}
+                                  · {v.amount} {v.currency}
+                                </span>
+                              ) : null}
+                            </p>
+                            {v.scopeSummary ? (
+                              <p className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">{v.scopeSummary}</p>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                )}
+                {!loading && detail && tab === 'payment' && (
+                  <div className="rounded-xl border border-app-border bg-neutral-50/50 p-4 text-sm text-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-300">
+                    <p className="font-semibold text-app-text">Payment ledger</p>
+                    <p className="mt-2 leading-relaxed">
+                      Stripe integration coming soon. Admin list:{' '}
+                      <code className="rounded bg-neutral-200 px-1 py-0.5 text-xs dark:bg-neutral-800">
+                        GET /api/admin/payments
+                      </code>
+                      ; per-order detail:{' '}
+                      <code className="rounded bg-neutral-200 px-1 py-0.5 text-xs dark:bg-neutral-800">
+                        GET /api/admin/payments/orders/:orderId
+                      </code>
+                      .
+                    </p>
+                  </div>
                 )}
                 {!loading && detail && tab === 'matching' && (
                   <div className="space-y-6">
@@ -660,18 +805,12 @@ export function OrderDetailDrawer({
               </div>
 
               <footer className="border-t border-app-border p-6">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Cancel reason</p>
-                <textarea
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  disabled={cancelDisabled}
-                  placeholder="Required for cancellation (min. 5 characters)"
-                  className="mb-3 min-h-[72px] w-full rounded-xl border border-app-border bg-neutral-50 p-3 text-sm dark:bg-neutral-900"
-                />
                 <button
                   type="button"
                   disabled={cancelDisabled}
-                  onClick={() => void runCancel()}
+                  onClick={() => {
+                    if (!cancelDisabled) setCancelDialogOpen(true);
+                  }}
                   className={cn(
                     'w-full rounded-2xl py-3 text-sm font-bold transition-colors',
                     cancelDisabled
@@ -679,13 +818,50 @@ export function OrderDetailDrawer({
                       : 'bg-red-600 text-white hover:bg-red-700'
                   )}
                 >
-                  Cancel order
+                  Cancel order…
                 </button>
               </footer>
             </motion.aside>
           </>
         )}
       </AnimatePresence>
+      {cancelDialogOpen && (
+        <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-app-border bg-app-card p-6 shadow-xl">
+            <h3 className="text-lg font-black italic uppercase text-app-text">Cancel this order?</h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              This sends <code className="rounded bg-neutral-100 px-1 text-xs dark:bg-neutral-800">POST /api/admin/orders/:id/cancel</code> with your reason. This action cannot be undone for orders in a cancellable state.
+            </p>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Reason (required, min. 5 characters)"
+              className="mt-4 min-h-[100px] w-full rounded-xl border border-app-border bg-neutral-50 p-3 text-sm dark:bg-neutral-900"
+            />
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={cancelling}
+                onClick={() => void runCancel()}
+              >
+                {cancelling ? 'Cancelling…' : 'Confirm cancel'}
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-2xl border border-app-border py-3 text-sm font-bold text-neutral-600 dark:text-neutral-300"
+                disabled={cancelling}
+                onClick={() => {
+                  setCancelDialogOpen(false);
+                  setCancelReason('');
+                }}
+              >
+                Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <ImageLightbox
         open={!!lightbox}
         src={lightbox?.src ?? null}

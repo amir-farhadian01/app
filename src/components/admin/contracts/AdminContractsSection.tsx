@@ -6,6 +6,15 @@ import { fetchAdminContractDetail, fetchContractQueue } from '../../../services/
 import { ContractsTable } from './ContractsTable';
 import { ContractDetailDrawer } from './ContractDetailDrawer';
 
+type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
+
+function versionStatusParam(f: StatusFilter): string | undefined {
+  if (f === 'all') return undefined;
+  if (f === 'pending') return 'sent';
+  if (f === 'approved') return 'approved';
+  return 'rejected';
+}
+
 type Props = {
   setNotification: (n: { show: boolean; message: string; type: 'success' | 'error' } | null) => void;
 };
@@ -13,12 +22,9 @@ type Props = {
 export function AdminContractsSection({ setNotification }: Props) {
   const [rows, setRows] = useState<AdminContractQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [attentionOnly, setAttentionOnly] = useState(false);
-  const [workspaceId, setWorkspaceId] = useState('');
-  const [q, setQ] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [versionStatus, setVersionStatus] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [orderIdInput, setOrderIdInput] = useState('');
+  const [orderIdApplied, setOrderIdApplied] = useState('');
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [detail, setDetail] = useState<AdminContractDetail | null>(null);
@@ -27,13 +33,10 @@ export function AdminContractsSection({ setNotification }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const vs = versionStatusParam(statusFilter);
       const res = await fetchContractQueue({
-        attention: attentionOnly || undefined,
-        workspaceId: workspaceId.trim() || undefined,
-        q: q.trim() || undefined,
-        dateFrom: dateFrom.trim() || undefined,
-        dateTo: dateTo.trim() || undefined,
-        versionStatus: versionStatus.trim() || undefined,
+        versionStatus: vs,
+        q: orderIdApplied.trim() || undefined,
       });
       setRows(res.items);
     } catch (e: unknown) {
@@ -46,7 +49,7 @@ export function AdminContractsSection({ setNotification }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [attentionOnly, workspaceId, q, dateFrom, dateTo, versionStatus]);
+  }, [statusFilter, orderIdApplied]);
 
   useEffect(() => {
     void load();
@@ -101,70 +104,38 @@ export function AdminContractsSection({ setNotification }: Props) {
         </button>
       </div>
 
-      <div className="grid gap-3 rounded-2xl border border-app-border bg-app-card p-4 sm:grid-cols-2 lg:grid-cols-3">
-        <label className="block text-xs font-bold uppercase tracking-wide text-neutral-500">
-          Attention (sent/rejected)
-          <input
-            type="checkbox"
-            checked={attentionOnly}
-            onChange={(e) => setAttentionOnly(e.target.checked)}
-            className="mt-2 block h-5 w-5"
-          />
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wide text-neutral-500">
-          Workspace ID
-          <input
-            value={workspaceId}
-            onChange={(e) => setWorkspaceId(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-text"
-            placeholder="cuid…"
-          />
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wide text-neutral-500">
-          Version status filter
-          <input
-            value={versionStatus}
-            onChange={(e) => setVersionStatus(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-text"
-            placeholder="sent,rejected or approved"
-          />
-        </label>
-        <label className="sm:col-span-2 block text-xs font-bold uppercase tracking-wide text-neutral-500">
-          Provider / customer / order search
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-text"
-            placeholder="email, name, or order id"
-          />
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wide text-neutral-500">
-          Updated from
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-text"
-          />
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wide text-neutral-500">
-          Updated to
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-text"
-          />
-        </label>
-        <div className="flex items-end">
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="min-h-[44px] w-full rounded-xl bg-neutral-900 text-sm font-bold text-white dark:bg-white dark:text-neutral-900"
+      <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-app-border bg-app-card p-4">
+        <label className="block min-w-[200px] flex-1 text-xs font-bold uppercase tracking-wide text-neutral-500">
+          Status
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="mt-1 block w-full rounded-xl border border-app-border bg-app-input px-3 py-2 text-sm text-app-text"
           >
-            Apply filters
-          </button>
-        </div>
+            <option value="all">All</option>
+            <option value="pending">Pending review</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </label>
+        <label className="block min-w-[220px] flex-[2] text-xs font-bold uppercase tracking-wide text-neutral-500">
+          Search by order ID
+          <input
+            value={orderIdInput}
+            onChange={(e) => setOrderIdInput(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-app-border bg-app-input px-3 py-2 font-mono text-sm text-app-text"
+            placeholder="Order cuid…"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setOrderIdApplied(orderIdInput.trim());
+          }}
+          className="min-h-[44px] rounded-xl bg-neutral-900 px-6 text-sm font-bold text-white dark:bg-white dark:text-neutral-900"
+        >
+          Apply
+        </button>
       </div>
 
       <ContractsTable rows={rows} loading={loading} onOpen={(id) => void openDrawer(id)} />

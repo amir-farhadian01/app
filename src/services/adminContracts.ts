@@ -23,6 +23,9 @@ export type AdminContractVersionRow = {
   currency: string | null;
   mismatchWarnings: unknown;
   reviewNote: string | null;
+  sentById?: string | null;
+  sentAt?: string | null;
+  sentBy?: AdminContractParty | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -98,12 +101,48 @@ export async function fetchContractQueue(
   return api.get<{ items: AdminContractQueueItem[] }>(`/api/admin/contracts/queue${buildQueueQueryString(query)}`);
 }
 
+export type AdminContractByOrderRow = {
+  id: string;
+  orderId: string;
+  currentVersionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminContractVersionByOrderRow = {
+  id: string;
+  contractId: string;
+  versionNumber: number;
+  status: string;
+  title: string;
+  termsMarkdown: string;
+  policiesMarkdown: string | null;
+  scopeSummary: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  amount: number | null;
+  currency: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchAdminContractsByOrderId(orderId: string): Promise<{
+  contract: AdminContractByOrderRow | null;
+  versions: AdminContractVersionByOrderRow[];
+}> {
+  const p = new URLSearchParams();
+  p.set('orderId', orderId);
+  return api.get<{ contract: AdminContractByOrderRow | null; versions: AdminContractVersionByOrderRow[] }>(
+    `/api/admin/contracts?${p.toString()}`,
+  );
+}
+
 export async function fetchAdminContractDetail(contractId: string): Promise<AdminContractDetail> {
   return api.get<AdminContractDetail>(`/api/admin/contracts/${encodeURIComponent(contractId)}`);
 }
 
 export async function markContractReviewed(contractId: string): Promise<{ contract: AdminContractQueueItem | null }> {
-  return api.post(`/api/admin/contracts/${encodeURIComponent(contractId)}/mark-reviewed`, {});
+  return api.post(`/api/admin/contracts/${encodeURIComponent(contractId)}/reviewed`, {});
 }
 
 export async function overrideSupersedeVersion(
@@ -117,5 +156,5 @@ export async function addContractInternalNote(
   contractId: string,
   note: string,
 ): Promise<{ events: AdminContractEventRow[] }> {
-  return api.post(`/api/admin/contracts/${encodeURIComponent(contractId)}/internal-note`, { note });
+  return api.post(`/api/admin/contracts/${encodeURIComponent(contractId)}/note`, { note });
 }

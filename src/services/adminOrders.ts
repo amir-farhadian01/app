@@ -29,6 +29,8 @@ export type AdminOrderListQuery = {
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
   q?: string;
+  /** Substring match against order status enum values (backend `search`). */
+  search?: string;
   status?: string[];
   entryPoint?: string[];
   phase?: string[];
@@ -52,6 +54,7 @@ export function buildAdminOrdersQueryString(q: AdminOrderListQuery): string {
   if (q.sortBy) p.set('sortBy', q.sortBy);
   if (q.sortDir) p.set('sortDir', q.sortDir);
   if (q.q?.trim()) p.set('q', q.q.trim());
+  if (q.search?.trim()) p.set('search', q.search.trim());
   appendRepeated(p, 'status', q.status);
   appendRepeated(p, 'entryPoint', q.entryPoint);
   appendRepeated(p, 'phase', q.phase);
@@ -90,7 +93,14 @@ export type AdminOrderDetailAuditEntry = {
   metadata: unknown;
 };
 
+export type AdminOrderCustomerReview = {
+  rating: number;
+  reviewText: string | null;
+  createdAt: string;
+};
+
 export type AdminOrderDetailResponse = {
+  customerReview: AdminOrderCustomerReview | null;
   order: {
     id: string;
     customerId: string;
@@ -125,6 +135,8 @@ export type AdminOrderDetailResponse = {
   schema: ServiceQuestionnaireV1 | null;
   staleSnapshot: boolean;
   auditLog: AdminOrderDetailAuditEntry[];
+  /** Same sequence as `auditLog` (API alias for admin drawer Timeline tab). */
+  auditLogs?: AdminOrderDetailAuditEntry[];
 };
 
 export type AdminOrderEligibilityResponse = {

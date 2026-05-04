@@ -13,8 +13,8 @@ import {
 } from '../../../services/adminOrders';
 import { OrdersTable } from './OrdersTable';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
+import { AdminOrdersFilterBar } from './AdminOrdersFilterBar';
 import type { AdminOrdersSegment } from './orderColumns';
-import { cn } from '../../../lib/utils';
 
 type Props = {
   showSuccess: (message: string) => void;
@@ -28,6 +28,7 @@ const SEGMENT_STORAGE_PREFIX = 'admin.orders.segment.';
 function normalizeSegment(raw: string | null): AdminOrdersSegment {
   if (!raw) return 'offer';
   const t = raw.toLowerCase();
+  if (t === 'all') return 'all';
   if (t === 'offers' || t === 'offer') return 'offer';
   if (t === 'orders' || t === 'order') return 'order';
   if (t === 'jobs' || t === 'job') return 'job';
@@ -39,6 +40,8 @@ function segmentToApi(
   seg: AdminOrdersSegment,
 ): Pick<AdminOrderListQuery, 'phase' | 'status' | 'includeDrafts'> {
   switch (seg) {
+    case 'all':
+      return {};
     case 'offer':
       return { phase: ['offer'], status: ['submitted'] };
     case 'order':
@@ -46,7 +49,7 @@ function segmentToApi(
     case 'job':
       return {
         phase: ['job'],
-        status: ['contracted', 'paid', 'in_progress', 'completed'],
+        status: ['contracted', 'paid', 'in_progress', 'completed', 'closed'],
       };
     case 'cancelled':
       return { status: ['cancelled'] };
@@ -169,6 +172,8 @@ export function AdminOrdersSection({
   const [sort, setSort] = useState<Sort | null>({ id: 'createdAt', dir: 'desc' });
   const [filters, setFilters] = useState<Record<string, FilterValue>>({});
   const [globalSearch, setGlobalSearch] = useState('');
+  const [statusSearchInput, setStatusSearchInput] = useState('');
+  const [debouncedStatusSearch, setDebouncedStatusSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
@@ -201,6 +206,15 @@ export function AdminOrdersSection({
 
   const listBlocked = listImpossible || segmentStatusEmpty;
 
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedStatusSearch(statusSearchInput), 300);
+    return () => window.clearTimeout(t);
+  }, [statusSearchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedStatusSearch]);
+
   const listQuery = useMemo((): AdminOrderListQuery => {
     const sortBy =
       sort?.id && ['createdAt', 'scheduledAt', 'status', 'updatedAt'].includes(sort.id)
@@ -219,13 +233,14 @@ export function AdminOrdersSection({
       sortBy,
       sortDir,
       q: globalSearch.trim() || undefined,
+      search: debouncedStatusSearch.trim() || undefined,
       ...fv,
     };
     if (seg.phase) q.phase = seg.phase;
     q.status = status.length ? status : undefined;
     if (seg.includeDrafts === true) q.includeDrafts = true;
     return q;
-  }, [page, pageSize, sort, filters, globalSearch, segment, legacyStatuses]);
+  }, [page, pageSize, sort, filters, globalSearch, debouncedStatusSearch, segment, legacyStatuses]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -328,9 +343,10 @@ export function AdminOrdersSection({
 
   const counts = useMemo(() => {
     if (!stats) {
-      return { offer: 0, order: 0, job: 0, cancelled: 0 };
+      return { all: 0, offer: 0, order: 0, job: 0, cancelled: 0 };
     }
     return {
+      all: stats.totalOrders,
       offer: stats.submittedCount,
       order: stats.orders,
       job: stats.jobs,
@@ -338,12 +354,16 @@ export function AdminOrdersSection({
     };
   }, [stats]);
 
-  const segments: { id: AdminOrdersSegment; label: string; count: number }[] = [
-    { id: 'offer', label: 'Offers', count: counts.offer },
-    { id: 'order', label: 'Orders', count: counts.order },
-    { id: 'job', label: 'Jobs', count: counts.job },
-    { id: 'cancelled', label: 'Cancelled', count: counts.cancelled },
-  ];
+  const phaseOptions = useMemo(
+    () => [
+      { id: 'all' as const, label: 'All', count: counts.all },
+      { id: 'offer' as const, label: 'Offers', count: counts.offer },
+      { id: 'order' as const, label: 'Orders', count: counts.order },
+      { id: 'job' as const, label: 'Jobs', count: counts.job },
+      { id: 'cancelled' as const, label: 'Cancelled', count: counts.cancelled },
+    ],
+    [counts],
+  );
 
   return (
     <div className="space-y-4">
@@ -352,35 +372,16 @@ export function AdminOrdersSection({
         <p className="text-sm text-neutral-500">Review customer orders, answers, and photos.</p>
       </div>
 
-      <div
-        className={cn(
-          'sticky top-0 z-20 -mx-1 flex flex-wrap gap-1 border-b border-app-border bg-app-card/95 px-1 pb-0 backdrop-blur-sm',
-        )}
-        role="tablist"
-        aria-label="Order lifecycle"
-      >
-        {segments.map((s) => {
-          const active = segment === s.id;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              className={cn(
-                'border-b-[4px] border-transparent px-4 py-3 text-sm font-black uppercase tracking-wide transition-colors',
-                active ? 'border-app-text text-app-text' : 'text-neutral-500 hover:text-app-text',
-              )}
-              onClick={() => {
-                setSegment(s.id);
-                setPage(1);
-              }}
-            >
-              {s.label} <span className="tabular-nums opacity-80">({s.count})</span>
-            </button>
-          );
-        })}
-      </div>
+      <AdminOrdersFilterBar
+        segment={segment}
+        onSegmentChange={(next) => {
+          setSegment(next);
+          setPage(1);
+        }}
+        phaseOptions={phaseOptions}
+        statusSearch={statusSearchInput}
+        onStatusSearchChange={setStatusSearchInput}
+      />
 
       <OrdersTable
         key={segment}

@@ -134,6 +134,92 @@ router.get('/queue', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/** Read-only contract + versions for an order (admin order drawer). */
+router.get('/', async (req: AuthRequest, res: Response) => {
+  try {
+    const orderId = pickStr(req.query.orderId);
+    if (!orderId) {
+      return res.status(400).json({ error: 'orderId query parameter is required' });
+    }
+    const row = await prisma.orderContract.findUnique({
+      where: { orderId },
+      include: {
+        versions: { orderBy: { versionNumber: 'desc' } },
+      },
+    });
+    if (!row) {
+      return res.json({ contract: null, versions: [] });
+    }
+    return res.json({
+      contract: {
+        id: row.id,
+        orderId: row.orderId,
+        currentVersionId: row.currentVersionId,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      },
+      versions: row.versions.map((v) => ({
+        id: v.id,
+        contractId: v.contractId,
+        versionNumber: v.versionNumber,
+        status: v.status,
+        title: v.title,
+        termsMarkdown: v.termsMarkdown,
+        policiesMarkdown: v.policiesMarkdown,
+        scopeSummary: v.scopeSummary,
+        startDate: v.startDate?.toISOString() ?? null,
+        endDate: v.endDate?.toISOString() ?? null,
+        amount: v.amount,
+        currency: v.currency,
+        createdAt: v.createdAt.toISOString(),
+        updatedAt: v.updatedAt.toISOString(),
+      })),
+    });
+  } catch (err: unknown) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+const userSelectForContractParty = {
+  id: true,
+  email: true,
+  displayName: true,
+  firstName: true,
+  lastName: true,
+} as const;
+
+async function attachSentByToVersions<T extends { versions: { sentById: string | null }[] }>(row: T): Promise<
+  T & {
+    versions: (T['versions'][number] & {
+      sentBy: {
+        id: string;
+        email: string;
+        displayName: string | null;
+        firstName: string | null;
+        lastName: string | null;
+      } | null;
+    })[];
+  }
+> {
+  const sentIds = [...new Set(row.versions.map((v) => v.sentById).filter((id): id is string => Boolean(id)))];
+  if (!sentIds.length) {
+    return { ...row, versions: row.versions.map((v) => ({ ...v, sentBy: null })) };
+  }
+  const senders = await prisma.user.findMany({
+    where: { id: { in: sentIds } },
+    select: userSelectForContractParty,
+  });
+  const byId = Object.fromEntries(senders.map((u) => [u.id, u]));
+  return {
+    ...row,
+    versions: row.versions.map((v) => ({
+      ...v,
+      sentBy: v.sentById ? (byId[v.sentById] ?? null) : null,
+    })),
+  };
+}
+
 router.get('/:contractId', async (req: AuthRequest, res: Response) => {
   try {
     const { contractId } = req.params;
@@ -165,14 +251,15 @@ router.get('/:contractId', async (req: AuthRequest, res: Response) => {
       },
     });
     if (!row) return res.status(404).json({ error: 'Contract not found' });
-    return res.json(row);
+    const withSenders = await attachSentByToVersions(row);
+    return res.json(withSenders);
   } catch (err: unknown) {
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/:contractId/mark-reviewed', async (req: AuthRequest, res: Response) => {
+async function handleMarkContractReviewed(req: AuthRequest, res: Response) {
   try {
     const { contractId } = req.params;
     const uid = req.user!.userId;
@@ -202,7 +289,11 @@ router.post('/:contractId/mark-reviewed', async (req: AuthRequest, res: Response
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
   }
-});
+}
+
+router.post('/:contractId/mark-reviewed', handleMarkContractReviewed);
+/** Alias for admin UI / integrations expecting `/reviewed`. */
+router.post('/:contractId/reviewed', handleMarkContractReviewed);
 
 router.post('/:contractId/override-supersede', async (req: AuthRequest, res: Response) => {
   try {
@@ -248,7 +339,7 @@ router.post('/:contractId/override-supersede', async (req: AuthRequest, res: Res
   }
 });
 
-router.post('/:contractId/internal-note', async (req: AuthRequest, res: Response) => {
+async function handleContractInternalNote(req: AuthRequest, res: Response) {
   try {
     const { contractId } = req.params;
     const body = req.body as { note?: unknown };
@@ -280,6 +371,10 @@ router.post('/:contractId/internal-note', async (req: AuthRequest, res: Response
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
   }
-});
+}
+
+router.post('/:contractId/internal-note', handleContractInternalNote);
+/** Alias for admin UI / integrations expecting `/note`. */
+router.post('/:contractId/note', handleContractInternalNote);
 
 export default router;

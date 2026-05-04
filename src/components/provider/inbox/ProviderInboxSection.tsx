@@ -3,8 +3,8 @@ import { Inbox } from 'lucide-react';
 import { useWorkspace } from '../../../lib/WorkspaceContext';
 import { useSoftToast } from '../../../lib/SoftToastContext';
 import {
-  accept,
   acknowledge,
+  completeOrder,
   decline,
   getInboxItem,
   listInbox,
@@ -41,6 +41,8 @@ export function ProviderInboxSection() {
   const [declineOpen, setDeclineOpen] = useState(false);
   const [target, setTarget] = useState<ProviderInboxItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [completeBusy, setCompleteBusy] = useState(false);
+  const [paymentBannerByOrderId, setPaymentBannerByOrderId] = useState<Record<string, boolean>>({});
   const [segmentCounts, setSegmentCounts] = useState<Record<SegmentId, number>>({
     awaiting: 0,
     accepted: 0,
@@ -109,33 +111,45 @@ export function ProviderInboxSection() {
 
   const runAcknowledge = async () => {
     if (!activeWorkspaceId || !target) return;
-    const prev = detail && detail.id === target.id ? detail : items.find((x) => x.id === target.id) ?? null;
-    const optimisticStatus: InboxStatus = target.status === 'invited' ? 'accepted' : 'accepted';
-    patchItem(target.id, (x) => ({ ...x, status: optimisticStatus, respondedAt: new Date().toISOString() }));
     setBusy(true);
     try {
-      if (target.status === 'invited') {
-        const updated = await accept(activeWorkspaceId, target.id);
-        patchItem(target.id, () => updated);
-        showToast("Accepted. We'll notify you when the customer decides.");
-      } else {
-        await acknowledge(activeWorkspaceId, target.id);
-        const updated = await getInboxItem(activeWorkspaceId, target.id);
-        patchItem(target.id, () => updated);
-        showToast('Acknowledged. This order is now in your active jobs.');
-      }
+      await acknowledge(activeWorkspaceId, target.id);
+      const updated = await getInboxItem(activeWorkspaceId, target.id);
+      patchItem(target.id, () => updated);
+      showToast(
+        target.status === 'invited'
+          ? "Accepted. We'll notify you when the customer decides."
+          : 'Acknowledged. This order is now in your active jobs.',
+      );
       setAckOpen(false);
       setTarget(null);
       await load();
-      if (openId && openId !== target.id) {
+      if (openId && activeWorkspaceId) {
         const d = await getInboxItem(activeWorkspaceId, openId);
         setDetail(d);
       }
     } catch (e) {
-      if (prev) patchItem(target.id, () => prev);
       showToast(e instanceof Error ? e.message : 'Acknowledge failed');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const runMarkComplete = async (orderId: string) => {
+    setCompleteBusy(true);
+    try {
+      await completeOrder(orderId);
+      setPaymentBannerByOrderId((prev) => ({ ...prev, [orderId]: true }));
+      showToast('Order marked complete.');
+      await load();
+      if (openId && activeWorkspaceId) {
+        const d = await getInboxItem(activeWorkspaceId, openId);
+        setDetail(d);
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not mark order complete');
+    } finally {
+      setCompleteBusy(false);
     }
   };
 
@@ -224,7 +238,7 @@ export function ProviderInboxSection() {
           {(
             [
               ['awaiting', `Awaiting (${segmentCounts.awaiting})`],
-              ['accepted', 'Acknowledged'],
+              ['accepted', `Acknowledged (${segmentCounts.accepted})`],
               ['declined', 'Declined'],
               ['lost', `Lost (${segmentCounts.lost})`],
             ] as const
@@ -252,6 +266,8 @@ export function ProviderInboxSection() {
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
         onOpen={openDetail}
+        pendingAttemptId={busy && (ackOpen || declineOpen) ? target?.id ?? null : null}
+        pendingAction={busy && ackOpen ? 'ack' : busy && declineOpen ? 'decline' : null}
         onAcknowledge={(row) => {
           setTarget(row);
           setAckOpen(true);
@@ -265,6 +281,7 @@ export function ProviderInboxSection() {
       <InboxDetailDrawer
         open={openId != null}
         item={detail}
+        activeWorkspaceId={activeWorkspaceId}
         onClose={() => {
           setOpenId(null);
           setDetail(null);
@@ -277,6 +294,11 @@ export function ProviderInboxSection() {
           setTarget(row);
           setDeclineOpen(true);
         }}
+        footerMutationBusy={Boolean(busy && target?.id === detail?.id && (ackOpen || declineOpen))}
+        footerMutationKind={busy && ackOpen ? 'ack' : busy && declineOpen ? 'decline' : null}
+        onMarkComplete={(orderId) => void runMarkComplete(orderId)}
+        markCompleteBusy={completeBusy}
+        showPaymentBanner={Boolean(detail && paymentBannerByOrderId[detail.order.id])}
         lostFeedbackSubmitting={lostFeedbackSubmitting}
         lostFeedbackDone={detail ? Boolean(lostFeedbackDoneIds[detail.id]) : false}
         onSubmitLostFeedback={(attemptId, body) => void submitLost(attemptId, body)}

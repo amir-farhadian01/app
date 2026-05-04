@@ -323,6 +323,8 @@ async function getWorkspaceInboxAttemptsList(req: AuthRequest, res: Response) {
           scheduleFlexibility: a.offer.scheduleFlexibility,
           phase: a.offer.phase,
           status: a.offer.status,
+          matchedProviderId: a.offer.matchedProviderId,
+          matchedWorkspaceId: a.offer.matchedWorkspaceId,
           locationLat: a.offer.locationLat,
           locationLng: a.offer.locationLng,
           submittedAt: a.offer.submittedAt?.toISOString() ?? null,
@@ -413,6 +415,8 @@ router.get('/:id/inbox/:attemptId', async (req: AuthRequest, res: Response) => {
         scheduleFlexibility: row.offer.scheduleFlexibility,
         phase: row.offer.phase,
         status: row.offer.status,
+        matchedProviderId: row.offer.matchedProviderId,
+        matchedWorkspaceId: row.offer.matchedWorkspaceId,
         locationLat: row.offer.locationLat,
         locationLng: row.offer.locationLng,
         entryPoint: row.offer.entryPoint,
@@ -441,8 +445,34 @@ router.post('/:id/inbox/:attemptId/acknowledge', async (req: AuthRequest, res: R
     if (!attempt) {
       return res.status(404).json({ error: 'Attempt not found' });
     }
+
+    /** Round-robin invite: same outcome as POST …/accept (provider commits as a candidate). */
+    if (attempt.status === MatchAttemptStatus.invited) {
+      await expireStaleAttempts(attempt.offerId);
+      const fresh = await prisma.offerMatchAttempt.findUnique({ where: { id: attempt.id } });
+      if (!fresh) return res.status(404).json({ error: 'Attempt not found' });
+      if (fresh.status !== MatchAttemptStatus.invited) {
+        return res.status(400).json({ error: 'Attempt is no longer open for acknowledgment' });
+      }
+      const now = new Date();
+      await prisma.offerMatchAttempt.update({
+        where: { id: fresh.id },
+        data: { status: MatchAttemptStatus.accepted, respondedAt: now },
+      });
+      try {
+        await publish('attempts.accepted', {
+          attemptId: fresh.id,
+          orderId: fresh.offerId,
+          providerId: fresh.providerId,
+        });
+      } catch {
+        /* optional */
+      }
+      return res.json({ success: true, orderId: fresh.offerId });
+    }
+
     if (attempt.status !== MatchAttemptStatus.matched) {
-      return res.status(400).json({ error: 'Only matched attempts can be acknowledged' });
+      return res.status(400).json({ error: 'Only matched or invited attempts can be acknowledged' });
     }
     const now = new Date();
     await prisma.$transaction(async (tx) => {

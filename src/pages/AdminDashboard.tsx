@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
@@ -8,8 +9,16 @@ import {
   CheckCircle, DollarSign, Activity, Lock, Key, List, FileText,
   CreditCard, UserPlus, Globe, Layout, Cpu, Plus, Save, ExternalLink,
   Search, Filter, ChevronRight, X, Mail, Phone, ShieldCheck, ShieldAlert, Workflow,
-  ShoppingCart,
+  ShoppingCart, Info, TrendingUp, Timer,
 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import { cn } from '../lib/utils';
 import type { AdminUserRow, AdminUsersResponse } from '../../lib/adminUsersTypes';
 import { AdminUsersSection } from '../components/admin/AdminUsersSection';
@@ -23,8 +32,50 @@ import { AdminContractsSection } from '../components/admin/contracts/AdminContra
 import { AdminPaymentsSection } from '../components/admin/payments/AdminPaymentsSection';
 import { SidebarNav } from '../components/admin/SidebarNav';
 import { isAdminTab, type AdminTab } from '../lib/adminTab.js';
+import type {
+  AdminAuditLogFeedItem,
+  AdminAuditLogFeedResponse,
+  AdminOverviewStats,
+  OrdersTrendPoint,
+} from '../services/adminOverview';
 
 export type { AdminTab } from '../lib/adminTab.js';
+
+function formatCad(amount: number): string {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: 'CAD',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '—';
+  const sec = Math.floor((Date.now() - t) / 1000);
+  if (sec < 10) return 'just now';
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hr ago`;
+  const d = Math.floor(hr / 24);
+  return `${d} day${d === 1 ? '' : 's'} ago`;
+}
+
+function humanizeAuditAction(action: string): string {
+  return action.replace(/_/g, ' ').replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+}
+
+function auditFeedIcon(action: string) {
+  const a = action.toUpperCase();
+  if (a.includes('PAYMENT') || a.includes('SESSION') || a.includes('CAPTURE')) return CreditCard;
+  if (a.includes('ORDER')) return ShoppingCart;
+  if (a.includes('CONTRACT')) return FileText;
+  if (a.includes('ADMIN') || a.includes('KYC')) return Shield;
+  return Activity;
+}
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -46,11 +97,9 @@ export default function AdminDashboard() {
   const [legalPolicies, setLegalPolicies] = useState<any[]>([]);
   const [pages, setPages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [ordersThisWeek, setOrdersThisWeek] = useState(0);
-  const [matchedAutoToday, setMatchedAutoToday] = useState(0);
-  const [matchedAutoThisWeek, setMatchedAutoThisWeek] = useState(0);
-  const [autoMatchExhaustedThisWeek, setAutoMatchExhaustedThisWeek] = useState(0);
-  const [declinedAttemptsThisWeek, setDeclinedAttemptsThisWeek] = useState(0);
+  const [overviewStats, setOverviewStats] = useState<AdminOverviewStats | null>(null);
+  const [ordersTrend, setOrdersTrend] = useState<OrdersTrendPoint[]>([]);
+  const [overviewAuditFeed, setOverviewAuditFeed] = useState<AdminAuditLogFeedItem[]>([]);
   const [ordersFilterSeed, setOrdersFilterSeed] = useState<{ createdFrom?: string } | null>(null);
 
   // Modal states
@@ -111,8 +160,21 @@ export default function AdminDashboard() {
 
   const fetchAll = async () => {
     try {
-      const [usersData, catsData, svcData, reqData, auditData, configData, legalData, pagesData, l1Pending, l2Pending, orderStats] =
-        await Promise.all([
+      const [
+        usersData,
+        catsData,
+        svcData,
+        reqData,
+        auditData,
+        configData,
+        legalData,
+        pagesData,
+        l1Pending,
+        l2Pending,
+        statsPayload,
+        trendPayload,
+        auditFeedPayload,
+      ] = await Promise.all([
         api.get<AdminUsersResponse>('/api/admin/users?page=1&pageSize=200'),
         api.get<any[]>('/api/categories'),
         api.get<any[]>('/api/services'),
@@ -123,25 +185,13 @@ export default function AdminDashboard() {
         api.get<any[]>('/api/admin/pages'),
         api.get<{ total: number }>('/api/admin/kyc/personal?status=pending&page=1&pageSize=1').catch(() => ({ total: 0 })),
         api.get<{ total: number }>('/api/admin/kyc/business?status=pending&page=1&pageSize=1').catch(() => ({ total: 0 })),
-        api.get<{
-          ordersThisWeek: number;
-          matchedAutoToday: number;
-          matchedAutoThisWeek: number;
-          autoMatchExhaustedThisWeek: number;
-          declinedAttemptsThisWeek: number;
-        }>('/api/admin/orders/stats').catch(() => ({
-          ordersThisWeek: 0,
-          matchedAutoToday: 0,
-          matchedAutoThisWeek: 0,
-          autoMatchExhaustedThisWeek: 0,
-          declinedAttemptsThisWeek: 0,
-        })),
+        api.get<AdminOverviewStats>('/api/admin/stats').catch(() => null),
+        api.get<OrdersTrendPoint[]>('/api/admin/stats/orders-trend?days=7').catch(() => []),
+        api.get<AdminAuditLogFeedResponse>('/api/admin/audit-log?limit=10').catch(() => ({ items: [] })),
       ]);
-      setOrdersThisWeek(orderStats?.ordersThisWeek ?? 0);
-      setMatchedAutoToday(orderStats?.matchedAutoToday ?? 0);
-      setMatchedAutoThisWeek(orderStats?.matchedAutoThisWeek ?? 0);
-      setAutoMatchExhaustedThisWeek(orderStats?.autoMatchExhaustedThisWeek ?? 0);
-      setDeclinedAttemptsThisWeek(orderStats?.declinedAttemptsThisWeek ?? 0);
+      setOverviewStats(statsPayload);
+      setOrdersTrend(Array.isArray(trendPayload) ? trendPayload : []);
+      setOverviewAuditFeed(Array.isArray(auditFeedPayload?.items) ? auditFeedPayload.items : []);
       setUsers((usersData as AdminUsersResponse)?.items || []);
       setUserDirectoryTotal((usersData as AdminUsersResponse)?.total ?? 0);
       setKycPendingTotal((l1Pending?.total ?? 0) + (l2Pending?.total ?? 0));
@@ -236,6 +286,29 @@ export default function AdminDashboard() {
     </div>
   );
 
+  const s = overviewStats;
+  const overviewTotalUsers = s?.totalUsers ?? (userDirectoryTotal || users.length);
+  const overviewKycPending = s?.kycPending ?? kycPendingTotal;
+  const overviewActiveOrders = s?.activeOrders ?? 0;
+  const overviewOrdersToday = s?.ordersToday ?? 0;
+  const overviewMatchRate = s?.matchRate ?? 0;
+  const overviewAvgMin = s?.avgTimeToMatch ?? 0;
+  const overviewRevTotal = s?.revenueTotal ?? 0;
+  const overviewRevPending = s?.revenuePending ?? 0;
+  const overviewProviders = s?.totalProviders ?? 0;
+
+  const overviewKpiCard = (label: string, value: string | number, IconCmp: LucideIcon, color: string) => (
+    <div className="bg-app-card p-6 md:p-8 rounded-[2.5rem] border border-app-border space-y-2 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center shrink-0', color)}>
+          <IconCmp className="w-6 h-6" />
+        </div>
+      </div>
+      <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">{label}</p>
+      <h3 className="text-2xl md:text-3xl font-bold text-app-text">{value}</h3>
+    </div>
+  );
+
   return (
     <div className="flex flex-row gap-8 pb-20 min-h-screen bg-app-bg">
       <SidebarNav activeTab={activeTab} onTabChange={goToTab} />
@@ -247,53 +320,59 @@ export default function AdminDashboard() {
             {/* Overview Section */}
             {activeTab === 'overview' && (
               <div className="space-y-8">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                  {[
-                    { label: 'Total Users', value: userDirectoryTotal || users.length, icon: Users, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
-                    { label: 'KYC Pending', value: kycPendingTotal, icon: ShieldAlert, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
-                    { label: 'Active Services', value: services.length, icon: Briefcase, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' },
-                    { label: 'Total Revenue', value: '$12,450', icon: DollarSign, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20' },
-                  ].map((stat) => (
-                    <div key={stat.label} className="bg-app-card p-8 rounded-[2.5rem] border border-app-border space-y-2 shadow-sm">
-                      <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", stat.color)}>
-                        <stat.icon className="w-6 h-6" />
-                      </div>
-                      <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">{stat.label}</p>
-                      <h3 className="text-3xl font-bold text-app-text">{stat.value}</h3>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  {overviewKpiCard('Total Users', overviewTotalUsers, Users, 'text-blue-600 bg-blue-50 dark:bg-blue-900/20')}
+                  {overviewKpiCard('KYC Pending', overviewKycPending, ShieldAlert, 'text-amber-600 bg-amber-50 dark:bg-amber-900/20')}
+                  {overviewKpiCard('Active Orders', overviewActiveOrders, ShoppingCart, 'text-orange-600 bg-orange-50 dark:bg-orange-900/20')}
                   <button
                     type="button"
                     onClick={() => {
                       const d = new Date();
-                      d.setDate(d.getDate() - 7);
                       d.setHours(0, 0, 0, 0);
                       setOrdersFilterSeed({ createdFrom: d.toISOString().slice(0, 10) });
                       goToTab('orders');
                     }}
-                    className="bg-app-card p-8 rounded-[2.5rem] border border-app-border space-y-2 shadow-sm text-left transition hover:border-neutral-400 dark:hover:border-neutral-600"
+                    className="bg-app-card p-6 md:p-8 rounded-[2.5rem] border border-app-border space-y-2 shadow-sm text-left transition hover:border-neutral-400 dark:hover:border-neutral-600"
                   >
-                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-orange-600 bg-orange-50 dark:bg-orange-900/20">
-                      <ShoppingCart className="w-6 h-6" />
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-sky-600 bg-sky-50 dark:bg-sky-900/20">
+                      <BarChart3 className="w-6 h-6" />
                     </div>
-                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Orders this week</p>
-                    <h3 className="text-3xl font-bold text-app-text">{ordersThisWeek}</h3>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">View last 7 days →</p>
+                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Orders Today</p>
+                    <h3 className="text-2xl md:text-3xl font-bold text-app-text">{overviewOrdersToday}</h3>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">Open in Orders →</p>
                   </button>
-                  {[
-                    { label: 'Auto matched today', value: matchedAutoToday, icon: Workflow, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' },
-                    { label: 'Auto matched this week', value: matchedAutoThisWeek, icon: Activity, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
-                    { label: 'Auto-match exhausted', value: autoMatchExhaustedThisWeek, icon: AlertCircle, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
-                    { label: 'Declined attempts', value: declinedAttemptsThisWeek, icon: ShieldAlert, color: 'text-rose-600 bg-rose-50 dark:bg-rose-900/20' },
-                  ].map((stat) => (
-                    <div key={stat.label} className="bg-app-card p-8 rounded-[2.5rem] border border-app-border space-y-2 shadow-sm">
-                      <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center', stat.color)}>
-                        <stat.icon className="w-6 h-6" />
+                  {overviewKpiCard('Match Rate', `${overviewMatchRate}%`, TrendingUp, 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20')}
+                  {overviewKpiCard('Avg Time to Match', `${overviewAvgMin} min`, Timer, 'text-violet-600 bg-violet-50 dark:bg-violet-900/20')}
+                  <div className="bg-app-card p-6 md:p-8 rounded-[2.5rem] border border-app-border space-y-2 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20">
+                        <DollarSign className="w-6 h-6" />
                       </div>
-                      <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">{stat.label}</p>
-                      <h3 className="text-3xl font-bold text-app-text">{stat.value}</h3>
+                      <button
+                        type="button"
+                        title="Revenue is estimated from order snapshots. Live Stripe data coming soon."
+                        className="rounded-lg p-1 text-neutral-400 hover:text-app-text focus:outline-none focus:ring-2 focus:ring-neutral-400"
+                        aria-label="Revenue is estimated from order snapshots. Live Stripe data coming soon."
+                      >
+                        <Info className="w-4 h-4" />
+                      </button>
                     </div>
-                  ))}
+                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Revenue Total (CAD)</p>
+                    <h3 className="text-2xl md:text-3xl font-bold text-app-text">{formatCad(overviewRevTotal)}</h3>
+                  </div>
+                  <div className="bg-app-card p-6 md:p-8 rounded-[2.5rem] border border-app-border space-y-2 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-neutral-600 bg-neutral-100 dark:bg-neutral-800">
+                        <DollarSign className="w-6 h-6" />
+                      </div>
+                      <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
+                        Stripe not connected
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Revenue Pending (CAD)</p>
+                    <h3 className="text-2xl md:text-3xl font-bold text-app-text">{formatCad(overviewRevPending)}</h3>
+                  </div>
+                  {overviewKpiCard('Active Providers', overviewProviders, Briefcase, 'text-teal-600 bg-teal-50 dark:bg-teal-900/20')}
                 </div>
 
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -320,50 +399,84 @@ export default function AdminDashboard() {
                   </button>
                 </div>
 
-                <div className="grid lg:grid-cols-2 gap-8">
-                  <div className="bg-app-card p-8 rounded-[3rem] border border-app-border shadow-sm space-y-6">
-                    <h3 className="text-xl font-black italic uppercase tracking-tight text-app-text">Recent Activity</h3>
-                    <div className="space-y-4">
-                      {auditLogs.slice(0, 10).map((log) => (
-                        <div key={log.id} className="flex items-center justify-between py-3 border-b border-app-border last:border-0">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-neutral-50 dark:bg-neutral-800 rounded-lg flex items-center justify-center">
-                              <Activity className="w-4 h-4 text-neutral-400" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-app-text">{log.action}</p>
-                              <p className="text-[10px] text-neutral-400 uppercase tracking-widest">
-                                {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Recent'}
-                              </p>
-                            </div>
-                          </div>
-                          <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">{String(log.actorId || '').slice(0, 5)}</span>
-                        </div>
-                      ))}
-                      {auditLogs.length === 0 && (
-                        <p className="text-neutral-400 font-bold uppercase tracking-widest text-xs text-center py-8">No activity logs.</p>
-                      )}
+                <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                  <div className="bg-app-card p-8 rounded-[3rem] border border-app-border shadow-sm space-y-4">
+                    <h3 className="text-xl font-black italic uppercase tracking-tight text-app-text">Orders Submitted (7 days)</h3>
+                    <div className="h-56 w-full min-w-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={ordersTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fontSize: 10, fill: '#a3a3a3' }}
+                            tickFormatter={(v: string) => (typeof v === 'string' && v.length >= 10 ? v.slice(5) : v)}
+                          />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#a3a3a3' }} width={32} />
+                          <RechartsTooltip
+                            contentStyle={{
+                              backgroundColor: 'var(--app-card, #171717)',
+                              border: '1px solid var(--app-border, #333)',
+                              borderRadius: '12px',
+                            }}
+                            labelFormatter={(v) => `Date: ${v}`}
+                          />
+                          <Bar dataKey="count" name="Orders" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
 
                   <div className="bg-app-card p-8 rounded-[3rem] border border-app-border shadow-sm space-y-6">
-                    <h3 className="text-xl font-black italic uppercase tracking-tight text-app-text">System Health</h3>
-                    <div className="space-y-6">
-                      {[
-                        { label: 'API Response', value: '98ms', status: 'Healthy' },
-                        { label: 'Database Load', value: '12%', status: 'Healthy' },
-                        { label: 'Storage Usage', value: '4.2 GB', status: 'Healthy' },
-                        { label: 'Active Sessions', value: '142', status: 'Normal' },
-                      ].map(item => (
-                        <div key={item.label} className="flex items-center justify-between">
-                          <p className="text-sm font-bold text-neutral-600 dark:text-neutral-400">{item.label}</p>
-                          <div className="flex items-center gap-4">
-                            <span className="text-sm font-black text-app-text">{item.value}</span>
-                            <span className="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[8px] font-black uppercase tracking-widest rounded-md">{item.status}</span>
+                    <h3 className="text-xl font-black italic uppercase tracking-tight text-app-text">Recent Activity</h3>
+                    <div className="space-y-1">
+                      {overviewAuditFeed.map((log) => {
+                        const Icon = auditFeedIcon(log.action);
+                        const email = log.actor?.email ?? '—';
+                        return (
+                          <div
+                            key={log.id}
+                            className="flex items-center gap-3 border-b border-app-border py-3 last:border-0"
+                          >
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-50 dark:bg-neutral-800">
+                              <Icon className="h-4 w-4 text-neutral-500" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold text-app-text">{humanizeAuditAction(log.action)}</p>
+                              <p className="truncate text-xs text-neutral-500">{email}</p>
+                            </div>
+                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                              {formatRelativeTime(log.timestamp)}
+                            </span>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
+                      {overviewAuditFeed.length === 0 && (
+                        <p className="py-8 text-center text-xs font-bold uppercase tracking-widest text-neutral-400">
+                          No activity logs.
+                        </p>
+                      )}
                     </div>
+                  </div>
+                </div>
+
+                <div className="bg-app-card p-8 rounded-[3rem] border border-app-border shadow-sm space-y-6">
+                  <h3 className="text-xl font-black italic uppercase tracking-tight text-app-text">System Health</h3>
+                  <div className="space-y-6">
+                    {[
+                      { label: 'API Response', value: '98ms', status: 'Healthy' },
+                      { label: 'Database Load', value: '12%', status: 'Healthy' },
+                      { label: 'Storage Usage', value: '4.2 GB', status: 'Healthy' },
+                      { label: 'Active Sessions', value: '142', status: 'Normal' },
+                    ].map((item) => (
+                      <div key={item.label} className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-neutral-600 dark:text-neutral-400">{item.label}</p>
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm font-black text-app-text">{item.value}</span>
+                          <span className="rounded-md bg-emerald-50 px-2 py-1 text-[8px] font-black uppercase tracking-widest text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
+                            {item.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -452,7 +565,19 @@ export default function AdminDashboard() {
 
             {/* Finance & Tax Section */}
             {activeTab === 'finance' && (
-              <AdminPaymentsSection setNotification={setNotification} />
+              <div className="space-y-4 rounded-[3rem] border border-app-border bg-app-card p-8 shadow-sm">
+                <h2 className="text-2xl font-black text-app-text">Finance &amp; tax</h2>
+                <p className="max-w-xl text-sm text-neutral-500">
+                  Tax profiles, remittance reports, and payout configuration will be configured here. Use the Payments tab for
+                  the order payment ledger.
+                </p>
+              </div>
+            )}
+
+            {activeTab === 'payments' && (
+              <div className="rounded-[3rem] border border-app-border bg-app-card p-6 shadow-sm md:p-8">
+                <AdminPaymentsSection setNotification={setNotification} />
+              </div>
             )}
 
             {/* Teams Section */}

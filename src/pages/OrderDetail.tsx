@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, CircleHelp, FileText, LayoutList, Star, X } from 'lucide-react';
@@ -9,6 +9,7 @@ import {
   getServiceCatalogSchema,
   getOrderCandidates,
   selectOrderProvider,
+  submitOrderReview,
   type OrderCandidate,
   type OrderWithSchema,
 } from '../services/orders';
@@ -22,6 +23,7 @@ import { useSoftToast } from '../lib/SoftToastContext';
 import { OrderChatPanel } from '../components/orders/chat/OrderChatPanel';
 import { isOrderChatEnabled } from '../services/orderChat';
 import { ContractPanel } from '../components/orders/contracts/ContractPanel';
+import { OrderStatusTimeline } from '../components/orders/OrderStatusTimeline';
 import { useAuth } from '../lib/AuthContext';
 import { createOrderPaymentSession, fetchOrderPaymentStatus, type OrderPaymentStatus } from '../services/orderPayments';
 
@@ -51,6 +53,11 @@ export default function OrderDetail() {
   const [paymentStatus, setPaymentStatus] = useState<OrderPaymentStatus | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
+  const [completionModal, setCompletionModal] = useState<null | 'confirm' | 'rating' | 'summary'>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const skipAutoCompletionModalRef = useRef(false);
 
   useEffect(() => {
     if (!id) return;
@@ -144,6 +151,27 @@ export default function OrderDetail() {
     };
   }, [order?.id, order?.status]);
 
+  useEffect(() => {
+    skipAutoCompletionModalRef.current = false;
+  }, [order?.id]);
+
+  useEffect(() => {
+    if (!order || user?.id !== order.customerId) return;
+    if (order.status === 'closed') {
+      setCompletionModal(null);
+      return;
+    }
+    if (order.status === 'completed' && !skipAutoCompletionModalRef.current) {
+      setCompletionModal((prev) => (prev == null ? 'confirm' : prev));
+    }
+  }, [order?.id, order?.status, order?.customerId, user?.id]);
+
+  useEffect(() => {
+    if (completionModal !== 'rating') return;
+    setReviewRating(0);
+    setReviewText('');
+  }, [completionModal, order?.id]);
+
   if (loading) {
     return (
       <div className="flex justify-center py-24">
@@ -207,7 +235,7 @@ export default function OrderDetail() {
     (isCustomer || isMatchedProvider || workspaceAligned);
 
   const contractViewerRole: 'customer' | 'provider' = isCustomer ? 'customer' : 'provider';
-  const showPaymentCard = isCustomer && ['contracted', 'paid', 'in_progress', 'completed'].includes(order.status);
+  const showPaymentCard = isCustomer && ['contracted', 'paid', 'in_progress', 'completed', 'closed'].includes(order.status);
 
   return (
     <div
@@ -276,7 +304,40 @@ export default function OrderDetail() {
             Job completed
           </div>
         ) : null}
+        {order.status === 'closed' ? (
+          <div className="rounded-xl border border-slate-400/30 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-900 dark:bg-slate-800/40 dark:text-slate-100">
+            Order closed
+          </div>
+        ) : null}
       </div>
+
+      {isCustomer && order.status === 'closed' && order.customerReview && order.matchedSummary ? (
+        <section className="rounded-2xl border border-app-border bg-app-card p-4 space-y-3">
+          <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Job summary</h3>
+          <p className="text-sm font-semibold text-app-text">{serviceLabel}</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-300">
+            Provider:{' '}
+            <span className="font-bold text-app-text">
+              {matchedProviderName ?? 'Provider'}
+            </span>
+          </p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-300">
+            Price:{' '}
+            <span className="font-bold text-app-text">
+              {formatMoney(order.matchedSummary.package.finalPrice, order.matchedSummary.package.currency || 'CAD')}
+            </span>
+          </p>
+          <p className="text-xs text-neutral-500">
+            Your rating: {order.customerReview.rating}/5
+            {order.customerReview.reviewText ? ` · “${order.customerReview.reviewText.slice(0, 120)}${order.customerReview.reviewText.length > 120 ? '…' : ''}”` : null}
+          </p>
+          <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-100/80 p-3 text-xs font-medium text-neutral-500 dark:border-neutral-600 dark:bg-neutral-800/50 dark:text-neutral-400">
+            Payment summary — Stripe integration coming soon
+          </div>
+        </section>
+      ) : null}
+
+      <OrderStatusTimeline order={order} />
 
       {showContractTab ? (
         <div
@@ -614,6 +675,196 @@ export default function OrderDetail() {
       ) : null}
 
       <AnimatePresence>
+        {completionModal && isCustomer ? (
+          <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4">
+            <motion.button
+              type="button"
+              aria-label="Close"
+              className="absolute inset-0 bg-black/50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (completionModal === 'confirm') {
+                  skipAutoCompletionModalRef.current = true;
+                  setCompletionModal(null);
+                }
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="completion-flow-title"
+              className="relative w-full max-w-md bg-app-card border border-app-border rounded-3xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              {completionModal === 'confirm' ? (
+                <>
+                  <div className="flex justify-between items-start gap-2">
+                    <h2 id="completion-flow-title" className="text-lg font-black text-app-text pr-2">
+                      Your provider has marked this job complete.
+                    </h2>
+                    <button
+                      type="button"
+                      className="min-w-[44px] min-h-[44px] shrink-0 flex items-center justify-center rounded-xl text-neutral-500"
+                      onClick={() => {
+                        skipAutoCompletionModalRef.current = true;
+                        setCompletionModal(null);
+                      }}
+                      aria-label="Close"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                    Please confirm you are satisfied or open a dispute if something went wrong.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      className="min-h-[48px] flex-1 rounded-2xl border border-app-border font-bold"
+                      onClick={() => {
+                        showToast('Dispute process coming soon. Contact support.');
+                        skipAutoCompletionModalRef.current = true;
+                        setCompletionModal(null);
+                      }}
+                    >
+                      Dispute
+                    </button>
+                    <button
+                      type="button"
+                      className="min-h-[48px] flex-1 rounded-2xl bg-neutral-900 text-white font-bold dark:bg-white dark:text-neutral-900"
+                      onClick={() => setCompletionModal('rating')}
+                    >
+                      Confirm &amp; Rate
+                    </button>
+                  </div>
+                </>
+              ) : null}
+              {completionModal === 'rating' ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <h2 id="completion-flow-title" className="text-lg font-black text-app-text">
+                      Rate your experience
+                    </h2>
+                    <button
+                      type="button"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-neutral-500"
+                      onClick={() => setCompletionModal('confirm')}
+                      aria-label="Back"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Rating (required)</p>
+                    <div className="flex gap-1" role="group" aria-label="Star rating 1 to 5">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          className="min-h-[48px] min-w-[48px] flex items-center justify-center rounded-xl text-amber-500 hover:bg-amber-500/10"
+                          aria-label={`${n} star${n > 1 ? 's' : ''}`}
+                          aria-pressed={reviewRating >= n}
+                          onClick={() => setReviewRating(n)}
+                        >
+                          <Star
+                            className={cn(
+                              'h-8 w-8 text-amber-500',
+                              reviewRating >= n ? 'fill-amber-400 text-amber-500' : 'fill-none',
+                            )}
+                            strokeWidth={1.5}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="order-review-text" className="text-xs font-black uppercase tracking-widest text-neutral-500">
+                      Written review (optional, max 500 characters)
+                    </label>
+                    <textarea
+                      id="order-review-text"
+                      value={reviewText}
+                      onChange={(e) => setReviewText(e.target.value.slice(0, 500))}
+                      rows={4}
+                      maxLength={500}
+                      className="mt-2 w-full rounded-2xl border border-app-border bg-app-input px-3 py-2 text-[15px] text-app-text"
+                      placeholder="Share details about the service…"
+                    />
+                    <p className="mt-1 text-xs text-neutral-500">{500 - reviewText.length} characters left</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={reviewRating < 1 || reviewBusy}
+                    className="w-full min-h-[48px] rounded-2xl bg-neutral-900 text-white font-bold disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+                    onClick={() => {
+                      void (async () => {
+                        if (!order || reviewRating < 1) return;
+                        setReviewBusy(true);
+                        try {
+                          const next = await submitOrderReview(order.id, {
+                            rating: reviewRating,
+                            review: reviewText.trim(),
+                          });
+                          setOrder(next);
+                          setCompletionModal('summary');
+                          showToast('Thank you for your feedback.');
+                        } catch (e) {
+                          showToast(e instanceof Error ? e.message : 'Could not submit review');
+                        } finally {
+                          setReviewBusy(false);
+                        }
+                      })();
+                    }}
+                  >
+                    {reviewBusy ? 'Submitting…' : 'Submit review'}
+                  </button>
+                </>
+              ) : null}
+              {completionModal === 'summary' ? (
+                <>
+                  <h2 id="completion-flow-title" className="text-lg font-black text-app-text">
+                    Thank you
+                  </h2>
+                  <div className="rounded-2xl border border-app-border bg-app-card/80 p-4 space-y-2 text-sm">
+                    <p>
+                      <span className="text-neutral-500">Service</span>
+                      <br />
+                      <span className="font-bold text-app-text">{serviceLabel}</span>
+                    </p>
+                    <p>
+                      <span className="text-neutral-500">Provider</span>
+                      <br />
+                      <span className="font-bold text-app-text">{matchedProviderName ?? 'Provider'}</span>
+                    </p>
+                    <p>
+                      <span className="text-neutral-500">Price</span>
+                      <br />
+                      <span className="font-bold text-app-text">
+                        {order.matchedSummary
+                          ? formatMoney(order.matchedSummary.package.finalPrice, order.matchedSummary.package.currency || 'CAD')
+                          : '—'}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-100/80 p-3 text-xs font-medium text-neutral-500 dark:border-neutral-600 dark:bg-neutral-800/50 dark:text-neutral-400">
+                    Payment summary — Stripe integration coming soon
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full min-h-[48px] rounded-2xl bg-neutral-900 text-white font-bold dark:bg-white dark:text-neutral-900"
+                    onClick={() => setCompletionModal(null)}
+                  >
+                    Done
+                  </button>
+                </>
+              ) : null}
+            </motion.div>
+          </div>
+        ) : null}
         {pickModal ? (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
             <motion.button

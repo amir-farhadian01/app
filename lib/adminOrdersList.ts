@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { OrderPhase } from '@prisma/client';
+import { OrderPhase, OrderStatus } from '@prisma/client';
 import type { Request } from 'express';
 import prisma from './db.js';
 import { categoryBreadcrumbs } from './categoryBreadcrumbs.js';
@@ -56,6 +56,8 @@ export type AdminOrdersListResponse = {
 type BuildOpts = {
   q?: string;
   status: string[];
+  /** Free-text substring filter against `OrderStatus` enum values (query param `search`). */
+  statusSearch?: string;
   entryPoint: string[];
   serviceCatalogId?: string;
   createdFrom?: Date;
@@ -110,9 +112,18 @@ const ORDER_STATUSES = new Set([
   'paid',
   'in_progress',
   'completed',
+  'closed',
 ]);
 const ENTRY_POINTS = new Set(['explorer', 'ai_suggestion', 'direct']);
 const ORDER_PHASES = new Set<string>(['offer', 'order', 'job']);
+
+/** `null` = no filter; `[]` = no status matches substring (impossible). */
+function statusesMatchingSubstring(raw: string | undefined): OrderStatus[] | null {
+  if (!raw?.trim()) return null;
+  const t = raw.trim().toLowerCase();
+  const out = [...ORDER_STATUSES].filter((s) => s.toLowerCase().includes(t)) as OrderStatus[];
+  return out.length ? out : [];
+}
 
 export function buildAdminOrderListOpts(q: Request['query']): BuildOpts {
   const status = [
@@ -131,6 +142,7 @@ export function buildAdminOrderListOpts(q: Request['query']): BuildOpts {
   return {
     q: pickStr(q.q),
     status,
+    statusSearch: pickQueryStr(q, 'search'),
     entryPoint,
     serviceCatalogId: pickStr(q.serviceCatalogId),
     createdFrom: parseDate(pickQueryStr(q, 'createdFrom')),
@@ -155,8 +167,29 @@ export function buildOrderWhere(o: BuildOpts, drop: DropDim = 'none'): Prisma.Or
       ],
     });
   }
-  if (drop !== 'status' && o.status.length) {
-    and.push({ status: { in: o.status as Prisma.EnumOrderStatusFilter['in'] } });
+  const searchHits = statusesMatchingSubstring(o.statusSearch);
+  if (searchHits !== null && searchHits.length === 0) {
+    return { id: { in: [] } };
+  }
+  if (drop !== 'status') {
+    let statusIn: OrderStatus[] | null = null;
+    const seg = o.status as OrderStatus[];
+    if (searchHits) {
+      if (seg.length) {
+        const inter = seg.filter((s) => searchHits.includes(s));
+        if (!inter.length) return { id: { in: [] } };
+        statusIn = inter;
+      } else {
+        statusIn = searchHits;
+      }
+    } else if (seg.length) {
+      statusIn = seg;
+    }
+    if (statusIn?.length) {
+      and.push({ status: { in: statusIn as Prisma.EnumOrderStatusFilter['in'] } });
+    }
+  } else if (searchHits?.length) {
+    and.push({ status: { in: searchHits as Prisma.EnumOrderStatusFilter['in'] } });
   }
   if (drop !== 'entryPoint' && o.entryPoint.length) {
     and.push({ entryPoint: { in: o.entryPoint as Prisma.EnumOrderEntryPointFilter['in'] } });

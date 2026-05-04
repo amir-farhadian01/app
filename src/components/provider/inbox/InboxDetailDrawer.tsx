@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { isServiceQuestionnaireV1, type ServiceFieldDef } from '../../../../lib/serviceDefinitionTypes';
 import { resolveMediaUrl } from '../../../lib/resolveMediaUrl';
 import type { ProviderInboxItem } from '../../../services/providerInbox';
@@ -56,9 +56,15 @@ function answerText(field: ServiceFieldDef, value: unknown): string {
 export function InboxDetailDrawer({
   open,
   item,
+  activeWorkspaceId,
   onClose,
   onAcknowledge,
   onDecline,
+  footerMutationBusy,
+  footerMutationKind,
+  onMarkComplete,
+  markCompleteBusy,
+  showPaymentBanner,
   lostFeedbackSubmitting,
   lostFeedbackDone,
   onSubmitLostFeedback,
@@ -66,9 +72,15 @@ export function InboxDetailDrawer({
 }: {
   open: boolean;
   item: ProviderInboxItem | null;
+  activeWorkspaceId: string | null;
   onClose: () => void;
   onAcknowledge: (row: ProviderInboxItem) => void;
   onDecline: (row: ProviderInboxItem) => void;
+  footerMutationBusy?: boolean;
+  footerMutationKind?: 'ack' | 'decline' | null;
+  onMarkComplete?: (orderId: string) => void;
+  markCompleteBusy?: boolean;
+  showPaymentBanner?: boolean;
   lostFeedbackSubmitting?: boolean;
   lostFeedbackDone?: boolean;
   onSubmitLostFeedback?: (attemptId: string, body: {
@@ -100,6 +112,11 @@ export function InboxDetailDrawer({
   })();
   const countdownDanger = !!item?.expiresAt && new Date(item.expiresAt).getTime() - Date.now() <= 3600 * 1000;
   const showLostPanel = item?.status === 'superseded' || item?.status === 'declined' || item?.status === 'expired';
+  const canMarkComplete =
+    Boolean(item && activeWorkspaceId) &&
+    item!.order.status === 'contracted' &&
+    item!.order.matchedWorkspaceId === activeWorkspaceId &&
+    item!.status === 'accepted';
 
   return (
     <AnimatePresence>
@@ -224,6 +241,11 @@ export function InboxDetailDrawer({
               ) : null}
             </div>
             <footer className="border-t border-app-border p-4">
+              {showPaymentBanner ? (
+                <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+                  Payment will be processed here — Stripe integration coming soon.
+                </div>
+              ) : null}
               {item.status === 'invited' ? (
                 <>
                   {countdown ? (
@@ -241,12 +263,24 @@ export function InboxDetailDrawer({
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      className="min-h-[46px] flex-1 rounded-2xl bg-neutral-900 font-bold text-white dark:bg-white dark:text-neutral-900"
+                      disabled={Boolean(footerMutationBusy)}
+                      className="flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-2xl bg-neutral-900 font-bold text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900"
                       onClick={() => onAcknowledge(item)}
                     >
+                      {footerMutationBusy && footerMutationKind === 'ack' ? (
+                        <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
+                      ) : null}
                       Accept invitation
                     </button>
-                    <button type="button" className="min-h-[46px] rounded-2xl border border-app-border px-4 font-bold text-amber-700 dark:text-amber-300" onClick={() => onDecline(item)}>
+                    <button
+                      type="button"
+                      disabled={Boolean(footerMutationBusy)}
+                      className="flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-app-border px-4 font-bold text-amber-700 disabled:opacity-60 dark:text-amber-300"
+                      onClick={() => onDecline(item)}
+                    >
+                      {footerMutationBusy && footerMutationKind === 'decline' ? (
+                        <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
+                      ) : null}
                       Decline
                     </button>
                   </div>
@@ -255,18 +289,53 @@ export function InboxDetailDrawer({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="min-h-[46px] flex-1 rounded-2xl bg-neutral-900 font-bold text-white dark:bg-white dark:text-neutral-900"
+                    disabled={Boolean(footerMutationBusy)}
+                    className="flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-2xl bg-neutral-900 font-bold text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900"
                     onClick={() => onAcknowledge(item)}
                   >
+                    {footerMutationBusy && footerMutationKind === 'ack' ? (
+                      <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
+                    ) : null}
                     Acknowledge & take this job
                   </button>
-                  <button type="button" className="min-h-[46px] rounded-2xl border border-app-border px-4 font-bold text-amber-700 dark:text-amber-300" onClick={() => onDecline(item)}>
+                  <button
+                    type="button"
+                    disabled={Boolean(footerMutationBusy)}
+                    className="flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-app-border px-4 font-bold text-amber-700 disabled:opacity-60 dark:text-amber-300"
+                    onClick={() => onDecline(item)}
+                  >
+                    {footerMutationBusy && footerMutationKind === 'decline' ? (
+                      <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
+                    ) : null}
                     Decline
                   </button>
                 </div>
               ) : item.status === 'accepted' ? (
-                <div className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-800 dark:border-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-200">
-                  Awaiting customer&apos;s pick — multiple providers may have accepted. We&apos;ll notify you of the outcome.
+                <div className="space-y-3">
+                  {item.order.status === 'matching' ? (
+                    <div className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-800 dark:border-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-200">
+                      Awaiting customer&apos;s pick — multiple providers may have accepted. We&apos;ll notify you of the outcome.
+                    </div>
+                  ) : item.order.status === 'contracted' ? (
+                    <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                      You&apos;re on this job. Mark it complete when the work is finished.
+                    </div>
+                  ) : item.order.status === 'completed' ? (
+                    <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                      This order is marked complete.
+                    </div>
+                  ) : null}
+                  {canMarkComplete && onMarkComplete ? (
+                    <button
+                      type="button"
+                      disabled={Boolean(markCompleteBusy)}
+                      className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 font-bold text-white disabled:opacity-60 dark:bg-emerald-600"
+                      onClick={() => onMarkComplete(item.order.id)}
+                    >
+                      {markCompleteBusy ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden /> : null}
+                      Mark complete
+                    </button>
+                  ) : null}
                 </div>
               ) : item.status === 'superseded' ? (
                 <div className="rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 text-sm text-violet-800 dark:border-violet-700 dark:bg-violet-900/20 dark:text-violet-200">

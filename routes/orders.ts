@@ -17,7 +17,11 @@ import {
   roundRobinInviteOffer,
   RoundRobinValidationError,
 } from '../lib/matching/roundRobin.js';
-import { assertWorkspaceMember, listMyWorkspaces, WorkspaceAccessError } from '../lib/workspaceAccess.js';
+import {
+  assertWorkspaceMember,
+  listMyWorkspaces,
+  WorkspaceAccessError,
+} from '../lib/workspaceAccess.js';
 import { getOrderPaymentSummary } from '../lib/orderPayments.js';
 
 const router = Router();
@@ -821,6 +825,203 @@ router.get('/provider/me', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/** Matched provider / workspace staff marks the job complete (no payment capture in this sprint). */
+router.post('/:id/complete', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+    const order = await prisma.order.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        matchedWorkspaceId: true,
+        matchedProviderId: true,
+      },
+    });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (order.status !== OrderStatus.contracted) {
+      return res.status(400).json({
+        error: 'Order must be contracted (provider-acknowledged) before it can be marked complete',
+      });
+    }
+    if (!order.matchedWorkspaceId) {
+      return res.status(400).json({ error: 'Order has no matched workspace' });
+    }
+    let allowed = false;
+    try {
+      await assertWorkspaceMember(userId, order.matchedWorkspaceId);
+      allowed = true;
+    } catch (e) {
+      if (!(e instanceof WorkspaceAccessError)) throw e;
+    }
+    if (!allowed && order.matchedProviderId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: OrderStatus.completed,
+          phase: phaseFromStatus(OrderStatus.completed),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'ORDER_MARKED_COMPLETED',
+          resourceType: 'order',
+          resourceId: order.id,
+          metadata: {} as Prisma.InputJsonValue,
+        },
+      });
+    });
+    try {
+      await publish('orders.completed', { orderId: order.id });
+    } catch {
+      /* NATS optional */
+    }
+    const updated = await prisma.order.findUnique({ where: { id: order.id } });
+    if (!updated) {
+      return res.status(500).json({ error: 'Order not found after update' });
+    }
+    res.json({ success: true, order: await orderToCustomerJson(updated) });
+  } catch (err: unknown) {
+    console.error(err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+});
+
+/** Customer submits rating + optional review; closes the order and emits `orders.reviewed`. */
+router.post('/:id/review', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+    const body = req.body as { rating?: unknown; review?: unknown };
+    const ratingRaw = body.rating;
+    const rating =
+      typeof ratingRaw === 'number' && Number.isInteger(ratingRaw)
+        ? ratingRaw
+        : typeof ratingRaw === 'string' && ratingRaw.trim() !== ''
+          ? Number.parseInt(ratingRaw, 10)
+          : NaN;
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'rating must be an integer from 1 to 5' });
+    }
+    let reviewText = typeof body.review === 'string' ? body.review.trim() : '';
+    if (reviewText.length > 500) {
+      return res.status(400).json({ error: 'review must be at most 500 characters' });
+    }
+    if (reviewText.length === 0) reviewText = '';
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        customerId: true,
+        status: true,
+        phase: true,
+      },
+    });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (order.customerId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (order.status !== OrderStatus.completed) {
+      return res.status(400).json({
+        error: 'Order must be in completed status (provider marked done) before you can submit a review',
+      });
+    }
+
+    const existing = await prisma.orderReview.findUnique({ where: { orderId: id } });
+    if (existing) {
+      return res.status(409).json({ error: 'A review has already been submitted for this order' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.orderReview.create({
+        data: {
+          orderId: order.id,
+          customerId: userId,
+          rating,
+          reviewText: reviewText.length ? reviewText : null,
+        },
+      });
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: OrderStatus.closed,
+          phase: phaseFromStatus(OrderStatus.closed, order.phase),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'ORDER_CUSTOMER_REVIEWED',
+          resourceType: 'order',
+          resourceId: order.id,
+          metadata: { rating } as Prisma.InputJsonValue,
+        },
+      });
+    });
+
+    try {
+      await publish('orders.reviewed', { orderId: order.id, customerId: userId, rating });
+    } catch {
+      /* NATS optional */
+    }
+
+    const updated = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        matchedProvider: {
+          select: { id: true, displayName: true, firstName: true, lastName: true, avatarUrl: true },
+        },
+        matchedWorkspace: { select: { id: true, name: true } },
+        matchedPackage: {
+          select: { id: true, name: true, finalPrice: true, currency: true, durationMinutes: true },
+        },
+        customerReview: true,
+      },
+    });
+    if (!updated) {
+      return res.status(500).json({ error: 'Order not found after update' });
+    }
+    const resolved = await resolveWizardSchema(updated);
+    const payment = await getOrderPaymentSummary(updated.id);
+    const base = await orderToCustomerJson(updated);
+    res.json({
+      ...base,
+      schema: resolved.schema,
+      staleSnapshot: resolved.staleSnapshot,
+      payment,
+      matchedSummary:
+        updated.matchedProvider && updated.matchedWorkspace && updated.matchedPackage
+          ? {
+              provider: updated.matchedProvider,
+              workspace: updated.matchedWorkspace,
+              package: updated.matchedPackage,
+            }
+          : null,
+      customerReview: updated.customerReview
+        ? {
+            rating: updated.customerReview.rating,
+            reviewText: updated.customerReview.reviewText,
+            createdAt: updated.customerReview.createdAt.toISOString(),
+          }
+        : null,
+    });
+  } catch (err: unknown) {
+    console.error(err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+});
+
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
@@ -836,6 +1037,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
         matchedPackage: {
           select: { id: true, name: true, finalPrice: true, currency: true, durationMinutes: true },
         },
+        customerReview: true,
       },
     });
     if (!order) {
@@ -863,6 +1065,13 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
               package: order.matchedPackage,
             }
           : null,
+      customerReview: order.customerReview
+        ? {
+            rating: order.customerReview.rating,
+            reviewText: order.customerReview.reviewText,
+            createdAt: order.customerReview.createdAt.toISOString(),
+          }
+        : null,
     });
   } catch (err: unknown) {
     console.error(err);

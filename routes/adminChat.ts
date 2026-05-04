@@ -37,6 +37,54 @@ function pickStr(body: unknown, key: string): string | undefined {
 
 router.use(authenticate, isAdmin);
 
+/** Read-only thread + messages for admin order drawer (no participant auth). */
+router.get('/thread/:orderId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    if (!orderId?.trim()) {
+      return res.status(400).json({ error: 'orderId is required' });
+    }
+    const thread = await prisma.orderChatThread.findUnique({
+      where: { orderId: orderId.trim() },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 500,
+        },
+      },
+    });
+    if (!thread) {
+      return res.status(404).json({ error: 'NO_THREAD' });
+    }
+    return res.json({
+      thread: {
+        id: thread.id,
+        orderId: thread.orderId,
+        customerId: thread.customerId,
+        providerId: thread.providerId,
+        isClosed: thread.isClosed,
+        createdAt: thread.createdAt.toISOString(),
+        updatedAt: thread.updatedAt.toISOString(),
+      },
+      messages: thread.messages.map((m) => ({
+        id: m.id,
+        threadId: m.threadId,
+        senderId: m.senderId,
+        senderRole: m.senderRole,
+        type: m.type,
+        originalText: m.originalText,
+        displayText: m.displayText,
+        moderationStatus: m.moderationStatus,
+        createdAt: m.createdAt.toISOString(),
+        editedAt: m.editedAt?.toISOString() ?? null,
+      })),
+    });
+  } catch (err: unknown) {
+    console.error(err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+});
+
 router.get('/flags', async (req: AuthRequest, res: Response) => {
   try {
     const from = parseDate(req.query.from);

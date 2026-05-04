@@ -9,7 +9,7 @@ Update this file in the same PR as the feature.
 | Service type definitions (F0) | Admin editor for catalog questionnaire | ✅ (Service Definitions tab) |
 | Customer cabin (F4) | Admin user impersonation | ⏳ planned |
 | Customer Account → Safety hub / preferences / trusted contacts (Flutter UI) | No dedicated admin surface; support uses existing user and order tooling | ✅ n/a |
-| Order wizard (F5) | Admin Orders panel | ✅ |
+| Order wizard (F5) | Admin Orders panel (list filters + detail drawer: timeline/audit, read-only chat thread via `GET /api/admin/chat/thread/:orderId`, contract versions via `GET /api/admin/contracts?orderId=`, payment placeholder) + **Overview** DB-backed KPIs (`GET /api/admin/stats`, `GET /api/admin/stats/orders-trend`, `GET /api/admin/audit-log`) | ✅ |
 | Customer order confirmation route `/orders/:id/confirmation` (post-submit summary) | No new admin surface; order detail/list unchanged | ✅ n/a |
 | Order phases visible end-to-end | Admin Offers/Orders/Jobs segments + Customer My Orders segments | ✅ |
 | Auto-match (Sprint I) | Admin eligibility view + match override | ✅ |
@@ -20,8 +20,10 @@ Update this file in the same PR as the feature.
 | Provider inventory quick list (same data as workspace products) | `GET /api/products` (optional `workspaceId`); admin continues to use `/api/admin/products` | ✅ n/a |
 | Chat (F7) | Moderation + PII inbox | ✅ (Platform → **Chat Moderation** + `/api/admin/chat/flags` + review/escalate/note) |
 | Provider Flutter: workspace orders list + packages/inventory/company routes | No new admin surface (display/API reuse only); admin visibility unchanged | ✅ n/a |
-| Contracts (F8) | Templates + dispute (deferred); **contract queue + overrides** (Platform → **Contracts**, `GET /api/admin/contracts/queue`, detail drawer, mark-reviewed / internal note / override-supersede) | ✅ Sprint L queue |
-| Payments gate/session (Sprint M) | Admin payments ledger + per-row detail (`GET /api/admin/payments/ledger`, `GET /api/admin/payments/ledger/:transactionId`, Finance tab) + audit visibility (`PAYMENT_SESSION_CREATED`, `PAYMENT_CAPTURED`) | ✅ minimal |
+| Provider web inbox: accept / decline / mark job complete (`POST /api/orders/:id/complete`) | Admin order list/detail already shows status transitions; no new admin action required for this sprint | ✅ n/a |
+| Customer completion confirm + rating (`POST /api/orders/:id/review`, `OrderStatus.closed`, `OrderReview`) | Admin order detail **Overview** shows customer rating + text when present; Jobs segment + status filter include `closed` | ✅ |
+| Contracts (F8) | Templates + dispute (deferred); **contract queue + overrides** (Platform → **Contracts**, `GET /api/admin/contracts/queue`, detail drawer, `POST .../mark-reviewed` or `.../reviewed`, `POST .../internal-note` or `.../note`, override-supersede) | ✅ Sprint L queue + web admin UI |
+| Payments gate/session (Sprint M) | Admin **Payments** tab: KPI placeholders, paginated `GET /api/admin/payments`, row drawer via `GET /api/admin/payments/orders/:orderId`, legacy `GET /api/admin/payments/ledger` + `.../ledger/:transactionId`, audit (`PAYMENT_SESSION_CREATED`, `PAYMENT_CAPTURED`) | ✅ |
 | Lost-deal analytics + provider scorecards (F9) | Lost-deal explorer + provider scorecard report | ⏳ deferred post-Flutter |
 | Bulletin (F10) | Authoring + schedule | ⏳ deferred post-Flutter |
 

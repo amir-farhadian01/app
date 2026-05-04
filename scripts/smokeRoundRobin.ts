@@ -165,10 +165,10 @@ async function main(): Promise<void> {
       );
     if (!row || typeof row !== 'object') continue;
     const attemptId = String((row as Record<string, unknown>).id);
-    const action = i === 0 ? 'accept' : 'decline';
-    if (action === 'accept') {
-      const acc = await api('POST', `/api/workspaces/${wsId}/inbox/${attemptId}/accept`, pt, {});
-      console.log(`Provider[${i}] accept`, acc.status, JSON.stringify(acc.json, null, 2));
+    const action = i === 0 ? 'acknowledge' : 'decline';
+    if (action === 'acknowledge') {
+      const acc = await api('POST', `/api/workspaces/${wsId}/inbox/${attemptId}/acknowledge`, pt, {});
+      console.log(`Provider[${i}] acknowledge`, acc.status, JSON.stringify(acc.json, null, 2));
     } else {
       const dec = await api('POST', `/api/workspaces/${wsId}/inbox/${attemptId}/decline`, pt, {
         reason: 'busy next 2 days for smoke decline path',

@@ -8,8 +8,8 @@ import { useAuth } from '../lib/AuthContext';
 
 const TAB_STORAGE_PREFIX = 'customer.orders.listTab.';
 
-/** Non-terminal order rows shown under Active. */
-const ACTIVE_STATUSES = [
+/** Statuses included in non-cancelled pipeline tabs (matches server lifecycle). */
+const NON_CANCELLED_STATUSES = [
   'draft',
   'submitted',
   'matching',
@@ -17,37 +17,51 @@ const ACTIVE_STATUSES = [
   'contracted',
   'paid',
   'in_progress',
+  'completed',
+  'closed',
 ] as const;
 
-type OrderListTab = 'active' | 'past' | 'cancelled';
+type PhaseListTab = 'active' | 'offers' | 'jobs' | 'cancelled';
 
-function normalizeListTab(raw: string | null): OrderListTab {
+function normalizeListTab(raw: string | null): PhaseListTab {
   if (!raw) return 'active';
   const t = raw.toLowerCase();
-  if (t === 'past') return 'past';
+  if (t === 'offers' || t === 'offer') return 'offers';
+  if (t === 'jobs' || t === 'job') return 'jobs';
   if (t === 'cancelled' || t === 'canceled') return 'cancelled';
   if (t === 'active') return 'active';
-  // Legacy lifecycle URLs → Active
-  if (['offer', 'offers', 'order', 'orders', 'job', 'jobs'].includes(t)) return 'active';
+  // Legacy URLs
+  if (t === 'past' || t === 'completed') return 'jobs';
+  if (['order', 'orders'].includes(t)) return 'active';
   return 'active';
 }
 
-function tabToQueryParams(tab: OrderListTab): { status: string[] } {
+function tabToRequest(tab: PhaseListTab): { phase?: string[]; status?: string[] } {
   switch (tab) {
     case 'active':
-      return { status: [...ACTIVE_STATUSES] };
-    case 'past':
-      return { status: ['completed'] };
+      return { phase: ['offer', 'order', 'job'], status: [...NON_CANCELLED_STATUSES] };
+    case 'offers':
+      return { phase: ['offer'], status: [...NON_CANCELLED_STATUSES] };
+    case 'jobs':
+      return { phase: ['job'], status: [...NON_CANCELLED_STATUSES] };
     case 'cancelled':
       return { status: ['cancelled'] };
     default:
-      return { status: [...ACTIVE_STATUSES] };
+      return { phase: ['offer', 'order', 'job'], status: [...NON_CANCELLED_STATUSES] };
   }
 }
 
-function cancelledCountFromFacets(fp: OrderPhaseFacetCounts | undefined): number {
-  if (!fp) return 0;
-  return fp.cancelledOffer + fp.cancelledOrder + fp.cancelledJob;
+/** Tab badge numbers use only `facets.phase` from `GET /api/orders/me` (never length of `items`). */
+function facetCounts(fp: OrderPhaseFacetCounts | undefined): {
+  active: number;
+  offers: number;
+  jobs: number;
+  cancelled: number;
+} {
+  if (!fp) return { active: 0, offers: 0, jobs: 0, cancelled: 0 };
+  const cancelled = fp.cancelledOffer + fp.cancelledOrder + fp.cancelledJob;
+  const active = fp.offer + fp.order + fp.job;
+  return { active, offers: fp.offer, jobs: fp.job, cancelled };
 }
 
 function statusPill(status: string) {
@@ -58,7 +72,8 @@ function statusPill(status: string) {
     s === 'draft' && 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     s === 'cancelled' && 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200',
     s === 'completed' && 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-    !['submitted', 'draft', 'cancelled', 'completed'].includes(s) &&
+    s === 'closed' && 'bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-slate-100',
+    !['submitted', 'draft', 'cancelled', 'completed', 'closed'].includes(s) &&
       'bg-app-card border border-app-border text-app-text',
   );
 }
@@ -84,19 +99,19 @@ function canOpenChat(o: MyOrderListItem): boolean {
 
 function canOpenContract(o: MyOrderListItem): boolean {
   if (!o.matchedProviderId) return false;
-  return ['matching', 'matched', 'contracted', 'paid', 'in_progress', 'completed'].includes(o.status);
+  return ['matching', 'matched', 'contracted', 'paid', 'in_progress', 'completed', 'closed'].includes(o.status);
 }
 
-function TabEmpty({ tab }: { tab: OrderListTab }) {
+function TabEmpty({ tab }: { tab: PhaseListTab }) {
   if (tab === 'active') {
     return (
       <div className="mx-auto max-w-md space-y-6 px-4 py-12 text-center">
         <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-app-border bg-app-card">
           <ClipboardList className="h-12 w-12 text-neutral-400" aria-hidden />
         </div>
-        <h2 className="text-xl font-black text-app-text">Nothing active</h2>
+        <h2 className="text-xl font-black text-app-text">Nothing in your active pipeline</h2>
         <p className="text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-          Submit a request or check Past for completed work.
+          Submit a request or check other tabs for offers, jobs, or cancelled history.
         </p>
         <Link
           to="/orders/new"
@@ -108,15 +123,28 @@ function TabEmpty({ tab }: { tab: OrderListTab }) {
       </div>
     );
   }
-  if (tab === 'past') {
+  if (tab === 'offers') {
+    return (
+      <div className="mx-auto max-w-md space-y-4 px-4 py-12 text-center">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-app-border bg-app-card">
+          <FileText className="h-10 w-10 text-neutral-400" aria-hidden />
+        </div>
+        <h2 className="text-xl font-black text-app-text">No open offers</h2>
+        <p className="text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
+          Offers in matching appear here.
+        </p>
+      </div>
+    );
+  }
+  if (tab === 'jobs') {
     return (
       <div className="mx-auto max-w-md space-y-4 px-4 py-12 text-center">
         <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-app-border bg-app-card">
           <Briefcase className="h-10 w-10 text-neutral-400" aria-hidden />
         </div>
-        <h2 className="text-xl font-black text-app-text">No completed orders yet</h2>
+        <h2 className="text-xl font-black text-app-text">No jobs in this view</h2>
         <p className="text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-          Finished jobs will appear here.
+          Confirmed work (contracted and beyond) lives under Jobs.
         </p>
       </div>
     );
@@ -161,7 +189,7 @@ export default function MyOrders() {
       return;
     }
     const uid = user?.id;
-    let next: OrderListTab = 'active';
+    let next: PhaseListTab = 'active';
     if (uid && typeof window !== 'undefined') {
       try {
         const v = localStorage.getItem(`${TAB_STORAGE_PREFIX}${uid}`);
@@ -183,7 +211,7 @@ export default function MyOrders() {
   }, [user?.id, segmentParam, setSearchParams]);
 
   const setListTab = useCallback(
-    (next: OrderListTab) => {
+    (next: PhaseListTab) => {
       const uid = user?.id;
       if (uid && typeof window !== 'undefined') {
         try {
@@ -206,24 +234,20 @@ export default function MyOrders() {
   );
 
   const [probeDone, setProbeDone] = useState(false);
-  /** Total rows for customer (draft + all phases), unfiltered by status. */
-  const [pipelineTotal, setPipelineTotal] = useState(0);
-  const [pastTotal, setPastTotal] = useState(0);
+  const [accountHasOrders, setAccountHasOrders] = useState(false);
   const [facets, setFacets] = useState<{ phase: OrderPhaseFacetCounts } | undefined>();
   const [items, setItems] = useState<MyOrderListItem[]>([]);
   const [listTotal, setListTotal] = useState(0);
   const [listLoading, setListLoading] = useState(false);
 
   useEffect(() => {
-    void Promise.all([getMyOrders({ pageSize: 1 }), getMyOrders({ pageSize: 1, status: ['completed'] })])
-      .then(([all, past]) => {
-        setPipelineTotal(all.total);
-        setPastTotal(past.total);
-        if (all.facets) setFacets(all.facets);
+    void getMyOrders({ pageSize: 1, page: 1 })
+      .then((r) => {
+        setAccountHasOrders(r.total > 0);
+        if (r.facets) setFacets(r.facets);
       })
       .catch(() => {
-        setPipelineTotal(0);
-        setPastTotal(0);
+        setAccountHasOrders(false);
         setFacets(undefined);
       })
       .finally(() => {
@@ -233,13 +257,13 @@ export default function MyOrders() {
 
   useEffect(() => {
     if (!probeDone) return;
-    if (pipelineTotal === 0) {
+    if (!accountHasOrders) {
       setItems([]);
       setListTotal(0);
       return;
     }
     setListLoading(true);
-    const q = tabToQueryParams(listTab);
+    const q = tabToRequest(listTab);
     void getMyOrders({
       pageSize: 50,
       ...q,
@@ -256,18 +280,15 @@ export default function MyOrders() {
       .finally(() => {
         setListLoading(false);
       });
-  }, [probeDone, pipelineTotal, listTab]);
+  }, [probeDone, accountHasOrders, listTab]);
 
-  const cancelledTabCount = useMemo(() => cancelledCountFromFacets(facets?.phase), [facets]);
-  const activeTabCount = useMemo(
-    () => Math.max(0, pipelineTotal - pastTotal - cancelledTabCount),
-    [pipelineTotal, pastTotal, cancelledTabCount],
-  );
+  const counts = useMemo(() => facetCounts(facets?.phase), [facets]);
 
-  const tabs: { id: OrderListTab; label: string; count: number }[] = [
-    { id: 'active', label: 'Active', count: activeTabCount },
-    { id: 'past', label: 'Past', count: pastTotal },
-    { id: 'cancelled', label: 'Cancelled', count: cancelledTabCount },
+  const tabs: { id: PhaseListTab; label: string; count: number }[] = [
+    { id: 'active', label: 'Active', count: counts.active },
+    { id: 'offers', label: 'Offers', count: counts.offers },
+    { id: 'jobs', label: 'Jobs', count: counts.jobs },
+    { id: 'cancelled', label: 'Cancelled', count: counts.cancelled },
   ];
 
   if (!probeDone) {
@@ -278,7 +299,7 @@ export default function MyOrders() {
     );
   }
 
-  if (pipelineTotal === 0) {
+  if (!accountHasOrders) {
     return (
       <div className="mx-auto max-w-lg space-y-6 px-4 py-16 text-center">
         <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-app-border bg-app-card">
@@ -303,7 +324,7 @@ export default function MyOrders() {
       <header>
         <h1 className="text-3xl font-black text-app-text">My orders</h1>
         <p className="mt-1 text-[15px] text-neutral-500">
-          {pipelineTotal} total · this tab: {listTotal}
+          This tab: {listTotal} order{listTotal === 1 ? '' : 's'}
         </p>
       </header>
 
@@ -312,7 +333,7 @@ export default function MyOrders() {
           'sticky top-0 z-10 -mx-1 flex flex-wrap gap-1 border-b border-app-border bg-app-card/95 px-1 backdrop-blur-sm',
         )}
         role="tablist"
-        aria-label="Order history"
+        aria-label="Order segments"
       >
         {tabs.map((t) => {
           const active = listTab === t.id;

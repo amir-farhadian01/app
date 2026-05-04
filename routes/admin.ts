@@ -10,6 +10,7 @@ import {
 } from '../lib/dependencyCatalog.js';
 import { getAdminUsersList, getAdminUserIds } from '../lib/adminUsersList.js';
 import { fetchAdminUserFull } from '../lib/adminUserDetail.js';
+import { computeAdminOverviewStats, computeOrdersSubmittedTrend } from '../lib/adminOverviewStats.js';
 
 const router = Router();
 router.use(authenticate, isAdmin);
@@ -235,6 +236,22 @@ router.put('/kyc/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// GET /api/admin/audit-log?limit=10 — overview feed (new); see /audit-logs for legacy full list
+router.get('/audit-log', async (req: AuthRequest, res: Response) => {
+  try {
+    const limitRaw = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 10;
+    const limit = Math.min(100, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 10));
+    const items = await prisma.auditLog.findMany({
+      include: { actor: { select: { id: true, displayName: true, email: true } } },
+      orderBy: { timestamp: 'desc' },
+      take: limit,
+    });
+    res.json({ items });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/audit-logs
 router.get('/audit-logs', async (req: AuthRequest, res: Response) => {
   try {
@@ -265,18 +282,24 @@ router.get('/transactions', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/admin/stats
-router.get('/stats', async (req: AuthRequest, res: Response) => {
+// GET /api/admin/stats/orders-trend?days=7 — submitted orders per UTC day
+router.get('/stats/orders-trend', async (_req: AuthRequest, res: Response) => {
   try {
-    const [users, companies, services, requests, contracts, openTickets] = await Promise.all([
-      prisma.user.count(),
-      prisma.company.count(),
-      prisma.service.count(),
-      prisma.request.count(),
-      prisma.contract.count(),
-      prisma.ticket.count({ where: { status: 'open' } }),
-    ]);
-    res.json({ users, companies, services, requests, contracts, openTickets });
+    const daysRaw =
+      typeof _req.query.days === 'string' ? parseInt(String(_req.query.days), 10) : 7;
+    const days = Math.min(90, Math.max(1, Number.isFinite(daysRaw) ? daysRaw : 7));
+    const series = await computeOrdersSubmittedTrend(days);
+    res.json(series);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/stats — platform overview KPIs (DB-backed; revenue from order/package/contract snapshots, not Stripe)
+router.get('/stats', async (_req: AuthRequest, res: Response) => {
+  try {
+    const stats = await computeAdminOverviewStats();
+    res.json(stats);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

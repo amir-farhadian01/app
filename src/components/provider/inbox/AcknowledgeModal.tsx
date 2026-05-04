@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
+import { Loader2 } from 'lucide-react';
 
 export function AcknowledgeModal({
   open,
@@ -46,8 +47,9 @@ export function AcknowledgeModal({
                 type="button"
                 disabled={busy}
                 onClick={onConfirm}
-                className="min-h-[46px] flex-1 rounded-2xl bg-neutral-900 font-bold text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900"
+                className="flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-2xl bg-neutral-900 font-bold text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900"
               >
+                {busy ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden /> : null}
                 {busy ? 'Confirming…' : confirmLabel}
               </button>
             </div>

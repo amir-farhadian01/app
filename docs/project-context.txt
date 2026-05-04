@@ -1,0 +1,260 @@
+Neighborly — project-context.txt
+Purpose: single-file handoff for an AI assistant (architecture, ports, APIs, roadmap). Generated from repo state; verify live ports and docker ps on your machine.
+Repository: monolith (Express + TypeScript API, Vite React SPA, Prisma/PostgreSQL, Flutter app). Not microservices.
+
+================================================================================
+1) DOCKER AND INFRASTRUCTURE
+================================================================================
+
+1.1 docker ps (example snapshot from developer machine, 2026-05-03 — yours will differ)
+When captured, output included:
+- merge-main-web-app (neighborly_web_app) — STATUS Restarting — no PORTS line in that row
+- postgres:16-alpine (neighborly_db) — 0.0.0.0:5432->5432/tcp
+- merge-main-flutter-web (neighborly_flutter_web) — Exited
+- postgres:16-alpine (neighborly_media_db) — Exited (when up: host 5433->5432)
+- minio/minio (neighborly_minio) — Exited (when up: 9002->9000 API, 9003->9001 console)
+- metabase/metabase (neighborly_metabase) — Exited (when up: 3001->3000)
+- redis:7-alpine (neighborly_cache) — Exited (no host port in compose; internal 6379)
+- portainer/portainer-ce (neighborly_portainer) — Exited (when up: 9000->9000)
+- traefik:v3.3 (neighborly_traefik) — Exited (when up: 80->80, 8080 dashboard)
+- nats:2.10-alpine (neighborly_bus) — Exited (no host port; internal 4222)
+- amir20/dozzle (neighborly_dozzle) — Exited (when up: 8888->8080)
+
+1.2 Compose file
+Primary file: docker-compose.yml at repository root (not temp_version2 copy unless comparing upstream).
+
+1.3 Service port map (host -> container or path) — from docker-compose.yml and .env.example
+- Traefik: 80 (HTTP entry), 8080 (Traefik API/dashboard insecure)
+- PostgreSQL (app): ${POSTGRES_HOST_PORT:-5432} -> 5432
+- PostgreSQL (media): 5433 -> 5432
+- MinIO: 9002 -> 9000 (S3 API), 9003 -> 9001 (console); Traefik path prefix /minio
+- Redis: internal 6379 only (no published host port in default compose)
+- NATS: internal 4222 only (no published host port in default compose)
+- web-app (Node+Vite+API): 3000 -> 8080 (container app listens 8080); plus ${ADMIN_PORT:-9090}:${ADMIN_PORT:-9090} for second HTTP listener (admin UI in dev)
+- Portainer: 9000 -> 9000; Traefik /portainer
+- Dozzle: 8888 -> 8080; Traefik /dozzle
+- Metabase: 3001 -> 3000; Traefik /metabase
+- flutter-web: served on port 80 inside container; Traefik PathPrefix /flutter (no fixed host port in compose for direct host binding)
+
+Local Node dev (.env.example): PORT=8077 (main app + API), ADMIN_PORT=9090 (same React bundle, AdminDashboard route area), VITE_ADMIN_PORT=9090. These differ from Docker web-app mapping (3000:8080) — set API_BASE_URL / env to match how you run the stack.
+
+Flutter web local scripts:
+- Default FLUTTER_WEB_PORT 9088 in flutter_project/run-web.sh, .vscode tasks, run-project.sh
+- run_dev_web.sh uses web-port 7357 for faster dev
+- API_BASE_URL typically http://localhost:8077 when Node runs locally
+
+1.4 Important environment variables (names only / non-secret semantics — do not commit real secrets)
+- GEMINI_API_KEY — server/build may reference; Vite may inline GEMINI for client usage patterns (see package.json @google/genai)
+- VITE_GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_SERVER_API_KEY — maps autocomplete / places
+- APP_URL — base URL for links and OAuth
+- PORT, ADMIN_PORT, VITE_ADMIN_PORT — dual HTTP dev servers
+- VITE_API_PUBLIC_ORIGIN — optional fix for uploads when admin on different port
+- DB_USER, DB_PASSWORD, DB_NAME, DATABASE_URL — main Postgres
+- MEDIA_DB_*, MEDIA_DATABASE_URL — second Postgres for media metadata
+- MINIO_ROOT_USER, MINIO_ROOT_PASSWORD — MinIO credentials
+- JWT_SECRET — JWT signing
+- GOOGLE_CLIENT_ID, VITE_GOOGLE_CLIENT_ID — Google OAuth
+- ROUND_ROBIN_WINDOW_HOURS, ROUND_ROBIN_POOL_SIZE — matching engine tuning
+- REDIS_URL, NATS_URL — set in compose for app container; local defaults in code use localhost variants when unset
+- NODE_ENV — production vs dev (Vite middleware mode when not production)
+- ALLOWED_ORIGIN — CORS (optional)
+- POSTGRES_HOST_PORT — optional override for host binding of main DB
+
+================================================================================
+2) ARCHITECTURE
+================================================================================
+
+2.1 High-level service map
+- Browser (React SPA) and Flutter clients talk to the same Express HTTP API under /api/*.
+- Express uses Prisma -> primary PostgreSQL (system of record).
+- Optional Redis (cache/session style usage via lib/cache.ts) — server warns if down.
+- Optional NATS (lib/bus.ts) for publish-only domain events — server warns if down; consumers not required for app to run.
+- Secondary PostgreSQL (media_db) + MinIO for explorer/media pipeline (lib/mediaDb.ts, routes/media.ts).
+- Traefik (when compose stack fully up) routes path prefixes to Minio, Metabase, Portainer, Dozzle, Flutter static, and web-app.
+
+2.2 API gateway
+- Traefik acts as reverse proxy when using full Docker stack on port 80.
+- There is no separate API Gateway product; the Node server is the API edge for /api.
+
+2.3 Databases
+- PostgreSQL 16 (primary): users, orders, KYC, contracts, etc.
+- PostgreSQL 16 (media): metadata for media feed / explorer.
+- Not MongoDB.
+
+2.4 Authentication
+- JWT access + refresh (routes/auth.ts). Cookie/header patterns per implementation in auth middleware.
+- Google OAuth endpoints present.
+- WebAuthn (@simplewebauthn) registration and login options under /api/auth.
+- Protected routes use authenticate / requireRole from lib/auth.middleware.ts (imports in routes use .js extension after compile).
+
+2.5 Message queue
+- NATS is used as a lightweight message bus (publish); not RabbitMQ.
+- Redis is a cache client (ioredis), not a durable task queue in the documented sense.
+
+================================================================================
+3) FRONTENDS
+================================================================================
+
+3.1 Flutter (flutter_project/)
+- Dart SDK constraint in pubspec: >=3.0.0 <4.0.0; local tool version file may show e.g. 3.41.x (Flutter/Dart toolchain on dev machine).
+- State management: package provider (not Riverpod/Bloc).
+- Structure: lib/main.dart, lib/screens/*, lib/widgets/*, lib/services/*, lib/models/*, lib/routing/*, lib/theme/*, lib/order/*.
+- Targets: mobile + web; web dev ports commonly 9088 (default scripts) or 7357 (run_dev_web.sh). Uses dart-define API_BASE_URL for backend.
+- AI: google_generative_ai package; services/gemini_ai_backend.dart, ai_consultant_screen.dart, models/ai_chat_models.dart.
+- Calls REST API (neighborly_api_service.dart, api_service.dart).
+
+3.2 React customer/provider web (same SPA as admin)
+- React ^19, Vite ^6, react-router-dom ^7.
+- Styling: Tailwind CSS v4 (@tailwindcss/vite), tailwind-merge, clsx; motion (Framer successor) for animation; lucide-react icons.
+- State: mostly React hooks + context; TanStack Table for some admin grids; no Redux named in package.json.
+- Structure: src/pages/*, src/components/*, src/services/*, src/lib/*, App.tsx routing.
+- Firebase: not real Firebase — Vite aliases map firebase/* to src/lib/shims/* (JWT + REST). Do not remove shims.
+
+3.3 Admin panel
+- Same React+Vite application as main site; server.ts creates two HTTP servers in dev: PORT (customer/provider shell) and ADMIN_PORT (admin entry). Production serves same dist on both.
+- Access: roles owner, platform_admin (full admin per docs/AGENTS.md), plus support/finance and other staff where routes allow. amirfarhadian569@gmail.com is documented hardcoded platform owner email in project rules.
+
+================================================================================
+4) BACKEND
+================================================================================
+
+4.1 Stack
+- Node.js, Express 4, TypeScript. Entry: server.ts (tsx in dev).
+- ORM: Prisma 5.x only (do not upgrade to Prisma 6/7 per docs/AGENTS.md).
+
+4.2 API surface (grouped by mount prefix in server.ts)
+Public / special:
+- GET /api/health — lightweight health JSON
+- /api/auth — register, login, forgot/reset password, google, google/link, refresh, logout, me, WebAuthn register/login verify and options
+- GET /api/system/config — public theme-related config
+- GET /api/system/pages/:slug — public CMS page
+- GET /api/service-catalog/by-category/:categoryId — public read
+- GET /api/media/feed — public media list
+- GET /api/posts — public list (with query behavior per routes/posts.ts)
+
+Authenticated domains (typical pattern: authenticate on router or per-route):
+- /api/users — me, stats, preferences, become-provider, profile, password, :id
+- /api/services — CRUD style listing and provider service management
+- /api/service-catalog — :id/schema (auth)
+- /api/requests — customer requests
+- /api/contracts — legacy/simple contract listing and signing flows
+- /api/tickets — support tickets
+- /api/notifications — inbox read/delete
+- /api/companies — workspaces/companies CRUD and members
+- /api/posts — create, like, comments (auth where required)
+- /api/chat — legacy chat rooms/messages and provider channels
+- /api/categories — tree, tree-with-services, search, admin-only mutations for owners
+- /api/orders — draft create/update/submit, me, provider/me, detail, candidates, select-provider, cancel
+- /api/orders/:orderId/chat — thread, messages, post message, translate
+- /api/orders/:orderId/contracts — context, list, draft, draft-from-ai, send, approve, reject, supersede, version fetch
+- /api/orders/:orderId/payments — status, session, confirm (gated on approved contract)
+- /api/workspaces — workspace CRUD, members, provider inbox (attempts, acknowledge, accept, decline, lost-feedback), products, service-packages, BOM lines
+- /api/upload — multipart upload
+- /api/media/admin — staff roles media audit list
+- /api/places — autocomplete, details, reverse-geocode
+- /api/transactions — finance-history and transaction CRUD patterns
+- /api/kyc — legacy KYC endpoints
+- /api/kyc/v2 — level0 (/me, address, verify-email, verify-phone), personal (/me, submit, resubmit, history), business (/schema/active, /me, draft, submit, resubmit, history); all behind authenticate on router
+- /api/admin — users CRM, kyc summary, audit-logs, transactions, stats, config, legal-policies, pages, dependency-catalog, change-password, destructive user delete for owner/platform_admin
+- /api/admin/kyc — level0/personal/business queues, reviews, form-schemas, audit
+- /api/admin/service-definitions — catalog CRUD, preview
+- /api/admin/categories-tree — reorder, create category/service, archive helpers
+- /api/admin/orders — list, stats, detail, eligibility, match-override, cancel, etc.
+- /api/admin/contracts — queue, detail, mark-reviewed, override-supersede, internal-note
+- /api/admin/payments — ledger list and detail
+- /api/admin/chat — moderation flags review/escalate/note
+- /api/admin/service-packages — list/detail/create/update tied to catalog
+- /api/admin/products — inventory read/meta
+
+4.3 Prisma models (primary schema — names only)
+User, WebAuthnCredential, Company, CompanyUser, ServiceCatalog, ProviderServicePackage, OfferMatchAttempt, Product, ProductInPackage, Order (+ enums OrderStatus, OrderPhase, OrderEntryPoint, ...), OrderChatThread, OrderChatMessage, OrderContract, ContractVersion, ContractEvent, Category, Contract (legacy), AuditLog, Transaction, Schedule, B2BConnection, Post, Comment, Notification, Service, Request, KYC, KycLevel0Profile, KycPersonalSubmission, BusinessKycFormSchema, BusinessKycSubmission, KycReviewAuditLog, Ticket, ChatRoom, ChatMessage, LegalPolicy, Page, SystemConfig.
+
+4.4 Microservices
+- None. Single deployable Node process with route modules under routes/.
+
+================================================================================
+5) PRODUCT AND BUSINESS LOGIC
+================================================================================
+
+5.1 One-liner
+Neighborly is a local services marketplace: customers request work, providers fulfill via companies/workspaces, with orders, matching, contracts, chat, and payments on platform.
+
+5.2 User types (Prisma UserRole and product language)
+owner, platform_admin, developer, support, finance, customer, provider, staff (plus StaffRole for internal staff flavors). KYC rules: personal KYC before provider; business KYC before core provider business features (see docs/AGENTS.md).
+
+5.3 Major implemented features (see docs/ROADMAP.md phases F0–F8 evidence)
+- Hierarchical categories and service catalog with dynamic field schemas (F0).
+- Admin CRM users module partial (F1 in progress).
+- Admin KYC queues and form builder (F2); customer/provider KYC v2 flows (F3).
+- Flutter shell navigation rework (F4).
+- Order wizard MVP, admin orders (F5); Flutter order wizard explicitly deferred in roadmap.
+- Matching engine MVP auto vs round-robin pool (F6).
+- Order-scoped chat, PII moderation, optional translation layer (F7).
+- Versioned order contracts, AI-assisted draft endpoints, payment gate tied to approved contract, minimal payment ledger (F8 partially complete; templates/disputes/settlement depth deferred).
+
+5.4 Roadmap / in-flight (from docs/ROADMAP.md)
+- F1 admin users UX completion.
+- F8 remaining: templates, disputes, settlement automation; continued payment/contract depth.
+- F9 lost-deal analytics and provider scorecards — deferred post-Flutter parity.
+- F10 weekly bulletin and market insights — deferred post-Flutter parity.
+- Cross-cutting: Flutter parity for F5–F8, i18n/RTL polish, observability depth.
+
+5.5 AI-related features
+- Google Gemini client (@google/genai) in web bundle for consultant / BI style features (see src/services/geminiService.ts, aiService.ts, BusinessIntelligence.tsx per docs/ARCHITECTURE.md).
+- Order wizard AI coach (referenced in roadmap evidence).
+- Contract draft-from-AI endpoint POST /api/orders/:orderId/contracts/draft-from-ai.
+- Flutter: google_generative_ai and AI consultant screen.
+- Matching is rules/engine code under lib/matching/, not an external ML model.
+
+================================================================================
+6) CODEBASE CONVENTIONS
+================================================================================
+
+6.1 Naming
+- TypeScript: typical camelCase for variables/functions, PascalCase for types/components, kebab-case for some route path segments, Prisma models PascalCase.
+
+6.2 Folder trees (short)
+Repo root:
+- server.ts, routes/, lib/, prisma/, src/ (React), flutter_project/, docker/, docs/, scripts/
+
+src/ (web):
+- pages, components, services, lib, contexts, ...
+
+flutter_project/lib/:
+- screens, widgets, services, models, routing, theme, order, utils
+
+6.3 Design system
+- Tailwind utility-first; ThemeContext for light/dark (per docs/AGENTS.md). No separate MUI design system; Recharts for charts where used.
+
+6.4 Git branching (from docs/CLAUDE.md)
+Upstream AI-generated code lands on github amirfarhadian01/Version2; sync script sync-from-version2.sh merges into this Merge repo (integration branch release/v1 mentioned); pushes to main can flow to neighborly production via CI. Use project scripts and GitHub Actions names in .github/workflows when reasoning about automation.
+
+================================================================================
+7) OTHER IMPORTANT NOTES
+================================================================================
+
+7.1 Third-party and integrations
+- Google (Maps, OAuth), Gemini AI, WebAuthn passkeys.
+- MinIO S3-compatible storage; Metabase; Portainer; Dozzle; Traefik — ops stack in compose.
+- Docker image publish path documented in docs/CLAUDE.md (ghcr.io/amir-farhadian01/merge:latest).
+
+7.2 New developer checklist (condensed from docs/AGENTS.md / docs/CLAUDE.md)
+- Read docs/ROADMAP.md before changing phases; run npm run docs:check.
+- New protected routes must use authenticate/requireRole; register router in server.ts; try/catch handlers; .js import suffix for local ESM.
+- Do not run prisma migrate in agent flows; schema edits are maintainer migrations.
+- If adding env vars, mirror in .env.example.
+- Admin parity: update docs/ADMIN-PARITY.md when adding admin-visible features.
+
+7.3 Known risks / debt (high level)
+- NATS publish-only — no in-repo consumer workers documented as required.
+- Redis/NATS optional at runtime — code paths must tolerate absence.
+- Legacy Contract model vs new OrderContract/ContractVersion — both exist; know which feature uses which.
+- Flutter parity behind web for orders (roadmap explicit).
+- Repository language policy: human-facing repo text (comments, docs in tree) should be English per docs/ROADMAP.md manifest (this file is English for that reason).
+
+7.4 docs:check
+Last run during doc generation: all phase rows F0–F10 reported match (npm run docs:check exit 0). Re-run after substantive changes.
+
+================================================================================
+END OF FILE
+================================================================================

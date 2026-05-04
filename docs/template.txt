@@ -1,0 +1,23 @@
+# Neighborly UI color source of truth
+# Keep Flutter (flutter_project/lib/theme/neighborly_theme.dart) and web (src/index.css)
+# aligned with these hex values when changing the product palette.
+
+# --- Light mode ---
+# Page background
+NL_LIGHT_BG=#F8FAFC
+# Surfaces / cards / glass tint base
+NL_LIGHT_SURFACE=#D9EAFD
+# Borders / dividers / muted fills
+NL_LIGHT_BORDER=#BCCCDC
+# Secondary / helper text
+NL_LIGHT_MUTED=#9AA6B2
+
+# --- Dark mode ---
+# Page background
+NL_DARK_BG=#1B3C53
+# Surfaces / cards / glass tint base
+NL_DARK_SURFACE=#234C6A
+# Borders / dividers / muted fills
+NL_DARK_BORDER=#456882
+# Accent / secondary / warm contrast text
+NL_DARK_ACCENT=#D2C1B6

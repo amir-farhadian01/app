@@ -1,0 +1,188 @@
+name: Release to neighborly
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Runs after each merge to main in the Merge repo.
+#
+# Steps:
+#   1. Typecheck + build (sanity check)
+#   2. Strip AI Studio artifacts (firebase config, blueprints, etc.)
+#   3. Push a clean tree to amirfarhadian01/neighborly
+#   4. Create a dated release tag + build id
+#
+# Rule: neighborly/main tracks the latest healthy Merge/main build.
+#
+# Secret:
+#   SYNC_PAT — GitHub PAT with repo + workflow scopes (needs access to all three repos)
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # ── Step 1: Validate ─────────────────────────────────────────────────────────
+  validate:
+    name: CI Validation
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.value }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Generate release tag
+        id: tag
+        run: |
+          TAG="v$(date +%Y.%m.%d)-$(git rev-parse --short HEAD)"
+          echo "value=$TAG" >> $GITHUB_OUTPUT
+          echo "Release tag: $TAG"
+
+  # ── Step 2: Push to neighborly ───────────────────────────────────────────────
+  release:
+    name: Push to neighborly
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - name: Checkout Merge repo (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Clone neighborly repo
+        run: |
+          git clone https://${{ secrets.SYNC_PAT }}@github.com/amir-farhadian01/neighborly.git /tmp/neighborly
+          cd /tmp/neighborly
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Copy clean code to neighborly
+        run: |
+          # ── Patterns to delete (AI Studio artifacts) ───────────────────────────
+          EXCLUDE=(
+            "firebase-applet-config.json"   # Firebase credentials
+            "firebase-blueprint.json"       # AI Studio blueprint
+            "firestore.rules"               # Firestore security rules
+            "AGENTS.md"                     # AI Studio agent docs
+            "untitled.tsx"                  # AI Studio leftover
+            ".env.local"                    # dev-only env
+            ".env"                          # real env (never push)
+            "*.save"                        # editor temp files
+          )
+
+          # ── Reset neighborly working tree, then copy from Merge ───────────────
+          cd /tmp/neighborly
+
+          # Remove everything except .git
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
+          # Copy from Merge workspace
+          rsync -a --exclude='.git' \
+            ${{ github.workspace }}/ \
+            /tmp/neighborly/
+
+          # ── Remove excluded artifacts ─────────────────────────────────────────
+          for pattern in "${EXCLUDE[@]}"; do
+            find /tmp/neighborly -name "$pattern" -not -path "*/.git/*" -delete 2>/dev/null || true
+          done
+
+          # ── Ensure .env.example exists ───────────────────────────────────────
+          # .env.example should ship as configuration documentation
+          if [ ! -f /tmp/neighborly/.env.example ]; then
+            echo "WARNING: .env.example not found in release!"
+          fi
+
+      - name: Commit and push to neighborly
+        run: |
+          cd /tmp/neighborly
+
+          git add -A
+
+          # Skip when there is nothing to commit
+          if git diff --cached --quiet; then
+            echo "No changes to release."
+            exit 0
+          fi
+
+          COMMIT_MSG=$(git -C ${{ github.workspace }} log -1 --pretty=format:"%s")
+          SHORT_SHA=$(git -C ${{ github.workspace }} rev-parse --short HEAD)
+
+          git commit -m "release: ${{ needs.validate.outputs.tag }}
+
+Source: amir-farhadian01/Merge@${SHORT_SHA}
+Commit: ${COMMIT_MSG}
+
+✓ TypeCheck passed
+✓ Build passed
+✓ Prisma validated"
+
+          git push origin main --force-with-lease 2>/dev/null || git push origin main
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+
+          # Find previous release tag for changelog context
+          PREV_TAG=$(gh release list \
+            --repo amir-farhadian01/neighborly \
+            --limit 1 \
+            --json tagName \
+            --jq '.[0].tagName' 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log ${PREV_TAG}..HEAD --oneline --no-decorate | head -20)
+          else
+            CHANGES=$(git log --oneline --no-decorate | head -10)
+          fi
+
+          gh release create "$TAG" \
+            --repo amir-farhadian01/neighborly \
+            --title "$TAG" \
+            --notes "## Changes
+          ${CHANGES}
+
+          ## How to deploy
+          \`\`\`bash
+          git clone https://github.com/amir-farhadian01/neighborly.git
+          cd neighborly
+          cp .env.example .env   # fill in your values
+          docker compose up -d
+          \`\`\`
+
+          ---
+          Released from [Merge@$(git rev-parse --short HEAD)](https://github.com/amir-farhadian01/Merge/commit/$(git rev-parse HEAD))" \
+            --latest \
+            2>/dev/null || true
+
+      - name: Summary
+        run: |
+          echo "## ✅ Released to neighborly" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ needs.validate.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Repo:** https://github.com/amir-farhadian01/neighborly" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,11 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Windows "Mark of the Web" — NTFS alternate stream shown as a sidecar file under WSL (e.g. foo.ts:Zone.Identifier). Not part of the project; safe to delete.
+**/*Zone.Identifier

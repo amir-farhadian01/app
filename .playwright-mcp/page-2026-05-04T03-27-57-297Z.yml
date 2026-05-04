@@ -1,0 +1,57 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Neighborly" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e7]: Neighborly
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - link "Home" [ref=e10] [cursor=pointer]:
+            - /url: /
+          - link "Chat AI" [ref=e11] [cursor=pointer]:
+            - /url: /ai-consultant
+          - link "Explore" [ref=e12] [cursor=pointer]:
+            - /url: /services
+          - link "Orders" [ref=e13] [cursor=pointer]:
+            - /url: /orders
+          - link "Account" [ref=e14] [cursor=pointer]:
+            - /url: /account
+        - button "Switch to Dark Mode" [ref=e16]:
+          - img [ref=e17]
+  - main [ref=e19]:
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - link "Sign in" [ref=e22] [cursor=pointer]:
+          - /url: /auth
+          - img [ref=e23]
+        - button "New offer" [ref=e26]:
+          - img [ref=e27]
+      - button "Try \"deck repair\" or \"deep clean\"" [ref=e28]:
+        - img [ref=e29]
+        - generic [ref=e32]: Try "deck repair" or "deep clean"
+      - generic [ref=e33]:
+        - 'link "Trusted help nearby: Start a booking" [ref=e35] [cursor=pointer]':
+          - generic [ref=e36]:
+            - heading "Trusted help nearby" [level=2] [ref=e37]
+            - paragraph [ref=e38]: Book vetted local pros for home repairs, cleaning, and more.
+            - generic: Start a booking
+        - generic [ref=e39]:
+          - button "Banner 1" [ref=e40]
+          - button "Banner 2" [ref=e42]
+          - button "Banner 3" [ref=e44]
+      - heading "Browse by category" [level=2] [ref=e46]
+      - generic [ref=e47]:
+        - button "Automotive" [ref=e48]:
+          - img [ref=e50]
+          - generic [ref=e54]: Automotive
+        - button "Home" [ref=e55]:
+          - img [ref=e57]
+          - generic [ref=e60]: Home
+        - button "Personal Care" [ref=e61]:
+          - img [ref=e63]
+          - generic [ref=e65]: Personal Care
+        - button "Tech" [ref=e66]:
+          - img [ref=e68]
+          - generic [ref=e70]: Tech
+      - heading "Popular services" [level=2] [ref=e71]
+      - heading "Top providers" [level=2] [ref=e75]

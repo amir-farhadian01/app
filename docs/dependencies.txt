@@ -1,0 +1,145 @@
+Neighborly / Merge-main — dependency inventory (single file as requested)
+Generated for stack: Docker Compose, Node API + Vite, PostgreSQL, Redis, NATS, Traefik, Portainer, Metabase, Flutter web.
+
+Live per-profile catalog in the database (SystemConfig.dependencyCatalog), editable from admin:
+GET/PUT /api/admin/dependency-catalog; reset from repo defaults: POST /api/admin/dependency-catalog/reset
+Text export: GET /api/admin/dependency-catalog/export.txt?profile=default
+Roles allowed for PUT/reset: owner, platform_admin, developer.
+
+================================================================================
+1) RUNTIME / HOST
+================================================================================
+- Docker Engine + Docker Compose plugin (v2), Linux or WSL2
+- Optional: reverse DNS / TLS termination outside this file (Traefik here uses HTTP :80)
+
+================================================================================
+2) DOCKER IMAGES (from docker-compose.yml + Dockerfiles)
+================================================================================
+- traefik:v3.3
+- postgres:16-alpine
+- redis:7-alpine
+- nats:2.10-alpine
+- portainer/portainer-ce:latest
+- metabase/metabase:latest
+- amir20/dozzle:latest
+- minio/minio:latest
+- node:20-alpine          (app Dockerfile base + production)
+- nginx:1.27-alpine       (flutter_project/Dockerfile)
+- ghcr.io/cirruslabs/flutter:stable   (flutter_project build stage)
+
+================================================================================
+3) NODE / NPM (package.json — neighborly-app)
+================================================================================
+Runtime engines: Node 20 (see Dockerfile).
+
+dependencies:
+- @google/genai ^1.29.0
+- @prisma/client ^5.22.0
+- @react-oauth/google ^0.12.1
+- @simplewebauthn/browser ^13.3.0
+- @simplewebauthn/server ^13.3.0
+- @tailwindcss/vite ^4.1.14
+- @types/cookie-parser ^1.4.10
+- @vitejs/plugin-react ^5.0.4
+- bcrypt ^5.1.1
+- clsx ^2.1.1
+- cookie-parser ^1.4.7
+- cors ^2.8.6
+- dotenv ^17.2.3
+- express ^4.21.2
+- google-auth-library ^9.15.1
+- helmet ^8.1.0
+- html2canvas ^1.4.1
+- ioredis ^5.3.2
+- jsonwebtoken ^9.0.2
+- jspdf ^4.2.1
+- lucide-react ^0.546.0
+- motion ^12.23.24
+- morgan ^1.10.1
+- multer ^1.4.5-lts.1
+- nats ^2.29.2
+- pg ^8.16.3
+- qrcode.react ^4.2.0
+- react ^19.0.0
+- react-dom ^19.0.0
+- react-google-autocomplete ^2.7.5
+- react-markdown ^10.1.0
+- react-phone-input-2 ^2.15.1
+- react-router-dom ^7.14.0
+- react-webcam ^7.2.0
+- recharts ^3.8.1
+- remark-gfm ^4.0.1
+- tailwind-merge ^3.5.0
+- vite ^6.2.0
+- xlsx ^0.18.5
+
+devDependencies:
+- @simplewebauthn/types ^12.0.0
+- @types/bcrypt ^5.0.2
+- @types/express ^4.17.21
+- @types/jsonwebtoken ^9.0.8
+- @types/multer ^1.4.12
+- @types/node ^22.14.0
+- @types/pg ^8.15.5
+- autoprefixer ^10.4.21
+- prisma ^5.22.0
+- tailwindcss ^4.1.14
+- tsx ^4.21.0
+- typescript ~5.8.2
+
+--------------------------------------------------------------------------------
+3a) Cryptography, hashing, tokens, and authentication (package.json + runtime)
+--------------------------------------------------------------------------------
+These are not a custom in-app crypto model; they are standard libraries / primitives:
+
+- bcrypt — password hashing (not general-purpose symmetric/asymmetric encryption).
+- jsonwebtoken — JWT sign/verify (typically HMAC or RSA; transitive deps like jwa / buffer-equal-constant-time in the npm tree).
+- @simplewebauthn/browser / @simplewebauthn/server / @simplewebauthn/types — WebAuthn (FIDO2) on COSE/CBOR and browser/server crypto APIs.
+- google-auth-library — Google OAuth token verification (uses Node crypto).
+- helmet — HTTP security headers (does not replace TLS).
+- Node built-in module: crypto (no standalone package.json entry).
+- Docker image: OpenSSL on node:20-alpine for Prisma / DB TLS clients.
+
+Flutter (current pubspec): no dedicated crypto package (e.g. pointycastle) declared; transport security is HTTPS/TLS to server/proxy; shared_preferences stores plain strings (use Keychain/Keystore for sensitive mobile tokens when needed — out of scope for this file).
+
+@google/genai — Google generative AI client; not direct application payload encryption.
+
+================================================================================
+4) DATABASE / ORM
+================================================================================
+- PostgreSQL 16 (container)
+- Prisma schema: prisma/schema.prisma (DATABASE_URL)
+
+================================================================================
+5) FLUTTER (flutter_project/pubspec.yaml)
+================================================================================
+SDK: >=3.0.0 <4.0.0  (use Flutter stable matching ghcr.io/cirruslabs/flutter:stable for Docker builds)
+
+dependencies:
+- flutter (sdk)
+- cupertino_icons ^1.0.2
+- provider ^6.0.5
+- google_fonts ^5.1.0
+- lucide_icons ^0.257.0
+- intl ^0.18.1
+- http ^1.2.0
+- shared_preferences ^2.2.0
+
+dev_dependencies:
+- flutter_test (sdk)
+- flutter_lints ^2.0.0
+
+Build-time define (Dockerfile ARG): API_BASE_URL — empty = same-origin on web; override for mobile or split hosts.
+
+================================================================================
+6) ENVIRONMENT VARIABLES (representative — see .env / docker-compose)
+================================================================================
+- DATABASE_URL, DB_USER, DB_PASSWORD, DB_NAME
+- JWT / auth secrets (server)
+- GOOGLE_CLIENT_ID (server), VITE_GOOGLE_CLIENT_ID (Vite frontend)
+- REDIS_URL, NATS_URL
+- NODE_ENV
+
+================================================================================
+END
+================================================================================

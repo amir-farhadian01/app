@@ -1,0 +1,827 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  owner
+  platform_admin
+  developer
+  support
+  finance
+  customer
+  provider
+  staff
+}
+
+enum StaffRole {
+  handyman
+  finance
+  adv
+  career
+  task_manager
+  internal_manager
+  hr
+}
+
+enum Status {
+  active
+  suspended
+  pending_verification
+}
+
+enum KycStatus {
+  draft
+  pending
+  approved
+  rejected
+  resubmit_requested
+}
+
+enum KycSubmissionType {
+  level0
+  personal
+  business
+}
+
+enum OrderStatus {
+  draft
+  submitted
+  cancelled
+  matching
+  matched
+  contracted
+  paid
+  in_progress
+  completed
+}
+
+enum OrderPhase {
+  offer
+  order
+  job
+}
+
+enum OrderEntryPoint {
+  explorer
+  ai_suggestion
+  direct
+}
+
+enum BookingMode {
+  auto_appointment
+  negotiation
+  inherit_from_catalog
+}
+
+enum MatchAttemptStatus {
+  invited
+  matched
+  accepted
+  declined
+  expired
+  superseded
+}
+
+enum ChatMessageType {
+  text
+  system
+}
+
+enum ChatModerationStatus {
+  clean
+  masked
+  blocked
+  flagged
+}
+
+enum ContractVersionStatus {
+  draft
+  sent
+  approved
+  rejected
+  superseded
+}
+
+enum ContractActionType {
+  provider_sent
+  customer_approved
+  customer_rejected
+  customer_requested_edit
+  provider_superseded
+  admin_override
+  admin_marked_reviewed
+  admin_internal_note
+}
+
+model User {
+  id                  String      @id @default(cuid())
+  email               String      @unique
+  password            String?     // nullable for OAuth users
+  phone               String?
+  firstName           String?
+  lastName            String?
+  displayName         String?
+  role                UserRole    @default(customer)
+  staffRole           StaffRole?
+  status              Status      @default(active)
+  isVerified          Boolean     @default(false)
+  mfaEnabled          Boolean     @default(false)
+  creditLimit         Float?      @default(0)
+  currentDebt         Float?      @default(0)
+  companyId           String?
+  gender              String?     // 'male' | 'female' | 'other' — free string, UI validates
+  address             String?     // full readable address (keep `location` for coords)
+  lastLoginAt         DateTime?
+  lastSeenAt          DateTime?
+  lastDevice          String?     // user-agent short label e.g. "iPhone 15 / iOS 17 / Safari"
+  lastIp              String?
+  registrationIp    String?
+  birthDate           DateTime?
+  bio                 String?
+  location            String?
+  avatarUrl           String?
+  /// Google `sub` when the account is linked to Google (OAuth).
+  googleId            String?     @unique
+  /// Client-driven settings: privacy, device whitelist, safety flags (see app JSON contract).
+  accountPreferences  Json?
+  orderPriorities     Json?
+  refreshToken        String?     // for JWT refresh
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  // Relations
+  ownedCompany        Company?    @relation("CompanyOwner")
+  companies           CompanyUser[]
+  contractsAsCustomer Contract[]  @relation("CustomerContracts")
+  contractsAsProvider Contract[]  @relation("ProviderContracts")
+  auditLogs           AuditLog[]
+  transactions        Transaction[]
+  schedules           Schedule[]
+  kyc                 KYC?
+  ticketsCreated      Ticket[]    @relation("TicketCreator")
+  ticketsReceived     Ticket[]    @relation("TicketRecipient")
+  posts               Post[]
+  comments            Comment[]
+  notifications       Notification[]
+  chatMessages        ChatMessage[]
+  requestsAsCustomer  Request[]   @relation("CustomerRequests")
+  requestsAsProvider  Request[]   @relation("ProviderRequests")
+  services            Service[]
+  webauthnCredentials WebAuthnCredential[]
+  kycLevel0Profile    KycLevel0Profile?
+  kycPersonalSubmissions KycPersonalSubmission[]
+  businessKycSubmissions BusinessKycSubmission[]
+  ordersAsCustomer       Order[]                 @relation("CustomerOrders")
+  providerPackages       ProviderServicePackage[]
+  attemptsAsProvider     OfferMatchAttempt[]     @relation("ProviderAttempts")
+  ordersAsMatchedProvider Order[]                @relation("OrderMatchedProvider")
+}
+
+model WebAuthnCredential {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialID        String   @unique
+  credentialPublicKey String
+  counter             BigInt
+  transports          String?  // JSON string
+  createdAt           DateTime @default(now())
+}
+
+model Company {
+  id                  String      @id @default(cuid())
+  ownerId             String      @unique
+  owner               User        @relation("CompanyOwner", fields: [ownerId], references: [id])
+  name                String
+  slug                String?     @unique
+  slogan              String?
+  about               String?
+  logoUrl             String?
+  coverImageUrl       String?
+  licenseNumber       String?
+  experienceDate      DateTime?
+  address             String?
+  phone               String?
+  website             String?
+  socialLinks         Json?
+  type                String      @default("solo") // solo, business
+  kycStatus           String      @default("pending") // pending, verified, rejected
+  location            Json?
+  members             CompanyUser[]
+  transactions        Transaction[]
+  schedules           Schedule[]
+  b2bConnectionsA     B2BConnection[] @relation("ProviderA")
+  b2bConnectionsB     B2BConnection[] @relation("ProviderB")
+  businessKycSubmissions BusinessKycSubmission[]
+  servicePackages         ProviderServicePackage[] @relation("WorkspacePackages")
+  products                Product[]                @relation("WorkspaceProducts")
+  workspaceAttempts        OfferMatchAttempt[]     @relation("WorkspaceAttempts")
+  ordersAsMatchedWorkspace Order[]                @relation("OrderMatchedWorkspace")
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+}
+
+model CompanyUser {
+  companyId String
+  userId    String
+  role      String   @default("member") // 'owner' | 'admin' | 'member' | 'staff' | 'client'
+  joinedAt  DateTime @default(now())
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([companyId, userId])
+}
+
+model ServiceCatalog {
+  id                    String    @id @default(cuid())
+  name                  String
+  category              String
+  subcategory           String?
+  complianceTags        String[]  @default([])
+  categoryId            String?
+  category_             Category? @relation(fields: [categoryId], references: [id])
+  dynamicFieldsSchema   Json?
+  defaultMatchingMode   String    @default("manual_review")
+  description           String?
+  slug                  String?   @unique
+  isActive              Boolean   @default(true)
+  /// When set, packages must use this mode or `inherit_from_catalog` (see ADR-0028).
+  lockedBookingMode     String?
+  sortOrder             Int       @default(0)
+  archivedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  services                Service[]
+  orders                  Order[]
+  providerPackages        ProviderServicePackage[]
+
+  @@index([categoryId])
+  @@index([categoryId, sortOrder])
+  @@index([isActive])
+}
+
+model ProviderServicePackage {
+  id                String        @id @default(cuid())
+  providerId        String
+  workspaceId       String
+  serviceCatalogId  String
+  name              String
+  description       String?
+  finalPrice        Float
+  currency          String        @default("CAD")
+  bookingMode       BookingMode   @default(inherit_from_catalog)
+  durationMinutes   Int?
+  isActive          Boolean       @default(true)
+  archivedAt        DateTime?
+  sortOrder         Int           @default(0)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  provider          User          @relation(fields: [providerId], references: [id])
+  workspace         Company       @relation("WorkspacePackages", fields: [workspaceId], references: [id])
+  serviceCatalog    ServiceCatalog @relation(fields: [serviceCatalogId], references: [id])
+  bom               ProductInPackage[]
+  offerMatchAttempts OfferMatchAttempt[]
+  matchedOrders      Order[]              @relation("OrderMatchedPkg")
+
+  @@index([workspaceId])
+  @@index([serviceCatalogId])
+  @@unique([workspaceId, serviceCatalogId, name])
+}
+
+model OfferMatchAttempt {
+  id            String              @id @default(cuid())
+  offerId       String
+  offer         Order                 @relation("OfferAttempts", fields: [offerId], references: [id], onDelete: Cascade)
+  packageId     String
+  package       ProviderServicePackage @relation(fields: [packageId], references: [id])
+  providerId    String
+  provider      User                  @relation("ProviderAttempts", fields: [providerId], references: [id])
+  workspaceId   String
+  workspace     Company               @relation("WorkspaceAttempts", fields: [workspaceId], references: [id])
+  status        MatchAttemptStatus
+  score         Float
+  distanceKm    Float?
+  invitedAt     DateTime              @default(now())
+  matchedAt     DateTime?
+  respondedAt   DateTime?
+  expiresAt     DateTime?
+  declineReason String?
+  supersededAt  DateTime?
+  lostReason    String?
+  lostFeedback  Json?
+  metadata      Json?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([offerId])
+  @@index([workspaceId, status])
+  @@index([providerId, status])
+}
+
+model Product {
+  id            String               @id @default(cuid())
+  workspaceId   String
+  workspace     Company              @relation("WorkspaceProducts", fields: [workspaceId], references: [id])
+  name          String
+  sku           String?
+  description   String?
+  category      String?
+  unit          String               @default("each")
+  unitPrice     Float
+  currency      String               @default("CAD")
+  stockQuantity Float?
+  isActive      Boolean              @default(true)
+  archivedAt    DateTime?
+  sortOrder     Int                  @default(0)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  bomLines      ProductInPackage[]
+
+  @@index([workspaceId])
+  @@unique([workspaceId, sku])
+}
+
+model ProductInPackage {
+  id                  String                 @id @default(cuid())
+  packageId           String
+  package             ProviderServicePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  productId           String
+  product             Product                @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity            Float
+  snapshotUnitPrice   Float
+  snapshotCurrency    String
+  snapshotProductName String
+  snapshotUnit        String
+  notes               String?
+  sortOrder           Int                    @default(0)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@index([packageId])
+  @@index([productId])
+}
+
+model Order {
+  id                    String          @id @default(cuid())
+  customerId            String
+  customer              User            @relation("CustomerOrders", fields: [customerId], references: [id])
+  serviceCatalogId      String
+  serviceCatalog        ServiceCatalog  @relation(fields: [serviceCatalogId], references: [id])
+  schemaSnapshot        Json
+  answers               Json
+  photos                Json
+  description           String
+  descriptionAiAssisted Boolean         @default(false)
+  scheduledAt           DateTime?
+  scheduleFlexibility   String
+  address               String
+  locationLat           Float?
+  locationLng           Float?
+  entryPoint            OrderEntryPoint @default(direct)
+  status                OrderStatus     @default(draft)
+  phase                 OrderPhase?
+  matchedPackageId      String?
+  matchedPackage        ProviderServicePackage? @relation("OrderMatchedPkg", fields: [matchedPackageId], references: [id])
+  matchedProviderId     String?
+  matchedProvider       User?           @relation("OrderMatchedProvider", fields: [matchedProviderId], references: [id])
+  matchedWorkspaceId    String?
+  matchedWorkspace      Company?        @relation("OrderMatchedWorkspace", fields: [matchedWorkspaceId], references: [id])
+  autoMatchExhausted    Boolean         @default(false)
+  matchingExpiresAt     DateTime?
+  customerPicks         Json?
+  cancelReason          String?
+  cancelledAt           DateTime?
+  submittedAt           DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  matchAttempts         OfferMatchAttempt[] @relation("OfferAttempts")
+  chatThread            OrderChatThread?
+  orderContract         OrderContract?
+
+  @@index([customerId])
+  @@index([status])
+  @@index([phase])
+  @@index([serviceCatalogId])
+}
+
+model OrderChatThread {
+  id         String            @id @default(cuid())
+  orderId    String            @unique
+  order      Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId String
+  providerId String
+  isClosed   Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  messages   OrderChatMessage[]
+
+  @@index([customerId])
+  @@index([providerId])
+}
+
+model OrderChatMessage {
+  id               String               @id @default(cuid())
+  threadId         String
+  thread           OrderChatThread      @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderId         String
+  senderRole       String
+  type             ChatMessageType      @default(text)
+  originalText     String
+  displayText      String
+  moderationStatus ChatModerationStatus @default(clean)
+  moderationReasons Json?
+  sourceLang       String?
+  targetLang       String?
+  translatedText   String?
+  createdAt        DateTime             @default(now())
+  editedAt         DateTime?
+  metadata         Json?
+
+  @@index([threadId, createdAt])
+  @@index([moderationStatus, createdAt])
+}
+
+model OrderContract {
+  id                  String             @id @default(cuid())
+  orderId             String             @unique
+  order               Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  currentVersionId    String?            @unique
+  currentVersion      ContractVersion?   @relation("CurrentContractVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  adminLastReviewAt   DateTime?
+  adminLastReviewById String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  versions            ContractVersion[] @relation("ContractVersionBelongs")
+  events              ContractEvent[]
+}
+
+model ContractVersion {
+  id                String                  @id @default(cuid())
+  contractId        String
+  contract          OrderContract           @relation("ContractVersionBelongs", fields: [contractId], references: [id], onDelete: Cascade)
+  versionNumber     Int
+  status            ContractVersionStatus   @default(draft)
+  title             String
+  termsMarkdown     String
+  policiesMarkdown  String?
+  scopeSummary      String?
+  startDate         DateTime?
+  endDate           DateTime?
+  amount            Float?
+  currency          String?                 @default("CAD")
+  generatedByAi     Boolean                 @default(false)
+  generationPrompt  String?
+  generationContext Json?
+  mismatchWarnings  Json?
+  sentById          String?
+  sentAt            DateTime?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  reviewNote        String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  markedCurrentFor  OrderContract?        @relation("CurrentContractVersion")
+  events              ContractEvent[]
+
+  @@unique([contractId, versionNumber])
+  @@index([contractId, status])
+}
+
+model ContractEvent {
+  id         String             @id @default(cuid())
+  contractId String
+  contract   OrderContract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  versionId  String?
+  version    ContractVersion?   @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  actorId    String
+  actorRole  String
+  actionType ContractActionType
+  note       String?
+  metadata   Json?
+  createdAt  DateTime           @default(now())
+
+  @@index([contractId, createdAt])
+}
+
+model Category {
+  id               String            @id @default(cuid())
+  name             String
+  parentId         String?
+  parent           Category?         @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children         Category[]        @relation("CategoryHierarchy")
+  description      String?
+  icon             String?
+  sortOrder        Int               @default(0)
+  archivedAt       DateTime?
+  chatRooms        ChatRoom[]
+  serviceCatalogs  ServiceCatalog[]
+
+  @@index([parentId, sortOrder])
+}
+
+model Contract {
+  id               String   @id @default(cuid())
+  requestId        String?
+  request          Request? @relation(fields: [requestId], references: [id])
+  customerId       String
+  customer         User     @relation("CustomerContracts", fields: [customerId], references: [id])
+  providerId       String
+  provider         User     @relation("ProviderContracts", fields: [providerId], references: [id])
+  status           String   @default("pending")
+  terms            String?
+  amount           Float
+  commissionAmount Float?
+  paymentMethod    String   @default("platform")
+  clientSigned     Boolean  @default(false)
+  providerSigned   Boolean  @default(false)
+  clientSignedAt   DateTime?
+  providerSignedAt DateTime?
+  checkInTime      String?
+  checkOutTime     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?
+  actor        User?    @relation(fields: [actorId], references: [id])
+  action       String
+  resourceType String
+  resourceId   String
+  timestamp    DateTime @default(now())
+  metadata     Json?
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
+  customerId  String?
+  customer    User?    @relation(fields: [customerId], references: [id])
+  type        String   // income, outcome
+  amount      Float
+  category    String?
+  description String?
+  timestamp   DateTime @default(now())
+}
+
+model Schedule {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  staffId   String
+  staff     User     @relation(fields: [staffId], references: [id])
+  taskId    String?
+  startTime DateTime
+  endTime   DateTime
+  status    String   @default("scheduled")
+}
+
+model B2BConnection {
+  id           String   @id @default(cuid())
+  providerAId  String
+  providerA    Company  @relation("ProviderA", fields: [providerAId], references: [id])
+  providerBId  String
+  providerB    Company  @relation("ProviderB", fields: [providerBId], references: [id])
+  type         String   // contractor, subcontractor
+  specialPrice Float?
+  status       String   @default("pending")
+}
+
+model Post {
+  id         String    @id @default(cuid())
+  providerId String
+  provider   User      @relation(fields: [providerId], references: [id])
+  imageUrl   String
+  caption    String?
+  likes      String[]
+  comments   Comment[]
+  createdAt  DateTime  @default(now())
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  userName  String?
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   // request, ticket, system, payment
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+model Service {
+  id                 String         @id @default(cuid())
+  providerId         String
+  provider           User           @relation(fields: [providerId], references: [id])
+  title              String
+  category           String?
+  price              Float
+  description        String?
+  rating             Float?
+  reviewsCount       Int?           @default(0)
+  createdAt          DateTime       @default(now())
+  serviceCatalogId   String?
+  serviceCatalog     ServiceCatalog? @relation(fields: [serviceCatalogId], references: [id], onDelete: SetNull)
+  requests           Request[]
+
+  @@index([serviceCatalogId])
+}
+
+model Request {
+  id         String     @id @default(cuid())
+  customerId String
+  customer   User       @relation("CustomerRequests", fields: [customerId], references: [id])
+  providerId String
+  provider   User       @relation("ProviderRequests", fields: [providerId], references: [id])
+  serviceId  String
+  service    Service    @relation(fields: [serviceId], references: [id])
+  status     String     @default("pending")
+  details    String?
+  contracts  Contract[]
+  createdAt  DateTime   @default(now())
+}
+
+model KYC {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // personal, business
+  status    String   @default("pending")
+  details   Json?
+  createdAt DateTime @default(now())
+}
+
+model KycLevel0Profile {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailVerifiedAt     DateTime?
+  phoneVerifiedAt     DateTime?
+  address             String?
+  addressCapturedAt   DateTime?
+  addressVerifiedAt   DateTime?
+  adminAcknowledgedAt DateTime?
+  adminAcknowledgedBy String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model KycPersonalSubmission {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Snapshot of Level 0 address at submit time (for reviewers).
+  declaredAddress    String?
+  declaredLegalName  String
+  idDocumentType     String // 'national_id' | 'passport' | 'drivers_license'
+  idDocumentNumber   String?
+  idFrontUrl         String
+  idBackUrl          String?
+  selfieUrl          String
+  aiAnalysis         Json?
+  status             KycStatus @default(pending)
+  reviewedById       String?
+  reviewedAt         DateTime?
+  reviewNote         String?
+  submittedAt        DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model BusinessKycFormSchema {
+  id            String    @id @default(cuid())
+  version       Int       @unique
+  isActive      Boolean   @default(false)
+  schema        Json // BusinessKycFormV1
+  description   String?
+  publishedById String?
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model BusinessKycSubmission {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId      String?
+  company        Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  schemaVersion  Int
+  answers        Json
+  uploads        Json
+  inquiryResults Json?
+  expiryFlags    Json?
+  status         KycStatus @default(pending)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  submittedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model KycReviewAuditLog {
+  id             String            @id @default(cuid())
+  submissionType KycSubmissionType
+  submissionId   String
+  actorId        String
+  fromStatus     String?
+  toStatus       String
+  note           String?
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+
+  @@index([submissionType, submissionId])
+}
+
+model Ticket {
+  id          String   @id @default(cuid())
+  creatorId   String
+  creator     User     @relation("TicketCreator", fields: [creatorId], references: [id])
+  recipientId String?
+  recipient   User?    @relation("TicketRecipient", fields: [recipientId], references: [id])
+  type        String   // client_to_provider, client_to_admin
+  subject     String
+  status      String   @default("open")
+  messages    Json?
+  createdAt   DateTime @default(now())
+}
+
+model ChatRoom {
+  id            String        @id @default(cuid())
+  categoryId    String?
+  category      Category?     @relation(fields: [categoryId], references: [id])
+  name          String
+  lastMessage   String?
+  lastMessageAt DateTime?
+  messages      ChatMessage[]
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  roomId     String
+  room       ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  senderId   String
+  sender     User     @relation(fields: [senderId], references: [id])
+  senderName String?
+  senderRole String?
+  text       String
+  timestamp  DateTime @default(now())
+}
+
+model LegalPolicy {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  version   String?
+  updatedAt DateTime @default(now())
+}
+
+model Page {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  content   String
+  status    String   @default("draft")
+  lastEdit  DateTime @default(now())
+}
+
+model SystemConfig {
+  id                 String   @id @default(cuid())
+  key                String   @unique @default("global")
+  taxRate            Float?
+  commissionRate     Float?
+  defaultCreditLimit Float?
+  paymentMethods     String[]
+  integrations       Json?
+  monitoringUrls     Json?
+  theme              Json?
+  /// Per-environment dependency catalog (admin-editable). Shape: DependencyCatalogV1 in lib/dependencyCatalog.ts
+  dependencyCatalog  Json?
+  updatedAt          DateTime @default(now())
+}

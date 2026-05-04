@@ -1,0 +1,23 @@
+- main [ref=e4]:
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Sign in" [level=2] [ref=e8]
+      - paragraph [ref=e9]: Use your admin or account email and password
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - text: Email Address
+        - generic [ref=e12]:
+          - img [ref=e13]
+          - textbox "name@example.com" [ref=e16]
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - generic [ref=e19]: Password
+          - button "Forgot?" [ref=e20]
+        - generic [ref=e21]:
+          - img [ref=e22]
+          - textbox "••••••••" [ref=e25]
+          - button "Show password" [ref=e26]:
+            - img [ref=e27]
+      - button "Sign In" [ref=e30]:
+        - text: Sign In
+        - img [ref=e31]

@@ -1,0 +1,232 @@
+provider ux
+AI
+Explorer
+Home 
+Compony
+  Work Space ID : Company id 
+    Work space name : Compamy-name
+
+
+
+
+
+    ===============================
+ dashboard
+
+  Overview
+     #New Order
+     #waiting For approval
+     #Calenders (show /hide to client)
+     #Oppointments (disable /Enable)
+     #Notification (contract notif ,client chat ,explrer notif{like , commend })
+  ===============================
+  Activity
+     # Active jobs
+     # Done Jobs
+     # Cancelled Jobs
+  ===============================
+  Finance 
+     #Company wallet
+     #Commision
+     #statments 
+     #paymentMethod
+     #My cards
+
+  ===============================
+  Network
+     #B2B Marketplace
+     #B2B Contracts
+     #Rooms
+     #Refral 
+  ===============================
+ Compamy
+
+  #User and roles#
+  #client review and rating
+  #AI Recomendations
+    #Competitors
+    #Opportunities
+    #Analytics
+    #Reports
+  #Contracts Template
+    #Contract
+    #Term and condition
+    #Policy
+    #Template
+
+  ===============================
+  Social Network
+   #explorer
+   #Pages
+   #Inventory
+   #Facebook group
+   #Instegram
+   #Youtube  
+  
+  =============================== 
+  
+  ---------------------------------------
+  
+
+
+
+===== BUILD SPEC (Provider / Company app) — hand off to Google / UI builder =====
+Language: English UI. Mobile-first. Static mock reference: provider-ui-mock.html (same folder).
+
+-- Bottom navigation (4 items, left-to-right) --
+1) AI
+2) Explorer
+3) Home
+4) Company  (this spec focuses on Company + shared shell)
+
+-- Workspace (header / context) --
+Show company workspace name + opaque workspace id (e.g. cmp_7k2).
+
+-- Company: hamburger (right) opens side drawer. Accordion groups; one section open at a time. --
+
+1) DASHBOARD (only three destinations; do not list each tab as a separate menu row)
+   The side menu under Dashboard has exactly 3 tappable items that navigate to 3 PAGES:
+   A) ORDERS page
+      - 2 top tabs on that page (not in the hamburger list):  "New order" | "Waiting orders"
+      - Default when opening this page: "New order" tab
+   B) NOTIFICATIONS page
+      - 3 top tabs: "Chat" | "Explorer" | "Contract"
+      - Tapping each tab switches the feed for that type (in-page navigation only)
+   C) CALENDAR & APPOINTMENTS page
+      - 2 top tabs: "Calendar" | "Appointments"
+
+2) ACTIVITY
+   - Active jobs
+   - Done jobs
+   - Not contracted
+   - Cancelled (mid project)
+
+3) SERVICE MANAGEMENT  (replaces old “Contract templates” as top-level; placed above Finance)
+   - "Services" (main surface for service definition / catalog seed)
+
+4) FINANCE
+   - Company wallet
+   - Revenue & budget
+   - Platform commission (one screen can show: current cycle, total due, paid, remaining credit in one card/grid)
+   - Payroll & subcontractor
+   - Statements (filterable)
+   - Payment methods (e.g. PayPal, bank gateway)
+   - My cards (pay platform commission / charges)
+
+5) NETWORK
+   - B2B ads & partners
+   - B2B marketplace
+   - B2B contracts
+   - Rooms (specialist chat)
+   - Referral
+
+6) COMPANY
+   - Users & roles
+   - Client reviews & ratings
+
+7) AI RECOMMENDATIONS (analytics)
+   - Competitors
+   - Opportunities
+   - Analytics
+   - Reports
+
+8) SOCIAL NETWORK
+   - Explorer (company posts)
+   - Pages (public site on platform domain; optional own domain)
+   - Inventory / shop (phase 2)
+   - Facebook group
+   - Instagram
+   - YouTube
+
+-- Explorer (bottom tab) — separate from Company operations; Instagram-like; only provider can add posts for company context. --
+- Feed, posts, settings, etc. (detail can follow same patterns as main app)
+
+-- Global behaviour notes --
+- Do not put "New order" or "Waiting orders" in the hamburger; they exist only as tabs on the Orders page.
+- Do not duplicate notifications inside Orders; global notifications live only under the Notifications page with its 3 tabs.
+- After a request is approved, it may become a task/project (Orders are pre-approval; see Activity for execution states).
+- AI can stay as bottom tab for phase 2 or later if product needs a slimmer first release.
+
+-- Optional polish (not blocking first build) --
+- Deep link from a push into the correct tab (e.g. open Notifications on Contract)
+- Search on Orders and notification feeds
+- Empty states
+
+
+
+
+
+
+===== BUILD SPEC (Client / customer app) — hand off to Google / UI builder =====
+Language: English UI. Mobile-first. Mirror the provider app’s visual language (typography, spacing, bottom nav pattern) but with client-appropriate actions and data.
+
+-- Role --
+End user: books services, chats with companies, signs contracts, pays, and reviews. No company admin, no service catalog editing, no staff roles.
+
+-- Bottom navigation (4 items, left-to-right) --
+1) AI        (phase 2: tips, booking help, or generic assistant; can be hidden in MVP)
+2) Explorer  (discover companies, posts, marketplace-style browse)
+3) Home      (client’s hub: active requests, upcoming appointments, shortcuts)
+4) Account   (profile, orders history, payments, settings)  — label can be "Profile" or "Me"
+
+(Alternative MVP: 3 tabs — Home | Explorer | Account — and put AI inside Account or Home.)
+
+-- Home (tab) --
+Purpose: one place to resume work as a client.
+Sections (scroll; use cards):
+- Active requests / orders (status: submitted, waiting company response, approved, in progress)
+- Upcoming appointments (next 7 days; tap opens detail)
+- Recent messages (last 1–3 threads; “View all” → Chat hub)
+- Quick actions: Search company, Book again, Support
+
+-- Explorer (tab) --
+- Feed or list of companies / posts (read-only for client; like/follow if product supports it)
+- Filter: category, distance, rating (phase 2)
+- Company profile (from client view): services list, reviews, book CTA, chat CTA, public page link
+
+-- Account (tab) — or side menu from Account icon; keep shallow (max one sub-level in MVP) --
+1) PROFILE
+   - Name, photo, phone, email
+   - Saved addresses / time zone
+2) MY ORDERS
+   - Tabs on page: "Active" | "Past" | "Cancelled"
+   - Row: company, service, status, date; tap → order detail (timeline, messages shortcut, contract link if any)
+3) APPOINTMENTS (client view)
+   - Tabs: "Upcoming" | "Past"
+   - Book / reschedule / cancel per company rules (buttons only if allowed)
+4) MESSAGES / CHAT HUB
+   - List of threads (by company)
+   - Open thread → same chat experience as provider’s “client chat” side
+5) CONTRACTS (read-only for client)
+   - List of agreements linked to orders; open PDF / view terms; sign if pending
+6) PAYMENTS & RECEIPTS
+   - Payment history, invoices/receipts download
+   - Saved payment methods (optional; phase 2)
+7) NOTIFICATIONS (client)
+   - Tabs (align with product): "Chat" | "Orders" | "System"  OR single list with filters
+   - Tapping goes to relevant order, chat, or contract
+8) HELP & SUPPORT
+   - FAQ, contact support, report issue
+9) SETTINGS
+   - Push notification toggles (orders, chat, marketing)
+   - Language, theme (if offered)
+   - Log out
+
+-- Flows (must work end-to-end in UI, no backend required in spec) --
+- Request a service → see it under Home + My orders (Active)
+- Receive company message → notification → Chat thread
+- Appointment reminder → opens Appointments detail
+- Contract ready to sign → Contracts or order detail with CTA “Sign”
+
+-- What the client app does NOT include --
+- Company wallet, commission, payroll, subcontractor, B2B network, team/roles, service management editor
+- Provider-only Explorer posting (client is viewer / engager only unless you add UGC later)
+
+-- Consistency with provider app --
+- Same names where both sides meet: Order (pre-approval), Appointment, Contract, Chat.
+- Client “My orders” statuses should map to provider “Orders / Activity” without showing internal company labels.
+
+-- Optional polish --
+- Empty states for no orders, no appointments, no messages
+- Deep links from push (open right tab: order, chat, contract)
+- Guest mode (browse Explorer only, prompt to sign in to book) if product needs it

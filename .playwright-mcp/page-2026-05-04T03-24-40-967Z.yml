@@ -1,0 +1,43 @@
+- generic [ref=e3]:
+  - 'link "Account: Owner Admin" [ref=e5] [cursor=pointer]':
+    - /url: /profile
+    - generic [ref=e7]: OA
+  - button "Sign out" [ref=e8]:
+    - img [ref=e9]
+  - main [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - link "Account" [ref=e15] [cursor=pointer]:
+          - /url: /account
+          - generic [ref=e16]: OA
+        - button "New offer" [ref=e17]:
+          - img [ref=e18]
+      - button "Try \"deck repair\" or \"deep clean\"" [ref=e19]:
+        - img [ref=e20]
+        - generic [ref=e23]: Try "deck repair" or "deep clean"
+      - generic [ref=e24]:
+        - 'link "Trusted help nearby: Start a booking" [ref=e26] [cursor=pointer]':
+          - generic [ref=e27]:
+            - heading "Trusted help nearby" [level=2] [ref=e28]
+            - paragraph [ref=e29]: Book vetted local pros for home repairs, cleaning, and more.
+            - generic: Start a booking
+        - generic [ref=e30]:
+          - button "Banner 1" [ref=e31]
+          - button "Banner 2" [ref=e33]
+          - button "Banner 3" [ref=e35]
+      - heading "Browse by category" [level=2] [ref=e37]
+      - generic [ref=e38]:
+        - button "Automotive" [ref=e39]:
+          - img [ref=e41]
+          - generic [ref=e45]: Automotive
+        - button "Home" [ref=e46]:
+          - img [ref=e48]
+          - generic [ref=e51]: Home
+        - button "Personal Care" [ref=e52]:
+          - img [ref=e54]
+          - generic [ref=e56]: Personal Care
+        - button "Tech" [ref=e57]:
+          - img [ref=e59]
+          - generic [ref=e61]: Tech
+      - heading "Popular services" [level=2] [ref=e62]
+      - heading "Top providers" [level=2] [ref=e66]

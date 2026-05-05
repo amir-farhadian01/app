@@ -66,6 +66,8 @@ type BuildOpts = {
   scheduledTo?: Date;
   phases: OrderPhase[];
   includeDrafts: boolean;
+  /** When set, only orders where the user is the customer or matched provider (CRM deep-link). */
+  userId?: string;
 };
 
 type DropDim = 'none' | 'status' | 'entryPoint' | 'serviceCatalog' | 'phase';
@@ -139,6 +141,7 @@ export function buildAdminOrderListOpts(q: Request['query']): BuildOpts {
     ...toStrArray((q as Record<string, unknown>)['phase[]']),
   ].filter((s) => ORDER_PHASES.has(s));
   const phases = phaseRaw.map((p) => p as OrderPhase);
+  const userId = pickQueryStr(q, 'userId')?.trim();
   return {
     q: pickStr(q.q),
     status,
@@ -151,11 +154,18 @@ export function buildAdminOrderListOpts(q: Request['query']): BuildOpts {
     scheduledTo: parseDate(pickQueryStr(q, 'scheduledTo')),
     phases,
     includeDrafts: pickQueryStr(q, 'includeDrafts') === 'true',
+    userId: userId && userId.length > 0 ? userId : undefined,
   };
 }
 
 export function buildOrderWhere(o: BuildOpts, drop: DropDim = 'none'): Prisma.OrderWhereInput {
   const and: Prisma.OrderWhereInput[] = [];
+  if (o.userId?.trim()) {
+    const uid = o.userId.trim();
+    and.push({
+      OR: [{ customerId: uid }, { matchedProviderId: uid }],
+    });
+  }
   if (o.q?.trim()) {
     const t = o.q.trim();
     and.push({

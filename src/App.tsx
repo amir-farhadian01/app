@@ -26,6 +26,7 @@ import { AlertCircle, RefreshCcw } from 'lucide-react';
 import { useAuth } from './lib/AuthContext';
 import { api } from './lib/api';
 import { SoftToastProvider } from './lib/SoftToastContext';
+import { OrderLifecycleNotificationBridge } from './components/OrderLifecycleNotificationBridge';
 import { WorkspaceProvider } from './lib/WorkspaceContext';
 import { isAdminPanelPort, isStaffPlatformRole, getAdminPanelOrigin } from './lib/adminPort';
 
@@ -163,6 +164,7 @@ export default function App() {
     <ErrorBoundary>
       <Router>
         <SoftToastProvider>
+          <OrderLifecycleNotificationBridge />
           <WorkspaceProvider>
             <Layout role={role} companyId={companyId}>
               <Routes>

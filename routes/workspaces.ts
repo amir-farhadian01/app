@@ -21,6 +21,7 @@
  * DELETE /:id/service-packages/:pkgId
  * GET|POST /:id/service-packages/:pkgId/bom …
  * GET    /:id/inbox | /:id/inbox-attempts — list offer match attempts (same handler)
+ * GET    /:id/finance — read-only provider finance snapshot (orders + internal transactions; no gateway)
  */
 import { Router, Response } from 'express';
 import { BookingMode, MatchAttemptStatus, OrderStatus, Prisma } from '@prisma/client';
@@ -37,6 +38,7 @@ import {
   listMyWorkspaces,
   WorkspaceAccessError,
 } from '../lib/workspaceAccess.js';
+import { buildProviderWorkspaceFinance } from '../lib/buildProviderWorkspaceFinance.js';
 
 const router = Router();
 router.use(authenticate);
@@ -243,6 +245,21 @@ router.get('/:id/members', async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.get('/:id/finance', async (req: AuthRequest, res: Response) => {
+  try {
+    const workspaceId = req.params.id;
+    await assertWorkspaceMember(req.user!.userId, workspaceId);
+    const payload = await buildProviderWorkspaceFinance(workspaceId);
+    res.json(payload);
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // --- Inbox (offer match attempts) ---
 
 async function getWorkspaceInboxAttemptsList(req: AuthRequest, res: Response) {
@@ -300,6 +317,11 @@ async function getWorkspaceInboxAttemptsList(req: AuthRequest, res: Response) {
                 },
               },
               serviceCatalog: { select: { id: true, name: true, category: true, slug: true } },
+              orderContract: {
+                select: {
+                  currentVersion: { select: { status: true } },
+                },
+              },
             },
           },
         },
@@ -344,6 +366,9 @@ async function getWorkspaceInboxAttemptsList(req: AuthRequest, res: Response) {
           locationLng: a.offer.locationLng,
           submittedAt: a.offer.submittedAt?.toISOString() ?? null,
           customerPicks: a.offer.customerPicks ?? null,
+          contractSummary: a.offer.orderContract?.currentVersion
+            ? { currentVersionStatus: a.offer.orderContract.currentVersion.status }
+            : null,
         },
         customer: a.offer.customer,
         serviceCatalog: a.offer.serviceCatalog,
@@ -406,6 +431,11 @@ router.get('/:id/inbox/:attemptId', async (req: AuthRequest, res: Response) => {
               },
             },
             serviceCatalog: { select: { id: true, name: true, category: true, slug: true } },
+            orderContract: {
+              select: {
+                currentVersion: { select: { status: true } },
+              },
+            },
           },
         },
       },
@@ -453,6 +483,9 @@ router.get('/:id/inbox/:attemptId', async (req: AuthRequest, res: Response) => {
         createdAt: row.offer.createdAt.toISOString(),
         updatedAt: row.offer.updatedAt.toISOString(),
         customerPicks: row.offer.customerPicks ?? null,
+        contractSummary: row.offer.orderContract?.currentVersion
+          ? { currentVersionStatus: row.offer.orderContract.currentVersion.status }
+          : null,
       },
       customer: row.offer.customer,
       serviceCatalog: row.offer.serviceCatalog,

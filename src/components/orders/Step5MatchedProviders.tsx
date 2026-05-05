@@ -6,7 +6,8 @@ import { useWizardStore } from '../../lib/wizardStore';
 import { resolveMediaUrl } from '../../lib/resolveMediaUrl';
 
 export type Step5MatchedProvidersProps = {
-  orderId: string;
+  /** Null when the draft is not saved yet (e.g. guest) — show a non-blocking explanation instead of a blank step. */
+  orderId: string | null;
 };
 
 export function Step5MatchedProviders({ orderId }: Step5MatchedProvidersProps) {
@@ -17,24 +18,43 @@ export function Step5MatchedProviders({ orderId }: Step5MatchedProvidersProps) {
   const [autoMatch, setAutoMatch] = useState(false);
   const [manual, setManual] = useState(false);
   const [providers, setProviders] = useState<MatchedProviderPreview[]>([]);
+  const [previewBlocked, setPreviewBlocked] = useState(false);
 
   useEffect(() => {
-    if (!orderId) {
+    if (!orderId?.trim()) {
       setLoading(false);
+      setError(null);
+      setPreviewBlocked(false);
+      setAutoMatch(false);
+      setManual(false);
+      setProviders([]);
       return;
     }
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setPreviewBlocked(false);
     void (async () => {
       try {
-        const r = await getOrderMatchedProviders(orderId);
+        const r = await getOrderMatchedProviders(orderId.trim());
         if (cancelled) return;
         setAutoMatch(r.autoMatchEnabled);
         setManual(r.manualSelectionAvailable);
         setProviders(r.providers);
       } catch (e: unknown) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load providers');
+        if (!cancelled) {
+          const code =
+            e && typeof e === 'object' && 'code' in e ? String((e as { code?: string }).code) : '';
+          if (code === 'UNAUTHORIZED') {
+            setPreviewBlocked(true);
+            setError(null);
+            setProviders([]);
+            setAutoMatch(false);
+            setManual(false);
+          } else {
+            setError(e instanceof Error ? e.message : 'Could not load providers');
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -43,6 +63,22 @@ export function Step5MatchedProviders({ orderId }: Step5MatchedProvidersProps) {
       cancelled = true;
     };
   }, [orderId]);
+
+  if (!orderId?.trim() || previewBlocked) {
+    return (
+      <div className="rounded-2xl border border-dashed border-app-border bg-app-card p-6 space-y-3 text-center sm:text-left">
+        <p className="font-bold text-app-text">Matching preview</p>
+        <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+          {!orderId?.trim()
+            ? 'Save a signed-in draft to preview eligible workspaces for your package and address. You can keep going — the platform will still run matching when you submit.'
+            : 'Sign in to preview eligible workspaces for this draft. You can keep going — matching still runs after you submit.'}
+        </p>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          Final providers depend on availability, your location, and the service&apos;s matching mode.
+        </p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -70,10 +106,13 @@ export function Step5MatchedProviders({ orderId }: Step5MatchedProvidersProps) {
 
   if (!manual || providers.length === 0) {
     return (
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
-        No eligible providers were found for this location yet. You can still submit — we&apos;ll widen search or
-        notify you when someone becomes available.
-      </p>
+      <div className="rounded-2xl border border-app-border bg-app-card p-6 space-y-2">
+        <p className="font-bold text-app-text">No preview list yet</p>
+        <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+          We couldn&apos;t surface optional provider picks for this draft (location, package, or availability).
+          You can still submit — the platform will keep searching or notify you when someone becomes available.
+        </p>
+      </div>
     );
   }
 

@@ -120,6 +120,35 @@ export function postDraftFromAi(orderId: string): Promise<{ shell: OrderContract
   });
 }
 
+export type ContractTemplateListItem = {
+  id: string;
+  version: number;
+  title: string;
+  description: string;
+  placeholders: Array<{ key: string; label: string }>;
+};
+
+export function fetchContractTemplates(orderId: string): Promise<{ templates: ContractTemplateListItem[] }> {
+  return req<{ templates: ContractTemplateListItem[] }>(
+    `/api/orders/${encodeURIComponent(orderId)}/contracts/templates`,
+    {
+      method: 'GET',
+      headers: headers(),
+    },
+  );
+}
+
+export function postDraftFromTemplate(
+  orderId: string,
+  templateId: string,
+): Promise<{ shell: OrderContractShellDTO; version: ContractVersionDTO }> {
+  return req(`/api/orders/${encodeURIComponent(orderId)}/contracts/draft-from-template`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ templateId }),
+  });
+}
+
 export type ManualDraftBody = {
   title: string;
   termsMarkdown: string;

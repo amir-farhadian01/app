@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import prisma from './db.js';
 import { mapUserToRow, userListInclude } from './adminUsersList.js';
 
@@ -8,7 +9,11 @@ export async function fetchAdminUserFull(userId: string) {
   });
   if (!user) return null;
 
-  const [auditLogs, transactions, contracts, requests] = await Promise.all([
+  const orderWhereUser: Prisma.OrderWhereInput = {
+    OR: [{ customerId: userId }, { matchedProviderId: userId }],
+  };
+
+  const [auditLogs, transactions, contracts, requests, ordersSummary] = await Promise.all([
     prisma.auditLog.findMany({
       where: {
         OR: [{ resourceId: userId }, { actorId: userId }],
@@ -50,6 +55,55 @@ export async function fetchAdminUserFull(userId: string) {
         provider: { select: { id: true, displayName: true, email: true } },
       },
     }),
+    (async () => {
+      const [byStatusRows, asCustomer, asProvider, recentRows] = await Promise.all([
+        prisma.order.groupBy({
+          by: ['status'],
+          where: orderWhereUser,
+          _count: { _all: true },
+        }),
+        prisma.order.count({ where: { customerId: userId } }),
+        prisma.order.count({ where: { matchedProviderId: userId } }),
+        prisma.order.findMany({
+          where: orderWhereUser,
+          orderBy: { updatedAt: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            status: true,
+            phase: true,
+            createdAt: true,
+            updatedAt: true,
+            customerId: true,
+            serviceCatalog: { select: { id: true, name: true } },
+            matchedWorkspace: { select: { id: true, name: true } },
+          },
+        }),
+      ]);
+      const byStatus: Record<string, number> = {};
+      for (const r of byStatusRows) {
+        byStatus[r.status] = r._count._all;
+      }
+      const total = Object.values(byStatus).reduce((a, b) => a + b, 0);
+      return {
+        total,
+        asCustomer,
+        asMatchedProvider: asProvider,
+        byStatus,
+        recent: recentRows.map((o) => ({
+          id: o.id,
+          status: o.status,
+          phase: o.phase,
+          createdAt: o.createdAt.toISOString(),
+          updatedAt: o.updatedAt.toISOString(),
+          relation: o.customerId === userId ? ('customer' as const) : ('provider' as const),
+          serviceCatalogId: o.serviceCatalog.id,
+          serviceName: o.serviceCatalog.name,
+          workspaceId: o.matchedWorkspace?.id ?? null,
+          workspaceName: o.matchedWorkspace?.name ?? null,
+        })),
+      };
+    })(),
   ]);
 
   return {
@@ -66,5 +120,6 @@ export async function fetchAdminUserFull(userId: string) {
     transactions,
     contracts,
     requests,
+    ordersSummary,
   };
 }

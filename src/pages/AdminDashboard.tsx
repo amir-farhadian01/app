@@ -494,6 +494,16 @@ export default function AdminDashboard() {
                     setFormData({ role: u.role, status: u.status });
                     setShowUserModal(true);
                   }}
+                  onViewUserOrders={(userId) => {
+                    setActiveTab('orders');
+                    setSearchParams((prev) => {
+                      const n = new URLSearchParams(prev);
+                      n.set('tab', 'orders');
+                      n.set('segment', 'all');
+                      n.set('ordersUserId', userId);
+                      return n;
+                    });
+                  }}
                   onKycReview={async (kycId) => {
                     try {
                       const all = await api.get<Array<{ id: string; userId: string }>>('/api/admin/kyc');

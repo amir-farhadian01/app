@@ -40,6 +40,24 @@ export type AdminUserFullPayload = {
     customer: { id: string; displayName: string | null; email: string };
     provider: { id: string; displayName: string | null; email: string };
   }>;
+  ordersSummary: {
+    total: number;
+    asCustomer: number;
+    asMatchedProvider: number;
+    byStatus: Record<string, number>;
+    recent: Array<{
+      id: string;
+      status: string;
+      phase: string | null;
+      createdAt: string;
+      updatedAt: string;
+      relation: 'customer' | 'provider';
+      serviceCatalogId: string;
+      serviceName: string;
+      workspaceId: string | null;
+      workspaceName: string | null;
+    }>;
+  };
 };
 
 /** Build query string from flat key/value (repeated keys for arrays as `key` multiple times). */

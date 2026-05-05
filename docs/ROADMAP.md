@@ -125,14 +125,22 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
 - **Status:**
   | Customer | Provider | Admin |
   |----------|----------|-------|
-  | ⏳ | ⏳ | 🚧 |
+  | ⏳ | ⏳ | ✅ |
 - **Evidence (auto-discovered):** `src/components/crm/CrmTable.tsx` exists;
   `src/services/adminUsers.ts` exists; `GET /api/admin/users` delegates to
   `getAdminUsersList` in `lib/adminUsersList.ts` which implements `page`,
   `pageSize`, `sortBy`, `segment` (query params not duplicated as literals
-  throughout `routes/admin.ts`).
-- **Done definition:** Admin users UX complete (segments, bulk, export,
-  panel) and documented; any new list params reflected here and in checks.
+  throughout `routes/admin.ts`). **`GET /api/admin/users/:id/full`** (`fetchAdminUserFull`
+  in `lib/adminUserDetail.ts`) returns profile row + `ordersSummary` (wizard `Order`
+  counts/recent + legacy request/contract/transaction slices + audit). **`UserDetailPanel`**
+  (`src/components/admin/UserDetailPanel.tsx`) tabs: Overview (stats + handoff), Workspaces,
+  Orders, Activity (legacy), KYC, Audit. CRM filter persistence via URL (`fa`/`fc`/`fp`,
+  `segment`, `page`, `sort`, `q`, `ps`) + column state in `crm-table:*` localStorage.
+  Admin Orders supports **`userId`** query filter (`lib/adminOrdersList.ts`) and CRM links use
+  **`ordersUserId`** on the dashboard URL (distinct from KYC `userId`).
+- **Done definition:** Support-ready CRM (segments, bulk, persisted filters/columns, detail
+  panel with orders/workspaces/KYC/audit, Admin Orders handoff). Optional CSV export for the
+  user grid remains a future enhancement.
 - **Drift checks (commands):**
     test -f src/components/crm/CrmTable.tsx
     test -f src/services/adminUsers.ts
@@ -141,7 +149,10 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
     grep -q "sortBy" lib/adminUsersList.ts
     grep -q "segment" lib/adminUsersList.ts
     grep -q "getAdminUsersList" lib/adminUsersList.ts
-- **Last verified:** 2026-04-24 via `npm run docs:check`
+    test -f src/components/admin/UserDetailPanel.tsx
+    grep -q "ordersSummary" lib/adminUserDetail.ts
+    grep -q "userId" lib/adminOrdersList.ts
+- **Last verified:** 2026-05-05 via `npm run docs:check` + CRM Task 7
 - **Open prompts:** none
 
 ### F2 — Admin: KYC (Levels 0/1/2 + Form Builder)
@@ -233,8 +244,9 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
   `ADMIN_CANCELLED_ORDER`. **Customer:**   `src/components/orders/*` (wizard,
   steps including `Step6Description` / `Step7Review`, `DynamicFieldRenderer`, AI coach, photos), `src/services/orders.ts`,
   `/orders/:id/confirmation` post-submit summary route,
-  `src/lib/orderDescriptionAi.ts`, `src/pages/MyOrders.tsx` (pipeline cards: provider block + ratings + cancel/rate actions + tab empty states),
+  `src/lib/orderDescriptionAi.ts`,   `src/pages/MyOrders.tsx` (pipeline cards: provider block + ratings + cancel/rate actions + tab empty states),
   `src/pages/OrderDetail.tsx` (Details / Contract / Chat tabs; dispute POST `/api/orders/:id/dispute`; contract review modal via `ContractPanel`),
+  customer **Events Hub** (`src/pages/Notifications.tsx`) + `OrderLifecycleNotificationBridge` soft toasts for `order_matched` / `order_completed` / `contract_approved` (poll `GET /api/notifications`; deep links use `Notification.link`, contract opens `?tab=contract`),
   routes `/orders`, `/orders/new`, `/orders/:id` in `src/App.tsx`; entry wiring
   `ServiceDetails` (“Book this service”), `CustomerDashboard` (Book a service),
   `CustomerHome` → `/orders/new` deep links (`homeCategory`, `prefillProviderId`, `newOffer`),
@@ -247,6 +259,17 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
   `InboxDetailDrawer` + `InboxDrawerChat` for full offer detail + order-scoped chat via `routes/orderChat.ts`;
   workspace inbox list/detail returns `customerPicks` + package `bom` for BOM lines), and
   admin matching tab/eligibility/override wiring in order drawer + API.
+  **Provider finance (operations, no gateway):** Company dashboard **Finance** tab
+  (`src/components/provider/finance/ProviderFinanceSection.tsx`, `src/services/providerFinance.ts`)
+  loads read-only snapshot from `GET /api/workspaces/:id/finance` in `routes/workspaces.ts` with
+  aggregation in `lib/buildProviderWorkspaceFinance.ts` (matched orders, `Transaction` rows for
+  `companyId`, explicit payout placeholder + disclaimers).
+  **Task 8 (2026-05-05):** negotiated-order close — workspace inbox APIs attach `order.contractSummary`
+  (`currentVersionStatus` from `OrderContract.currentVersion`); provider `InboxDetailDrawer` treats winning
+  `matched` + `contracted` attempts like acknowledged (`Mark complete` + contract-status hints); customer
+  `OrderDetail` shows explicit next steps across matching / matched / contracted + contract version states.
+  **Task 9 (2026-05-05):** Company dashboard **Schedule** tab (`ProviderScheduleSection`, `getProviderPipelineOrders` →
+  `GET /api/orders/provider/me`) lists active workspace orders with loading/empty/error states (not the generic “coming soon” stub).
 - **Done definition:** Single wizard; dynamic fields from service schema;
   admin order panel per ADMIN-PARITY; Phase segments shipped (Offers / Orders /
   Jobs / Cancelled + lifecycle filters).
@@ -279,7 +302,14 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
     grep -q "computeAdminOverviewStats" routes/admin.ts
     grep -q "/stats/orders-trend" routes/admin.ts
     grep -q "audit-log" routes/admin.ts
-- **Last verified:** 2026-05-04 via `npm run docs:check` + customer order wizard steps 3–7 + provider inbox drawer (detail + chat) + lint
+    grep -q "/:id/finance" routes/workspaces.ts
+    test -f lib/buildProviderWorkspaceFinance.ts
+    test -f src/components/provider/finance/ProviderFinanceSection.tsx
+    grep -q "ProviderFinanceSection" src/pages/CompanyDashboard.tsx
+    test -f src/components/provider/schedule/ProviderScheduleSection.tsx
+    grep -q "ProviderScheduleSection" src/pages/CompanyDashboard.tsx
+    grep -q "getProviderPipelineOrders" src/services/orders.ts
+- **Last verified:** 2026-05-05 via `npm run docs:check` + Task 9 regression (Schedule tab wiring) + lint
 - **Open prompts:** ⏳ Flutter port of the order wizard (partial: `CreateOrderWizardScreen` + `HomeScreen` deep links).
 
 ### F6 — Matching engine MVP (auto_book vs round_robin_5)
@@ -362,8 +392,13 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
   `GET /api/admin/payments/orders/:orderId`, `GET /api/admin/payments/ledger`, `GET /api/admin/payments/ledger/:transactionId`),
   **Payments** tab (`AdminPaymentsSection`, `PaymentDetailDrawer`, `src/services/adminPayments.ts`, `tab=payments` in `AdminDashboard.tsx`),
   and audit actions `PAYMENT_SESSION_CREATED` / `PAYMENT_CAPTURED`.
-  **Deferred:** templates/disputes expansion + settlement automation.
-- **Done definition:** Templates, disputes, payment ledger in admin (remaining); Sprint L contract loop shipped; Sprint M payment gate/session + minimal admin ledger shipped.
+  **Task 6 (2026-05-05):** code-defined contract templates (`lib/contractTemplateCatalog.ts`,
+  `lib/renderContractTemplate.ts`) with explicit `{{placeholder}}` tokens; `GET /api/orders/:orderId/contracts/templates`,
+  `POST .../draft-from-template` creates a **draft** `ContractVersion` (`generationPrompt` `template:<id>`,
+  `generationContext` records template id/version + filled keys); provider **Contract** tab template picker +
+  `fetchContractTemplates` / `postDraftFromTemplate` in `src/services/orderContracts.ts`.
+  **Deferred:** dispute queue expansion, settlement automation depth, optional admin UI to author templates in DB.
+- **Done definition:** Code-defined template foundation + provider template-based drafts shipped; disputes; payment ledger in admin (remaining areas); Sprint L contract loop shipped; Sprint M payment gate/session + minimal admin ledger shipped.
 - **Drift checks (commands):**
     test -f prisma/schema.prisma
     test -f routes/orderContracts.ts
@@ -371,9 +406,14 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
     test -f lib/contractDraft.ts
     test -f lib/contractMismatchGuard.ts
     test -f lib/contractEvents.ts
+    test -f lib/contractTemplateCatalog.ts
+    test -f lib/renderContractTemplate.ts
+    grep -q "/templates" routes/orderContracts.ts
+    grep -q "draft-from-template" routes/orderContracts.ts
+    grep -q "fetchContractTemplates" src/services/orderContracts.ts
     test -f src/components/admin/contracts/AdminContractsSection.tsx
-- **Last verified:** 2026-05-04 via `npm run docs:check` + admin Contracts UI completion + admin Payments UI (ledger table + detail drawer; Stripe deferred)
-- **Open prompts:** F8 templates/dispute queue + settlement automation depth.
+- **Last verified:** 2026-05-05 via `npm run docs:check` + contract template API/UI wiring (lint)
+- **Open prompts:** F8 dispute queue + settlement automation depth; optional admin-managed template storage.
 
 ### F9 — Lost-deal analytics + provider scorecards
 - **Status:**
@@ -424,8 +464,10 @@ This "Admin parity" column ensures the admin side never falls behind.
 
 ## Cross-cutting tracks (run in parallel with F0..F10)
 - **Workspaces** — ✅ (Company = workspace; **provider UI:** `WorkspaceContext`,
-  `WorkspaceSwitcher` on `CompanyDashboard`, `My Packages` tab +
-  `src/components/provider/packages/*` + `src/services/workspaces.ts`; **admin:** global
+  `WorkspaceSwitcher` on `CompanyDashboard`, **Staff** tab (`ProviderStaffSection`,
+  `GET /api/workspaces/:id/members` via `listMembers` in `src/services/workspaces.ts`),
+  `My Packages` tab +
+  `src/components/provider/packages/*`; **admin:** global
   **Provider Packages** tab, booking lock in `ServiceDefinitionEditor`, `lockedBookingMode` in API).
 - **Inventory (Phase 1)** — ✅ (Prisma `Product` + `ProductInPackage` BOM snapshots, migration
   `g_inventory_bom`; `lib/packageMargin.ts`; provider CRUD + BOM under `routes/workspaces.ts`;

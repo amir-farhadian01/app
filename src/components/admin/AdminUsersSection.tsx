@@ -31,6 +31,8 @@ type SectionProps = {
   }) => void;
   onEditUser: (u: AdminUserRow) => void;
   onKycReview?: (kycId: string) => void;
+  /** Navigate to Admin Orders with this user pre-filtered (CRM handoff). */
+  onViewUserOrders?: (userId: string) => void;
   fetchDashboardUsers: () => void | Promise<void>;
 };
 
@@ -54,6 +56,7 @@ export function AdminUsersSection({
   setShowConfirmModal,
   onEditUser,
   onKycReview,
+  onViewUserOrders,
   fetchDashboardUsers,
 }: SectionProps) {
   const { user: authUser } = useAuth();
@@ -333,6 +336,7 @@ export function AdminUsersSection({
           onClose={() => setPanelUserId(null)}
           showSuccess={onSuccess}
           showError={(m) => notifyError(setNotification, m)}
+          onViewUserOrders={onViewUserOrders}
           onConfirm={({ title, message, type, onConfirm: inner }) => {
             setShowConfirmModal({
               show: true,

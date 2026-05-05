@@ -4,8 +4,6 @@ import { cn } from '../../lib/utils';
 import { getServiceCatalogPackages, type ServiceCatalogPackageRow } from '../../services/orders';
 import { useWizardStore } from '../../lib/wizardStore';
 
-const DEFAULT_CITY = 'Vaughan, ON';
-
 export type Step3PackageAndLocationProps = {
   serviceCatalogId: string;
   savedProfileAddress?: string | null;
@@ -27,7 +25,7 @@ export function Step3PackageAndLocation({
   onPackagesCount,
 }: Step3PackageAndLocationProps) {
   const street = useWizardStore((s) => s.addressStreet ?? '');
-  const city = useWizardStore((s) => s.addressCity ?? DEFAULT_CITY);
+  const city = useWizardStore((s) => s.addressCity ?? '');
   const postal = useWizardStore((s) => s.addressPostal ?? '');
   const selectedId = useWizardStore((s) => s.selectedPackageId);
   const setBookingForm = useWizardStore((s) => s.setBookingForm);
@@ -50,16 +48,30 @@ export function Step3PackageAndLocation({
       try {
         const rows = await getServiceCatalogPackages(serviceCatalogId.trim());
         if (cancelled) return;
-        setPackages(rows);
-        onPackagesCount?.(rows.length);
-        if (rows.length === 1) {
-          const p = rows[0]!;
+        const valid = rows.filter((r) => r.id?.trim() && r.name?.trim());
+        setPackages(valid);
+        onPackagesCount?.(valid.length);
+        const currentSel = useWizardStore.getState().selectedPackageId;
+        if (valid.length === 1) {
+          const p = valid[0]!;
+          const pref = useWizardStore.getState().wizardTimePreference?.trim();
           setBookingForm({
             selectedPackageId: p.id,
             selectedPackageName: p.name,
             selectedPackagePrice: p.price,
             selectedPackageDuration: p.duration,
             selectedPackageBookingMode: p.bookingMode,
+            ...(p.bookingMode === 'negotiation' && !pref
+              ? { wizardTimePreference: 'AS_SOON_AS_POSSIBLE' as const }
+              : {}),
+          });
+        } else if (currentSel && !valid.some((r) => r.id === currentSel)) {
+          setBookingForm({
+            selectedPackageId: undefined,
+            selectedPackageName: undefined,
+            selectedPackagePrice: undefined,
+            selectedPackageDuration: undefined,
+            selectedPackageBookingMode: undefined,
           });
         }
       } catch (e: unknown) {
@@ -78,17 +90,31 @@ export function Step3PackageAndLocation({
   }, [serviceCatalogId, setBookingForm, onPackagesCount]);
 
   const selectPackage = (p: ServiceCatalogPackageRow) => {
+    const pref = useWizardStore.getState().wizardTimePreference?.trim();
     setBookingForm({
       selectedPackageId: p.id,
       selectedPackageName: p.name,
       selectedPackagePrice: p.price,
       selectedPackageDuration: p.duration,
       selectedPackageBookingMode: p.bookingMode,
+      ...(p.bookingMode === 'negotiation' && !pref ? { wizardTimePreference: 'AS_SOON_AS_POSSIBLE' as const } : {}),
     });
   };
 
   const cad = (n: number) =>
     n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 2 });
+
+  function scopeSummary(p: ServiceCatalogPackageRow): string | null {
+    const lines = p.bomLines ?? [];
+    if (!lines.length) return null;
+    const maxShow = 4;
+    const parts = lines.slice(0, maxShow).map((b) => {
+      const q = b.quantity > 1 ? `${b.quantity}× ` : '';
+      return `${q}${b.productName}`;
+    });
+    const more = lines.length > maxShow ? ` · +${lines.length - maxShow} more line items` : '';
+    return parts.join(' · ') + more;
+  }
 
   return (
     <div className="space-y-6">
@@ -114,6 +140,7 @@ export function Step3PackageAndLocation({
       <div className="space-y-3">
         {packages.map((p) => {
           const selected = selectedId === p.id;
+          const scopeLine = scopeSummary(p);
           return (
             <button
               key={p.id}
@@ -141,6 +168,16 @@ export function Step3PackageAndLocation({
                       {bookingModeBadge(p.bookingMode)}
                     </span>
                   </div>
+                  {scopeLine ? (
+                    <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-2 leading-snug">
+                      <span className="font-semibold text-app-text">Includes: </span>
+                      {scopeLine}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-2 italic">
+                      Scope details will follow in your job description.
+                    </p>
+                  )}
                 </div>
               </div>
             </button>
@@ -151,7 +188,8 @@ export function Step3PackageAndLocation({
       <div className="border-t border-app-border pt-6 space-y-4">
         <p className="text-xs font-black uppercase tracking-widest text-neutral-400">Service location</p>
         <p className="text-neutral-600 dark:text-neutral-400 text-[15px]">
-          Confirm where the provider should meet you.
+          Confirm where the provider should meet you. Street, city, and postal code are required before you can
+          continue.
         </p>
         {savedProfileAddress ? (
           <button
@@ -184,7 +222,7 @@ export function Step3PackageAndLocation({
             value={city}
             onChange={(e) => setBookingForm({ addressCity: e.target.value })}
             className="w-full min-h-[48px] rounded-2xl border border-app-border bg-app-input px-4 py-3 text-[15px] text-app-text"
-            placeholder={DEFAULT_CITY}
+            placeholder="City, Province"
             autoComplete="address-level2"
           />
         </div>

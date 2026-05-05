@@ -49,8 +49,8 @@ export function PhotoUploader({
             ...(fieldId ? { fieldId } : {}),
           });
           onChange(next);
-        } catch (e) {
-          console.error(e);
+        } catch {
+          /* Upload failed — user can retry; avoid console noise in production wizard */
         } finally {
           setProgressByName((p) => {
             const { [key]: _, ...rest } = p;

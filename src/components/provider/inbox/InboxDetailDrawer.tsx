@@ -138,6 +138,25 @@ function budgetLine(item: ProviderInboxItem): string | null {
   return null;
 }
 
+/** Next-step copy for negotiated orders once the job is contracted (contract lifecycle). */
+function providerContractCloseHint(summary: ProviderInboxItem['order']['contractSummary']): string | null {
+  if (!summary?.currentVersionStatus) return null;
+  switch (summary.currentVersionStatus) {
+    case 'draft':
+      return 'Contract is still in draft — send it from the order Contract tab when ready.';
+    case 'sent':
+      return 'Contract sent — waiting for customer approval.';
+    case 'approved':
+      return 'Contract approved — mark the job complete when the work is finished.';
+    case 'rejected':
+      return 'Customer rejected the contract — send a revised version before completing the job.';
+    case 'superseded':
+      return 'A contract version was superseded — follow the latest contract on the order.';
+    default:
+      return null;
+  }
+}
+
 function structuredAddressLines(item: ProviderInboxItem): { street?: string; city?: string; postal?: string } {
   const picks = item.order.customerPicks;
   return {
@@ -238,7 +257,8 @@ export function InboxDetailDrawer({
     Boolean(item && activeWorkspaceId) &&
     item!.order.status === 'contracted' &&
     item!.order.matchedWorkspaceId === activeWorkspaceId &&
-    item!.status === 'accepted';
+    (item!.status === 'accepted' || item!.status === 'matched');
+  const contractCloseHint = item ? providerContractCloseHint(item.order.contractSummary) : null;
 
   const badge = item ? lifecycleStatusBadge(item) : '';
   const addrParts = item ? structuredAddressLines(item) : {};
@@ -526,6 +546,37 @@ export function InboxDetailDrawer({
                     </button>
                   </div>
                 </>
+              ) : item.status === 'matched' && item.order.status === 'contracted' ? (
+                <div className="space-y-3">
+                  {orderCompleted ? (
+                    <div className="rounded-xl border border-app-border bg-neutral-100 px-3 py-2 text-sm text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200">
+                      This job is complete. Payment and payout steps will appear here next.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                        Customer selected your workspace — this job is confirmed. Use Chat or open the order Contract tab to
+                        finalize terms, then mark complete when finished.
+                      </div>
+                      {contractCloseHint ? (
+                        <div className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 dark:border-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-100">
+                          {contractCloseHint}
+                        </div>
+                      ) : null}
+                      {canMarkComplete && onMarkComplete ? (
+                        <button
+                          type="button"
+                          disabled={Boolean(markCompleteBusy)}
+                          className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 font-bold text-white disabled:opacity-60 dark:bg-emerald-600"
+                          onClick={() => onMarkComplete(item.order.id)}
+                        >
+                          {markCompleteBusy ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden /> : null}
+                          Mark complete
+                        </button>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               ) : item.status === 'matched' ? (
                 <div className="flex gap-2">
                   <button
@@ -562,8 +613,15 @@ export function InboxDetailDrawer({
                       Awaiting customer&apos;s pick — multiple providers may have accepted. We&apos;ll notify you of the outcome.
                     </div>
                   ) : item.order.status === 'contracted' ? (
-                    <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
-                      You&apos;re on this job. Mark it complete when the work is finished.
+                    <div className="space-y-2">
+                      <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                        You&apos;re on this job. Mark it complete when the work is finished.
+                      </div>
+                      {contractCloseHint ? (
+                        <div className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 dark:border-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-100">
+                          {contractCloseHint}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                   {canMarkComplete && onMarkComplete && !orderCompleted ? (

@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { FileText, History, Loader2, Sparkles } from 'lucide-react';
+import { FileText, History, LayoutTemplate, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { useSoftToast } from '../../../lib/SoftToastContext';
 import {
   fetchContractBundle,
+  fetchContractTemplates,
   parseMismatchWarnings,
   postApproveContract,
   postContractDraft,
   postDraftFromAi,
+  postDraftFromTemplate,
   postRejectContract,
   postSendContract,
   type ContractBundleResponse,
@@ -49,6 +51,8 @@ export function ContractPanel({ orderId, viewer, orderStatus, onContractApproved
   const [modal, setModal] = useState<'reject' | 'request_edit' | null>(null);
   const [note, setNote] = useState('');
   const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
+  const [templates, setTemplates] = useState<Array<{ id: string; title: string; description: string }>>([]);
+  const [templateId, setTemplateId] = useState<string>('');
 
   const reload = useCallback(async () => {
     const b = await fetchContractBundle(orderId);
@@ -83,6 +87,22 @@ export function ContractPanel({ orderId, viewer, orderStatus, onContractApproved
       cancelled = true;
     };
   }, [orderId, viewer, reload, showToast]);
+
+  useEffect(() => {
+    if (viewer !== 'provider') return;
+    let cancelled = false;
+    void fetchContractTemplates(orderId)
+      .then((r) => {
+        if (cancelled) return;
+        setTemplates(r.templates.map((t) => ({ id: t.id, title: t.title, description: t.description })));
+      })
+      .catch(() => {
+        if (!cancelled) setTemplates([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, viewer]);
 
   const versionsAsc = useMemo(() => sortVersionsAsc(bundle?.versions ?? []), [bundle?.versions]);
   const selected = useMemo(
@@ -130,6 +150,22 @@ export function ContractPanel({ orderId, viewer, orderStatus, onContractApproved
         setEditing(true);
       }
       showToast('Draft generated — review before sending');
+    });
+
+  const onTemplateDraft = () =>
+    run('template', async () => {
+      if (!templateId) {
+        showToast('Choose a template first');
+        return;
+      }
+      await postDraftFromTemplate(orderId, templateId);
+      const b = await reload();
+      const last = sortVersionsAsc(b.versions).pop();
+      if (last) {
+        setSelectedId(last.id);
+        setEditing(true);
+      }
+      showToast('Draft created from template — review before sending');
     });
 
   const onSaveDraft = () =>
@@ -308,7 +344,38 @@ export function ContractPanel({ orderId, viewer, orderStatus, onContractApproved
 
       {/* Sticky action footer */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-app-border bg-app-card/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md md:static md:z-0 md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-0">
-        <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-end gap-2 lg:max-w-none">
+        <div className="mx-auto flex max-w-2xl flex-col gap-2 lg:max-w-none">
+          {viewer === 'provider' && templates.length ? (
+            <div className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-app-border bg-app-card/80 px-3 py-2">
+              <LayoutTemplate className="h-4 w-4 shrink-0 text-neutral-500" aria-hidden />
+              <label className="sr-only" htmlFor={`contract-template-${orderId}`}>
+                Contract template
+              </label>
+              <select
+                id={`contract-template-${orderId}`}
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value)}
+                disabled={!!busy || ['draft', 'cancelled'].includes(orderStatus)}
+                className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-app-border bg-app-input px-3 text-sm font-semibold text-app-text disabled:opacity-50"
+              >
+                <option value="">Template…</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!!busy || !templateId || ['draft', 'cancelled'].includes(orderStatus)}
+                onClick={() => void onTemplateDraft()}
+                className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-xl border border-sky-400 bg-sky-50 px-3 text-xs font-black uppercase tracking-wide text-sky-950 disabled:opacity-50 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100"
+              >
+                {busy === 'template' ? '…' : 'Use template'}
+              </button>
+            </div>
+          ) : null}
+          <div className="mx-auto flex w-full max-w-2xl flex-wrap items-center justify-end gap-2 lg:max-w-none">
           {viewer === 'provider' ? (
             <>
               <button
@@ -371,6 +438,7 @@ export function ContractPanel({ orderId, viewer, orderStatus, onContractApproved
               </button>
             </>
           )}
+          </div>
         </div>
       </div>
 

@@ -569,6 +569,55 @@ export async function getMyOrders(params?: {
   };
 }
 
+/** Active pipeline orders for the matched provider / workspace (excludes completed/closed/cancelled by default). */
+const PROVIDER_SCHEDULE_STATUSES = [
+  'submitted',
+  'matching',
+  'matched',
+  'contracted',
+  'paid',
+  'in_progress',
+  'disputed',
+];
+
+export async function getProviderPipelineOrders(params?: {
+  page?: number;
+  pageSize?: number;
+  status?: string[];
+  phase?: string[];
+}): Promise<MyOrdersResponse> {
+  const sp = new URLSearchParams();
+  if (params?.page != null) sp.set('page', String(params.page));
+  if (params?.pageSize != null) sp.set('pageSize', String(params.pageSize));
+  const statuses = params?.status ?? PROVIDER_SCHEDULE_STATUSES;
+  for (const s of statuses) sp.append('status', s);
+  const phases = params?.phase ?? ['order', 'job'];
+  for (const p of phases) sp.append('phase', p);
+  const q = sp.toString();
+  const res = await fetch(`/api/orders/provider/me?${q}`, {
+    headers: authHeaders(),
+    credentials: 'include',
+  });
+  const data = await parseJson(res);
+  if (res.status === 401) {
+    window.location.href = '/auth';
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || 'List failed');
+  }
+  const d = data as Record<string, unknown>;
+  const items = Array.isArray(d.items) ? d.items.map((x) => normalizeMyItem(x)) : [];
+  const facets = parsePhaseFacets(d.facets);
+  return {
+    items,
+    total: typeof d.total === 'number' ? d.total : 0,
+    page: typeof d.page === 'number' ? d.page : 1,
+    pageSize: typeof d.pageSize === 'number' ? d.pageSize : 20,
+    ...(facets ? { facets } : {}),
+  };
+}
+
 function normalizeCustomerReview(raw: unknown): OrderCustomerReview | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;

@@ -489,9 +489,40 @@ export default function OrderDetail() {
         <>
           <OrderStatusTimeline order={order} />
 
-          {!order.customerContract && order.matchedProviderId ? (
+          {isCustomer && order.status === 'matched' ? (
+            <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-100">
+              Your provider was auto-matched. They must acknowledge the job before contract and payment steps apply. Use Chat to
+              coordinate if needed.
+            </section>
+          ) : null}
+
+          {isCustomer && order.matchedProviderId ? (
             <section className="rounded-2xl border border-dashed border-app-border bg-app-card/60 p-4 text-sm text-neutral-600 dark:text-neutral-300">
-              Contract will be generated after the provider acknowledges the job.
+              {order.status === 'matching' ? (
+                <p>
+                  Negotiation: compare accepting providers above and pick one. That confirms the job so you can continue with
+                  contract and scheduling.
+                </p>
+              ) : order.status === 'matched' ? (
+                <p>Waiting for your matched provider to acknowledge this job.</p>
+              ) : order.status === 'contracted' || order.status === 'paid' || order.status === 'in_progress' ? (
+                !order.customerContract ? (
+                  <p>Next: your provider prepares or sends a contract — open the Contract tab when it is available.</p>
+                ) : order.customerContract.currentVersion?.status === 'draft' ? (
+                  <p>Next: your provider sends the contract for your review.</p>
+                ) : order.customerContract.currentVersion?.status === 'sent' ? (
+                  <p>
+                    <span className="font-semibold text-app-text">Action needed:</span> open the Contract tab to review and
+                    approve the terms.
+                  </p>
+                ) : order.customerContract.currentVersion?.status === 'approved' ? (
+                  <p>Contract approved. Payment options appear below when enabled for your account.</p>
+                ) : order.customerContract.currentVersion?.status === 'rejected' ? (
+                  <p>You rejected the contract — wait for a revised version from your provider.</p>
+                ) : (
+                  <p>See the Contract tab for the latest contract status.</p>
+                )
+              ) : null}
             </section>
           ) : null}
         </>

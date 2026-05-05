@@ -4,6 +4,7 @@ import type { ServiceQuestionnaireV1 } from '@/lib/serviceDefinitionTypes';
 import type { OrderPhotoRow } from '../../services/orders';
 import type { WizardBookingMode } from '../../lib/bookingModeWizard';
 import { wizardBookingModeLabel } from '../../lib/bookingModeWizard';
+import { resolveMediaUrl } from '../../lib/resolveMediaUrl';
 
 export type Step7ReviewProps = {
   serviceName: string;
@@ -153,7 +154,7 @@ export function Step7Review({
               {photos.map((p, i) => (
                 <img
                   key={`${p.url}-${i}`}
-                  src={p.url}
+                  src={resolveMediaUrl(p.url)}
                   alt=""
                   className="w-16 h-16 rounded-lg object-cover border border-app-border"
                 />

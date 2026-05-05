@@ -41,6 +41,8 @@ export type ProviderInboxItem = {
     id: string;
     customerId: string;
     serviceCatalogId: string;
+    /** Present when an OrderContract exists; drives negotiation close / contract UI in inbox. */
+    contractSummary?: { currentVersionStatus: string } | null;
     schemaSnapshot?: unknown;
     answers: Record<string, unknown>;
     photos: unknown;
@@ -74,6 +76,14 @@ export type ProviderInboxItem = {
   };
   serviceCatalog?: { id: string; name: string; category?: string; slug?: string | null };
 };
+
+function parseContractSummary(raw: unknown): ProviderInboxItem['order']['contractSummary'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const st = o.currentVersionStatus;
+  if (typeof st !== 'string' || !st.trim()) return null;
+  return { currentVersionStatus: st.trim() };
+}
 
 function normalizeItem(raw: unknown): ProviderInboxItem {
   const r = raw as Record<string, unknown>;
@@ -157,6 +167,7 @@ function normalizeItem(raw: unknown): ProviderInboxItem {
         orderRaw.customerPicks && typeof orderRaw.customerPicks === 'object' && !Array.isArray(orderRaw.customerPicks)
           ? (orderRaw.customerPicks as Record<string, unknown>)
           : null,
+      contractSummary: parseContractSummary(orderRaw.contractSummary),
     },
     customer: {
       id: String(customerRaw.id ?? ''),

@@ -94,7 +94,7 @@ export async function notifyCustomerContractApprovedFromEvent(data: unknown): Pr
       title: 'Contract approved',
       message: `The contract for ${service} is approved. You can proceed to payment from the order when ready.`,
       type: 'contract_approved',
-      link: `/orders/${order.id}`,
+      link: `/orders/${order.id}?tab=contract`,
     },
   });
 }

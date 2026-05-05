@@ -103,7 +103,7 @@ export function OrderStatusTimeline({ order }: { order: OrderWithSchema }) {
   const lifecycleDefs: { key: LifecycleKey; label: string }[] = [
     { key: 'submitted', label: 'Order Submitted' },
     { key: 'matching', label: 'Matching / Provider Invited' },
-    { key: 'accepted', label: 'Provider Accepted' },
+    { key: 'accepted', label: 'Provider Matched / Confirmed' },
   ];
   if (showService) {
     lifecycleDefs.push({ key: 'service', label: 'Service In Progress' });

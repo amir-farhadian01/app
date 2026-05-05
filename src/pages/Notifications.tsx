@@ -1,18 +1,31 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, Check, Trash2, Clock, MessageSquare, Briefcase, CreditCard, Info, Calendar } from 'lucide-react';
+import {
+  Bell,
+  Check,
+  Trash2,
+  Clock,
+  MessageSquare,
+  Briefcase,
+  CreditCard,
+  Info,
+  Calendar,
+  CheckCircle2,
+  FileText,
+  UserCheck,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../lib/AuthContext';
 import { api } from '../lib/api';
 import { handleApiError, OperationType } from '../lib/errors';
+import { fetchNotifications, isOrderLifecycleType, type AppNotification } from '../services/notifications';
 
 export default function Notifications() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'alerts';
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,9 +34,9 @@ export default function Notifications() {
 
     const tick = async () => {
       try {
-        const list = await api.get<any[]>('/api/notifications');
+        const list = await fetchNotifications();
         if (cancelled) return;
-        setNotifications(list || []);
+        setNotifications(list);
       } catch (e) {
         await handleApiError(e, OperationType.LIST, 'notifications');
       } finally {
@@ -57,8 +70,29 @@ export default function Notifications() {
     }
   };
 
+  const navigate = useNavigate();
+
+  const openNotification = async (n: AppNotification) => {
+    if (!n.read) {
+      try {
+        await api.put(`/api/notifications/${n.id}/read`, {});
+        setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+      } catch (error) {
+        await handleApiError(error, OperationType.UPDATE, 'notifications');
+      }
+    }
+    const href = n.link?.trim();
+    if (href) navigate(href);
+  };
+
   const getIcon = (type: string) => {
     switch (type) {
+      case 'order_matched':
+        return UserCheck;
+      case 'order_completed':
+        return CheckCircle2;
+      case 'contract_approved':
+        return FileText;
       case 'request':
         return Briefcase;
       case 'ticket':
@@ -71,6 +105,11 @@ export default function Notifications() {
   };
 
   const getColor = (type: string) => {
+    if (isOrderLifecycleType(type)) {
+      if (type === 'order_matched') return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-200';
+      if (type === 'order_completed') return 'text-purple-600 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-200';
+      return 'text-sky-600 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-100';
+    }
     switch (type) {
       case 'request':
         return 'text-blue-500 bg-blue-50';
@@ -151,26 +190,47 @@ export default function Notifications() {
                       n.read ? 'border-neutral-100 opacity-60' : 'border-neutral-200 shadow-sm',
                     )}
                   >
-                    <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center shrink-0', getColor(n.type))}>
-                      <Icon className="w-6 h-6" />
-                    </div>
-
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-black text-sm uppercase tracking-tight">{n.title}</h4>
-                        <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(n.createdAt).toLocaleDateString()}
-                        </span>
+                    <button
+                      type="button"
+                      onClick={() => void openNotification(n)}
+                      className={cn(
+                        'flex flex-1 items-start gap-4 text-left min-w-0 rounded-[1.5rem] outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2',
+                        n.link ? 'cursor-pointer' : 'cursor-default',
+                      )}
+                      aria-label={n.link ? `${n.title}. Open linked order.` : n.title}
+                    >
+                      <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center shrink-0', getColor(n.type))}>
+                        <Icon className="w-6 h-6" />
                       </div>
-                      <p className="text-sm text-neutral-600 leading-relaxed">{n.message}</p>
 
-                      <div className="pt-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex-1 space-y-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="font-black text-sm uppercase tracking-tight">{n.title}</h4>
+                          <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest flex items-center gap-1 shrink-0">
+                            <Clock className="w-3 h-3" />
+                            {new Date(n.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-neutral-600 leading-relaxed">{n.message}</p>
+                        {n.link ? (
+                          <p className="pt-1 text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                            Open order →
+                          </p>
+                        ) : null}
+                      </div>
+                    </button>
+
+                    <div className="flex shrink-0 flex-col items-end gap-2 pt-1">
+                      {!n.read && <div className="h-2 w-2 rounded-full bg-red-500" aria-hidden />}
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                         {!n.read && (
                           <button
                             type="button"
-                            onClick={() => markAsRead(n.id)}
-                            className="px-4 py-2 bg-neutral-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void markAsRead(n.id);
+                            }}
+                            className="flex items-center gap-2 rounded-xl bg-neutral-900 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:scale-105"
                           >
                             <Check className="w-3 h-3" />
                             Mark Read
@@ -178,15 +238,17 @@ export default function Notifications() {
                         )}
                         <button
                           type="button"
-                          onClick={() => deleteNotification(n.id)}
-                          className="p-2 text-neutral-400 hover:text-red-500 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteNotification(n.id);
+                          }}
+                          className="p-2 text-neutral-400 transition-colors hover:text-red-500"
+                          aria-label="Delete notification"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
-
-                    {!n.read && <div className="absolute top-6 right-6 w-2 h-2 bg-red-500 rounded-full" />}
                   </motion.div>
                 );
               })}

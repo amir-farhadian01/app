@@ -22,6 +22,9 @@ import { WorkspaceSwitcher } from '../components/workspace/WorkspaceSwitcher';
 import { ProviderPackagesSection } from '../components/provider/packages/ProviderPackagesSection';
 import { ProviderInventorySection } from '../components/provider/inventory/ProviderInventorySection';
 import { ProviderInboxSection } from '../components/provider/inbox/ProviderInboxSection';
+import { ProviderFinanceSection } from '../components/provider/finance/ProviderFinanceSection.js';
+import { ProviderScheduleSection } from '../components/provider/schedule/ProviderScheduleSection.js';
+import { ProviderStaffSection } from '../components/provider/staff/ProviderStaffSection.js';
 import { listInbox } from '../services/providerInbox';
 
 type Tab = 'inbox' | 'overview' | 'staff' | 'finance' | 'schedule' | 'b2b' | 'insights' | 'packages' | 'inventory' | 'kyc';
@@ -239,6 +242,12 @@ export default function CompanyDashboard() {
         ) : (
           <BusinessKycFlow userId={user.id} companyId={companyTargetId} company={flowCompany} />
         )
+      ) : activeTab === 'staff' ? (
+        <ProviderStaffSection />
+      ) : activeTab === 'finance' ? (
+        <ProviderFinanceSection />
+      ) : activeTab === 'schedule' ? (
+        <ProviderScheduleSection />
       ) : activeTab === 'inbox' ? (
         <ProviderInboxSection />
       ) : activeTab === 'packages' ? (

@@ -43,6 +43,27 @@ import { buildWizardBookingSummary } from '../../lib/wizardBookingSummary';
 
 const LS_DRAFT = 'neighborly_f5_order_draft';
 
+/** When `customerPicks` lacks street/city/postal, split a persisted single-line `Order.address` into wizard fields. */
+function splitSavedOrderAddress(full: string): {
+  addressStreet: string;
+  addressCity: string;
+  addressPostal: string;
+} {
+  const t = full.trim();
+  if (!t) return { addressStreet: '', addressCity: '', addressPostal: '' };
+  const parts = t.split(',').map((s) => s.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    const postal = parts[parts.length - 1] ?? '';
+    const city = parts.slice(1, -1).join(', ');
+    const street = parts[0] ?? '';
+    return { addressStreet: street, addressCity: city, addressPostal: postal };
+  }
+  if (parts.length === 2) {
+    return { addressStreet: parts[0] ?? '', addressCity: parts[1] ?? '', addressPostal: '' };
+  }
+  return { addressStreet: t, addressCity: '', addressPostal: '' };
+}
+
 /** Wizard-owned gallery rows (Step 2 uploader); POST /api/upload via `PhotoUploader`. */
 const WIZARD_GALLERY_FIELD_ID = '_wizardGallery';
 const REFERENCE_PHOTOS_MARKER = '--- Reference photos ---';
@@ -174,6 +195,12 @@ export default function OrderWizard() {
             : undefined,
       });
     }
+    if (o.address?.trim()) {
+      const w = useWizardStore.getState();
+      if (!(w.addressStreet ?? '').trim()) {
+        useWizardStore.getState().setBookingForm(splitSavedOrderAddress(o.address));
+      }
+    }
   }, []);
 
   const catFromUrl = searchParams.get('serviceCatalogId');
@@ -190,9 +217,27 @@ export default function OrderWizard() {
   const storeServiceAddress = useWizardStore((s) => s.serviceAddress);
   const pkgSchedMode = useWizardStore((s) => s.selectedPackageBookingMode);
   const selectedPkgName = useWizardStore((s) => s.selectedPackageName);
+  const selectedPkgId = useWizardStore((s) => s.selectedPackageId);
   const selectedPkgPrice = useWizardStore((s) => s.selectedPackagePrice);
   const accessNotesLive = useWizardStore((s) => s.accessNotes ?? '');
   const selectedProvId = useWizardStore((s) => s.selectedProviderId);
+  const reviewAddressStreet = useWizardStore((s) => s.addressStreet ?? '');
+  const reviewAddressCity = useWizardStore((s) => s.addressCity ?? '');
+  const reviewAddressPostal = useWizardStore((s) => s.addressPostal ?? '');
+  const wizDate = useWizardStore((s) => s.wizardScheduledDate);
+  const wizSlot = useWizardStore((s) => s.wizardTimeSlot);
+  const wizTp = useWizardStore((s) => s.wizardTimePreference);
+
+  const reviewAddressDisplay = useMemo(() => {
+    const trimmed = address.trim();
+    if (trimmed) return trimmed;
+    const line = composeWizardAddress(
+      reviewAddressStreet.trim(),
+      reviewAddressCity.trim(),
+      reviewAddressPostal.trim(),
+    ).trim();
+    return line;
+  }, [address, reviewAddressStreet, reviewAddressCity, reviewAddressPostal]);
 
   const authReturnTo = useMemo(() => `${location.pathname}${location.search}`, [location.pathname, location.search]);
 
@@ -487,6 +532,17 @@ export default function OrderWizard() {
       void (async () => {
         try {
           const w = useWizardStore.getState();
+          const persistedAddress =
+            step >= 3
+              ? (
+                  address.trim() ||
+                  composeWizardAddress(
+                    (w.addressStreet ?? '').trim(),
+                    (w.addressCity ?? '').trim(),
+                    (w.addressPostal ?? '').trim(),
+                  ).trim()
+                )
+              : address;
           await putOrderDraft(orderId, {
             answers,
             photos,
@@ -494,7 +550,7 @@ export default function OrderWizard() {
             descriptionAiAssisted,
             scheduleFlexibility,
             scheduledAt,
-            address,
+            address: persistedAddress,
             locationLat,
             locationLng,
             customerPicks: {
@@ -534,11 +590,17 @@ export default function OrderWizard() {
     address,
     locationLat,
     locationLng,
+    reviewAddressStreet,
+    reviewAddressCity,
+    reviewAddressPostal,
+    wizDate,
+    wizSlot,
+    wizTp,
+    pkgSchedMode,
+    selectedPkgId,
+    selectedPkgName,
+    selectedProvId,
   ]);
-
-  const wizDate = useWizardStore((s) => s.wizardScheduledDate);
-  const wizSlot = useWizardStore((s) => s.wizardTimeSlot);
-  const wizTp = useWizardStore((s) => s.wizardTimePreference);
 
   useEffect(() => {
     if (!pkgSchedMode) return;
@@ -674,14 +736,6 @@ export default function OrderWizard() {
     });
   };
 
-  useEffect(() => {
-    if (step !== 3) return;
-    const w = useWizardStore.getState();
-    if (!w.addressCity?.trim()) {
-      useWizardStore.getState().setBookingForm({ addressCity: 'Vaughan, ON' });
-    }
-  }, [step]);
-
   const validateQuestionnaire = (): boolean => {
     const eff = schema ?? minimalFallbackQuestionnaire();
     if (eff.fields.length === 0) {
@@ -723,9 +777,14 @@ export default function OrderWizard() {
       case 3: {
         if (packageOfferCount === null) return false;
         const w = useWizardStore.getState();
-        const city = (w.addressCity ?? 'Vaughan, ON').trim();
-        const line = composeWizardAddress(w.addressStreet ?? '', city, w.addressPostal ?? '');
-        if (line.trim().length < 8) return false;
+        const street = (w.addressStreet ?? '').trim();
+        const city = (w.addressCity ?? '').trim();
+        const postal = (w.addressPostal ?? '').trim();
+        if (street.length < 4) return false;
+        if (city.length < 2) return false;
+        if (postal.length < 3) return false;
+        const line = composeWizardAddress(street, city, postal);
+        if (line.trim().length < 12) return false;
         if (packageOfferCount > 0 && !w.selectedPackageId?.trim()) return false;
         return true;
       }
@@ -734,8 +793,10 @@ export default function OrderWizard() {
         const mode = w.selectedPackageBookingMode;
         if (mode === 'negotiation') return true;
         if (!w.wizardScheduledDate?.trim()) return false;
+        const slot = (w.wizardTimeSlot ?? '').trim();
+        if (!slot) return false;
         const t =
-          w.wizardTimeSlot === 'afternoon' ? '14:00:00' : w.wizardTimeSlot === 'evening' ? '18:00:00' : '09:00:00';
+          slot === 'afternoon' ? '14:00:00' : slot === 'evening' ? '18:00:00' : '09:00:00';
         const dt = new Date(`${w.wizardScheduledDate.trim()}T${t}`);
         return !Number.isNaN(dt.getTime()) && dt.getTime() > Date.now() + 55 * 60 * 1000;
       }
@@ -759,8 +820,11 @@ export default function OrderWizard() {
   const goNext = () => {
     if (step === 3) {
       const w = useWizardStore.getState();
-      const city = (w.addressCity ?? 'Vaughan, ON').trim();
-      const line = composeWizardAddress(w.addressStreet ?? '', city, w.addressPostal ?? '');
+      const line = composeWizardAddress(
+        (w.addressStreet ?? '').trim(),
+        (w.addressCity ?? '').trim(),
+        (w.addressPostal ?? '').trim(),
+      );
       setAddress(line);
     }
     if (step === 6 && !validateQuestionnaire()) return;
@@ -845,6 +909,14 @@ export default function OrderWizard() {
       return;
     }
     setPhase('submitting');
+    const wz = useWizardStore.getState();
+    const addrLine =
+      address.trim() ||
+      composeWizardAddress(
+        (wz.addressStreet ?? '').trim(),
+        (wz.addressCity ?? '').trim(),
+        (wz.addressPostal ?? '').trim(),
+      ).trim();
     const summary = buildWizardBookingSummary().trim();
     const marker = '--- Booking preferences ---';
     const gallery = photos.filter((p) => p.fieldId === WIZARD_GALLERY_FIELD_ID);
@@ -862,7 +934,7 @@ export default function OrderWizard() {
           photos,
           scheduleFlexibility,
           scheduledAt,
-          address,
+          address: addrLine,
           locationLat,
           locationLng,
         });
@@ -871,7 +943,6 @@ export default function OrderWizard() {
         /* continue to submit with prior description */
       }
     }
-    const wz = useWizardStore.getState();
     const galleryUrls = photos.filter((p) => p.fieldId === WIZARD_GALLERY_FIELD_ID).map((p) => p.url);
     const submitBody = {
       ...(wz.leafCategoryId ? { categoryId: wz.leafCategoryId } : {}),
@@ -880,7 +951,7 @@ export default function OrderWizard() {
       scheduledFor: scheduledAt,
       scheduleFlexibility,
       timePreference: wz.wizardTimePreference,
-      address: address.trim(),
+      address: addrLine,
       scope: nextDesc.trim(),
       accessNotes: (wz.accessNotes ?? '').trim(),
       photoIds: galleryUrls,
@@ -1094,7 +1165,7 @@ export default function OrderWizard() {
 
       {step === 4 ? <Step4Scheduling bookingMode={pkgSchedMode} /> : null}
 
-      {step === 5 && orderId ? <Step5MatchedProviders orderId={orderId} /> : null}
+      {step === 5 ? <Step5MatchedProviders orderId={orderId} /> : null}
 
       {step === 6 ? (
         <Step6Description
@@ -1136,7 +1207,7 @@ export default function OrderWizard() {
           categoryTrail={breadcrumbNames}
           bookingMode={storeBookingMode ?? undefined}
           scheduleLabel={scheduleLabel}
-          address={address}
+          address={reviewAddressDisplay}
           schema={schema}
           answers={answers}
           description={description}

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useWizardStore } from '../../lib/wizardStore';
 
 const PREFS = ['AS_SOON_AS_POSSIBLE', 'THIS_WEEK', 'NEXT_WEEK', 'FLEXIBLE'] as const;
@@ -19,6 +20,14 @@ export function Step4Scheduling({ bookingMode }: Step4SchedulingProps) {
   const setBookingForm = useWizardStore((s) => s.setBookingForm);
 
   const isNegotiation = bookingMode === 'negotiation';
+
+  useEffect(() => {
+    if (!isNegotiation) return;
+    const raw = useWizardStore.getState().wizardTimePreference;
+    if (raw == null || String(raw).trim() === '') {
+      setBookingForm({ wizardTimePreference: 'AS_SOON_AS_POSSIBLE' });
+    }
+  }, [isNegotiation, setBookingForm]);
 
   if (isNegotiation) {
     return (
@@ -49,7 +58,8 @@ export function Step4Scheduling({ bookingMode }: Step4SchedulingProps) {
   return (
     <div className="space-y-4">
       <p className="text-neutral-600 dark:text-neutral-400 text-[15px]">
-        Pick a preferred date. Time slots are a simple placeholder until live scheduling is connected.
+        Pick a preferred date and time window. Both are required before you continue — slots are a simple placeholder
+        until live scheduling is connected.
       </p>
       <div className="space-y-2">
         <label className="text-xs font-bold text-app-text" htmlFor="wiz-date">

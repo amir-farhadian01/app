@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ban } from 'lucide-react';
+import { Ban, User, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../lib/AuthContext';
 import type { FilterValue, Sort } from '../../crm/types';
@@ -183,6 +183,9 @@ export function AdminOrdersSection({
   const [cancelPromptIds, setCancelPromptIds] = useState<string[]>([]);
   const [cancelPromptReason, setCancelPromptReason] = useState('');
 
+  /** CRM deep-link: filter orders for one user (distinct from KYC `userId` query key). */
+  const ordersUserId = useMemo(() => searchParams.get('ordersUserId')?.trim() ?? '', [searchParams]);
+
   const legacyStatuses = useMemo(() => {
     const a = searchParams.getAll('status');
     return a.length ? a : undefined;
@@ -236,11 +239,12 @@ export function AdminOrdersSection({
       search: debouncedStatusSearch.trim() || undefined,
       ...fv,
     };
+    if (ordersUserId) q.userId = ordersUserId;
     if (seg.phase) q.phase = seg.phase;
     q.status = status.length ? status : undefined;
     if (seg.includeDrafts === true) q.includeDrafts = true;
     return q;
-  }, [page, pageSize, sort, filters, globalSearch, debouncedStatusSearch, segment, legacyStatuses]);
+  }, [page, pageSize, sort, filters, globalSearch, debouncedStatusSearch, segment, legacyStatuses, ordersUserId]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -382,6 +386,36 @@ export function AdminOrdersSection({
         statusSearch={statusSearchInput}
         onStatusSearchChange={setStatusSearchInput}
       />
+
+      {ordersUserId ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-app-border bg-app-input px-4 py-3 text-sm text-app-text">
+          <div className="flex items-center gap-2">
+            <User className="h-4 w-4 shrink-0 text-neutral-500" aria-hidden />
+            <span>
+              Showing orders for user ID <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs dark:bg-neutral-800">{ordersUserId}</code>{' '}
+              (customer or matched provider).
+            </span>
+          </div>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-lg border border-app-border px-2 py-1 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            onClick={() => {
+              setSearchParams(
+                (prev) => {
+                  const n = new URLSearchParams(prev);
+                  n.delete('ordersUserId');
+                  return n;
+                },
+                { replace: true },
+              );
+              setPage(1);
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+            Clear user filter
+          </button>
+        </div>
+      ) : null}
 
       <OrdersTable
         key={segment}

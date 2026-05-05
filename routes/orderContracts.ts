@@ -14,6 +14,11 @@ import { userHasActiveInboxAttemptForOrder } from '../lib/orderNegotiationAccess
 import { generateContractDraft } from '../lib/contractDraft.js';
 import { analyzeMismatch } from '../lib/contractMismatchGuard.js';
 import { createContractEvent } from '../lib/contractEvents.js';
+import {
+  getContractTemplateDefinition,
+  listContractTemplateDefinitions,
+} from '../lib/contractTemplateCatalog.js';
+import { buildContractTemplateContext, renderContractTemplate } from '../lib/renderContractTemplate.js';
 
 const router = Router({ mergeParams: true });
 
@@ -478,6 +483,127 @@ router.post('/draft', async (req: AuthRequest, res: Response) => {
     });
 
     return res.status(result.created ? 201 : 200).json(result);
+  } catch (err: unknown) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/templates', async (req: AuthRequest, res: Response) => {
+  try {
+    const orderId = req.params.orderId;
+    if (!orderId) return res.status(400).json({ error: 'orderId is required' });
+    const order = await loadOrderForContracts(orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const role = await resolveParticipantRole(order, req);
+    if (role === 'forbidden') return res.status(403).json({ error: 'Forbidden' });
+
+    const templates = listContractTemplateDefinitions().map((d) => ({
+      id: d.id,
+      version: d.version,
+      title: d.title,
+      description: d.description,
+      placeholders: d.placeholders,
+    }));
+    return res.json({ templates });
+  } catch (err: unknown) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/draft-from-template', async (req: AuthRequest, res: Response) => {
+  try {
+    const orderId = req.params.orderId;
+    if (!orderId) return res.status(400).json({ error: 'orderId is required' });
+    const order = await loadOrderForContracts(orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const role = await resolveParticipantRole(order, req);
+    if (role === 'invited_provider') {
+      return res.status(403).json({
+        error: 'Template drafts are available after your workspace is the matched provider.',
+        code: 'CONTRACTS_READ_ONLY_UNTIL_MATCHED',
+      });
+    }
+    if (role !== 'provider') return res.status(403).json({ error: 'Only the matched provider can create a template draft' });
+    const gate = contractsGate(order);
+    if (!gate.ok) {
+      return res.status(gate.status).json({ error: gate.message, ...(gate.code ? { code: gate.code } : {}) });
+    }
+
+    const templateId = pickStr((req.body as Record<string, unknown>)?.templateId);
+    if (!templateId) {
+      return res.status(400).json({ error: 'templateId is required' });
+    }
+    const def = getContractTemplateDefinition(templateId);
+    if (!def) {
+      return res.status(400).json({ error: 'Unknown templateId', code: 'UNKNOWN_TEMPLATE' });
+    }
+
+    const thread = await prisma.orderChatThread.findUnique({
+      where: { orderId },
+      include: {
+        messages: { orderBy: { createdAt: 'desc' }, take: 50, select: { displayText: true } },
+      },
+    });
+    const chatSummary = (thread?.messages ?? [])
+      .map((m) => m.displayText)
+      .reverse()
+      .join('\n---\n');
+
+    const ctx = buildContractTemplateContext(order, chatSummary);
+    const rendered = renderContractTemplate(def, ctx);
+    const pkg = order.matchedPackage;
+    const amount =
+      pkg?.finalPrice != null && Number.isFinite(pkg.finalPrice) ? pkg.finalPrice : null;
+    const currency = (pkg?.currency ?? 'CAD').toUpperCase();
+
+    const mismatchWarnings = analyzeMismatch({
+      chatSummary,
+      termsMarkdown: rendered.termsMarkdown,
+      scopeSummary: rendered.scopeSummary,
+      amount,
+    });
+    const mismatchWarningsJson = mismatchWarnings.length
+      ? (mismatchWarnings as Prisma.InputJsonValue)
+      : Prisma.JsonNull;
+
+    const result = await prisma.$transaction(async (tx) => {
+      let shell = await tx.orderContract.findUnique({ where: { orderId } });
+      if (!shell) {
+        shell = await tx.orderContract.create({ data: { orderId } });
+      }
+      const agg = await tx.contractVersion.aggregate({
+        where: { contractId: shell.id },
+        _max: { versionNumber: true },
+      });
+      const nextNum = (agg._max.versionNumber ?? 0) + 1;
+
+      const version = await tx.contractVersion.create({
+        data: {
+          contractId: shell.id,
+          versionNumber: nextNum,
+          status: ContractVersionStatus.draft,
+          title: rendered.title,
+          termsMarkdown: rendered.termsMarkdown,
+          policiesMarkdown: rendered.policiesMarkdown || null,
+          scopeSummary: rendered.scopeSummary || null,
+          amount,
+          currency,
+          generatedByAi: false,
+          generationPrompt: `template:${def.id}`,
+          generationContext: {
+            templateId: def.id,
+            templateVersion: def.version,
+            placeholderKeys: Object.keys(ctx),
+          } as Prisma.InputJsonValue,
+          mismatchWarnings: mismatchWarningsJson,
+        },
+      });
+      return { shell, version };
+    });
+
+    return res.status(201).json(result);
   } catch (err: unknown) {
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });

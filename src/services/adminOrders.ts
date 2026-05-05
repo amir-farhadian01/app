@@ -40,6 +40,8 @@ export type AdminOrderListQuery = {
   createdTo?: string;
   scheduledFrom?: string;
   scheduledTo?: string;
+  /** Restrict to orders where this user is customer or matched provider (CRM). */
+  userId?: string;
 };
 
 function appendRepeated(p: URLSearchParams, key: string, values: string[] | undefined) {
@@ -64,6 +66,7 @@ export function buildAdminOrdersQueryString(q: AdminOrderListQuery): string {
   if (q.createdTo) p.set('createdTo', q.createdTo);
   if (q.scheduledFrom) p.set('scheduledFrom', q.scheduledFrom);
   if (q.scheduledTo) p.set('scheduledTo', q.scheduledTo);
+  if (q.userId?.trim()) p.set('userId', q.userId.trim());
   const s = p.toString();
   return s ? `?${s}` : '';
 }

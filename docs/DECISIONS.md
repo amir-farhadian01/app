@@ -401,3 +401,9 @@ Shared validation and sibling resequencing live in `lib/categoryTreeOps.ts`
 **Context:** The order wizard review step needs a guest-safe, read-only estimate (lowest active `ProviderServicePackage.finalPrice` plus BOM line snapshots) without exposing authenticated schema payloads.
 **Decision:** Add `GET /api/service-catalog/:id` (registered after `/:id/schema` in `routes/serviceCatalog.ts`) returning catalog id/name plus optional `price` and `bom.lines` derived from the cheapest active package for that catalog; inactive catalogs return `404`.
 **Consequences:** ✅ review UI can show marketplace-style estimates for guests ❌ reflects one representative package, not full marketplace pricing.
+
+## ADR-0057 — Contract templates: explicit placeholders + same versioned workflow
+**Date:** 2026-05-05 **Status:** Accepted
+**Context:** F8 needs predictable, non-magical starting points for `ContractVersion` drafts before optional AI or future DB-managed catalogs.
+**Decision:** Ship a **code-defined** template registry (`lib/contractTemplateCatalog.ts`) whose Markdown uses `{{camelCase}}` tokens replaced from order + chat context (`lib/renderContractTemplate.ts`). `POST /api/orders/:orderId/contracts/draft-from-template` creates a normal **draft** row with `generatedByAi=false`, `generationPrompt` set to `template:<templateId>`, and `generationContext` storing `{ templateId, templateVersion, placeholderKeys }`. Listing uses `GET .../contracts/templates`. Lifecycle (send / approve / reject / supersede) is unchanged.
+**Consequences:** ✅ auditable, AI-ready structure ❌ template prose changes require a deploy until a separate admin/DB layer exists.

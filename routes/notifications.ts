@@ -55,8 +55,15 @@ function getNotificationCategory(type: string): 'reminder' | 'security' | 'payme
 // PUT /api/notifications/:id/read
 router.put('/:id/read', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    const owned = await prisma.notification.findFirst({
+      where: { id: req.params.id, userId: req.user!.userId },
+    });
+    if (!owned) {
+      res.status(404).json({ error: 'Notification not found' });
+      return;
+    }
     const updated = await prisma.notification.update({
-      where: { id: req.params.id },
+      where: { id: owned.id },
       data: { read: true },
     });
     res.json(updated);
@@ -81,7 +88,14 @@ router.put('/read-all', authenticate, async (req: AuthRequest, res: Response) =>
 // DELETE /api/notifications/:id
 router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    await prisma.notification.delete({ where: { id: req.params.id } });
+    const owned = await prisma.notification.findFirst({
+      where: { id: req.params.id, userId: req.user!.userId },
+    });
+    if (!owned) {
+      res.status(404).json({ error: 'Notification not found' });
+      return;
+    }
+    await prisma.notification.delete({ where: { id: owned.id } });
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -407,3 +407,9 @@ Shared validation and sibling resequencing live in `lib/categoryTreeOps.ts`
 **Context:** F8 needs predictable, non-magical starting points for `ContractVersion` drafts before optional AI or future DB-managed catalogs.
 **Decision:** Ship a **code-defined** template registry (`lib/contractTemplateCatalog.ts`) whose Markdown uses `{{camelCase}}` tokens replaced from order + chat context (`lib/renderContractTemplate.ts`). `POST /api/orders/:orderId/contracts/draft-from-template` creates a normal **draft** row with `generatedByAi=false`, `generationPrompt` set to `template:<templateId>`, and `generationContext` storing `{ templateId, templateVersion, placeholderKeys }`. Listing uses `GET .../contracts/templates`. Lifecycle (send / approve / reject / supersede) is unchanged.
 **Consequences:** ✅ auditable, AI-ready structure ❌ template prose changes require a deploy until a separate admin/DB layer exists.
+
+## ADR-0058 — `JobRecord` extends `Order` without renaming lifecycle core
+**Date:** 2026-05-05 **Status:** Accepted
+**Context:** `Order` already spans offer/order/job lifecycle states, but Sprint N needs a traceable offer-to-job chain with analytics-ready job metrics while preserving backward compatibility.
+**Decision:** Keep `Order` as the canonical lifecycle entity and add `Order.broadcastList` plus a 1:1 `JobRecord` (`orderId @unique`, relation `OrderJob`) to hold operational job timestamps, cancellation metadata, and analytics fields (`responseTimeMinutes`, `priceDelta`, `customerRating`) with `JobStatus`.
+**Consequences:** ✅ additive migration with minimal API break risk ❌ job-level reporting now joins across `Order` and `JobRecord` until dedicated read models exist.

@@ -260,6 +260,79 @@ router.get('/:id/finance', async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.get('/:id/dashboard/overview', async (req: AuthRequest, res: Response) => {
+  try {
+    const workspaceId = req.params.id;
+    await assertWorkspaceMember(req.user!.userId, workspaceId);
+
+    const pendingStatuses: OrderStatus[] = [
+      OrderStatus.submitted,
+      OrderStatus.matching,
+      OrderStatus.matched,
+      OrderStatus.contracted,
+      OrderStatus.paid,
+      OrderStatus.in_progress,
+      OrderStatus.disputed,
+    ];
+    const completedStatuses: OrderStatus[] = [OrderStatus.completed, OrderStatus.closed];
+
+    const [totalOrders, pendingOrders, completedOrders, activeStaff, completedRows] = await Promise.all([
+      prisma.order.count({
+        where: {
+          matchedWorkspaceId: workspaceId,
+          NOT: { status: OrderStatus.draft },
+        },
+      }),
+      prisma.order.count({
+        where: {
+          matchedWorkspaceId: workspaceId,
+          status: { in: pendingStatuses },
+        },
+      }),
+      prisma.order.count({
+        where: {
+          matchedWorkspaceId: workspaceId,
+          status: { in: completedStatuses },
+        },
+      }),
+      prisma.companyUser.count({ where: { companyId: workspaceId } }),
+      prisma.order.findMany({
+        where: {
+          matchedWorkspaceId: workspaceId,
+          status: { in: completedStatuses },
+        },
+        select: {
+          matchedPackage: {
+            select: {
+              finalPrice: true,
+              currency: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const totalEarnings = completedRows.reduce((sum, row) => {
+      if (row.matchedPackage?.currency !== 'CAD') return sum;
+      return sum + (row.matchedPackage?.finalPrice ?? 0);
+    }, 0);
+
+    res.json({
+      totalOrders,
+      pendingOrders,
+      completedOrders,
+      totalEarnings,
+      activeStaff,
+    });
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // --- Inbox (offer match attempts) ---
 
 async function getWorkspaceInboxAttemptsList(req: AuthRequest, res: Response) {

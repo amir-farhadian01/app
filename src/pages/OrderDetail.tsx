@@ -265,6 +265,8 @@ export default function OrderDetail() {
 
   const contractViewerRole: 'customer' | 'provider' = isCustomer ? 'customer' : 'provider';
   const showPaymentCard = isCustomer && ['contracted', 'paid', 'in_progress', 'completed', 'closed'].includes(order.status);
+  const showTrackingBar = order.phase === 'order' || order.phase === 'job';
+  const shortId = (value: string | null | undefined) => (value ? value.slice(-6) : '—');
 
   return (
     <div
@@ -309,6 +311,11 @@ export default function OrderDetail() {
             </div>
           ) : null}
         </div>
+        {showTrackingBar ? (
+          <p className="text-xs text-muted-foreground">
+            Tracking IDs: Offer #{shortId(order.offerId)} {'->'} Order #{shortId(order.orderId)} {'->'} Job #{shortId(order.jobId)}
+          </p>
+        ) : null}
         {order.status === 'cancelled' && order.phase ? (
           <p className="text-sm font-semibold text-neutral-500">
             Was:{' '}

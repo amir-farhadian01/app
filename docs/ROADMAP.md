@@ -270,6 +270,7 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
   `OrderDetail` shows explicit next steps across matching / matched / contracted + contract version states.
   **Task 9 (2026-05-05):** Company dashboard **Schedule** tab (`ProviderScheduleSection`, `getProviderPipelineOrders` →
   `GET /api/orders/provider/me`) lists active workspace orders with loading/empty/error states (not the generic “coming soon” stub).
+  **Sprint N (offer-job chain):** `broadcastList String[]` on `Order` for eligibility analytics; `JobRecord` model with `JobStatus` enum and performance metrics fields (`responseTimeMinutes`, `priceDelta`, `customerRating`) linked `@unique` to `Order` via `OrderJob` relation.
 - **Done definition:** Single wizard; dynamic fields from service schema;
   admin order panel per ADMIN-PARITY; Phase segments shipped (Offers / Orders /
   Jobs / Cancelled + lifecycle filters).
@@ -309,6 +310,12 @@ non-blocking feedback, and recovery paths must always keep navigation usable.
     test -f src/components/provider/schedule/ProviderScheduleSection.tsx
     grep -q "ProviderScheduleSection" src/pages/CompanyDashboard.tsx
     grep -q "getProviderPipelineOrders" src/services/orders.ts
+    grep -q "broadcastList" prisma/schema.prisma
+    grep -q "^model JobRecord" prisma/schema.prisma
+    grep -q "^enum JobStatus" prisma/schema.prisma
+    grep -q "OrderJob" prisma/schema.prisma
+    grep -q "offerId" src/services/orders.ts
+    grep -q "Tracking IDs" src/pages/OrderDetail.tsx
 - **Last verified:** 2026-05-05 via `npm run docs:check` + Task 9 regression (Schedule tab wiring) + lint
 - **Open prompts:** ⏳ Flutter port of the order wizard (partial: `CreateOrderWizardScreen` + `HomeScreen` deep links).
 

@@ -4,7 +4,7 @@ import prisma from '../lib/db.js';
 import { publish } from '../lib/bus.js';
 import { authenticate, AuthRequest } from '../lib/auth.middleware.js';
 import { categoryBreadcrumbs } from '../lib/categoryBreadcrumbs.js';
-import { snapshotSchemaForOrder } from '../lib/orderSnapshot.js';
+import { snapshotSchemaForOrder, withOrderTraceIds } from '../lib/orderSnapshot.js';
 import { photosJsonToUploadRows } from '../lib/orderPhotosForValidate.js';
 import { isServiceQuestionnaireV1 } from '../lib/serviceDefinitionTypes.js';
 import { validateServiceAnswers } from '../lib/serviceQuestionnaireValidate.js';
@@ -172,9 +172,13 @@ async function orderToCustomerJson(order: {
   submittedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  jobRecord?: { id: string } | null;
 }) {
   return {
     id: order.id,
+    offerId: order.id,
+    orderId: order.id,
+    jobId: order.jobRecord?.id ?? null,
     customerId: order.customerId,
     serviceCatalogId: order.serviceCatalogId,
     schemaSnapshot: order.schemaSnapshot,
@@ -342,7 +346,10 @@ async function runSubmitDraftOrderFlow(
       }
     }
 
-    const snapshot = schema as unknown as Prisma.InputJsonValue;
+    const snapshot = withOrderTraceIds(schema as Record<string, unknown>, {
+      id: order.id,
+      jobRecord: null,
+    }) as unknown as Prisma.InputJsonValue;
 
     const submitted = await prisma.$transaction(async (tx) => {
       const o = await tx.order.update({
@@ -811,6 +818,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
         where,
         include: {
           serviceCatalog: { select: { id: true, name: true, categoryId: true } },
+          jobRecord: true,
           matchedProvider: {
             select: { id: true, displayName: true, firstName: true, lastName: true, avatarUrl: true },
           },
@@ -856,6 +864,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
         const breadcrumb = cid ? crumbCache.get(cid) ?? [] : [];
         return {
           ...base,
+          jobId: r.jobRecord?.id ?? null,
           serviceCatalog: {
             id: r.serviceCatalog.id,
             name: r.serviceCatalog.name,
@@ -1033,6 +1042,7 @@ router.post('/:id/complete', async (req: AuthRequest, res: Response) => {
     }
 
     await prisma.$transaction(async (tx) => {
+      const completedAt = new Date();
       await tx.order.update({
         where: { id: order.id },
         data: {
@@ -1047,6 +1057,18 @@ router.post('/:id/complete', async (req: AuthRequest, res: Response) => {
           resourceType: 'order',
           resourceId: order.id,
           metadata: {} as Prisma.InputJsonValue,
+        },
+      });
+      await tx.jobRecord.upsert({
+        where: { orderId: order.id },
+        create: {
+          orderId: order.id,
+          status: 'completed',
+          completedAt,
+        },
+        update: {
+          status: 'completed',
+          completedAt,
         },
       });
     });
@@ -1288,6 +1310,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
+        jobRecord: true,
         matchedProvider: {
           select: { id: true, displayName: true, firstName: true, lastName: true, avatarUrl: true },
         },
@@ -1317,7 +1340,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     const payment = await getOrderPaymentSummary(order.id);
     const base = await orderToCustomerJson(order);
     res.json({
-      ...base,
+      ...withOrderTraceIds(base, order),
       schema: resolved.schema,
       staleSnapshot: resolved.staleSnapshot,
       payment,
@@ -1503,6 +1526,18 @@ router.post('/:id/select-provider', async (req: AuthRequest, res: Response) => {
           status: OrderStatus.contracted,
           phase: phaseFromStatus(OrderStatus.contracted),
           matchingExpiresAt: null,
+        },
+      });
+      await tx.jobRecord.upsert({
+        where: { orderId: id },
+        create: {
+          orderId: id,
+          status: 'scheduled',
+          scheduledStartAt: order.scheduledAt ?? null,
+        },
+        update: {
+          status: 'scheduled',
+          scheduledStartAt: order.scheduledAt ?? null,
         },
       });
       if (savePriorityTemplate && priorityTemplate) {

@@ -133,6 +133,15 @@ export function OrderDetailDrawer({
   const [contractVersions, setContractVersions] = useState<AdminContractVersionByOrderRow[] | null>(null);
   const [contractLoading, setContractLoading] = useState(false);
 
+  const copyTrackingId = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      onNotifyRef.current('Copied to clipboard.', 'success');
+    } catch {
+      onNotifyRef.current('Copy failed.', 'error');
+    }
+  };
+
   useEffect(() => {
     if (!open || !orderId) {
       setDetail(null);
@@ -196,6 +205,16 @@ export function OrderDetailDrawer({
   const fieldsSorted = schema ? [...schema.fields].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)) : [];
   const ans = detail ? answersRecord(detail.order) : {};
   const photos = detail ? parsePhotos(detail.order.photos) : [];
+  const trackingChain = detail
+    ? (() => {
+        const orderTrace = detail.order as { offerId?: string; orderId?: string; jobId?: string | null; id: string };
+        return {
+          offerId: typeof orderTrace.offerId === 'string' && orderTrace.offerId ? orderTrace.offerId : orderTrace.id,
+          orderId: typeof orderTrace.orderId === 'string' && orderTrace.orderId ? orderTrace.orderId : orderTrace.id,
+          jobId: typeof orderTrace.jobId === 'string' ? orderTrace.jobId : null,
+        };
+      })()
+    : null;
 
   const terminal = detail
     ? !['draft', 'submitted'].includes(detail.order.status)
@@ -473,6 +492,34 @@ export function OrderDetailDrawer({
                         <p className="font-mono text-xs text-neutral-600 dark:text-neutral-400">
                           {detail.order.schemaSnapshot != null ? 'Present' : 'Missing'}
                         </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Tracking Chain</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                          {([
+                            ['Offer', trackingChain?.offerId ?? null],
+                            ['Order', trackingChain?.orderId ?? null],
+                            ['Job', trackingChain?.jobId ?? null],
+                          ] as const).map(([label, idValue]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              disabled={!idValue}
+                              onClick={() => {
+                                if (idValue) void copyTrackingId(idValue);
+                              }}
+                              className={cn(
+                                'rounded border px-2 py-1 font-mono',
+                                idValue
+                                  ? 'border-app-border text-app-text hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                  : 'border-app-border text-neutral-400'
+                              )}
+                              title={idValue ?? `${label} ID unavailable`}
+                            >
+                              {label}: {idValue ?? '—'}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>

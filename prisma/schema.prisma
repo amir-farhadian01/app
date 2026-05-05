@@ -69,6 +69,21 @@ enum OrderPhase {
   job
 }
 
+enum OfferStatus {
+  pending // broadcast sent, awaiting provider response
+  expired // no provider responded in time
+  converted // at least one provider accepted -> Order created
+  cancelled // customer cancelled before conversion
+}
+
+enum JobStatus {
+  scheduled // Order contracted + paid, awaiting start
+  in_progress // provider checked in
+  completed // provider marked done
+  disputed // dispute raised after completion
+  cancelled // cancelled after job started
+}
+
 enum OrderEntryPoint {
   explorer
   ai_suggestion
@@ -398,6 +413,8 @@ model Order {
   autoMatchExhausted    Boolean         @default(false)
   matchingExpiresAt     DateTime?
   customerPicks         Json?
+  broadcastList         String[]        @default([])
+  // Provider IDs invited to this offer (populated by matching engine)
   cancelReason          String?
   cancelledAt           DateTime?
   submittedAt           DateTime?
@@ -408,11 +425,35 @@ model Order {
   orderContract         OrderContract?
   customerReview        OrderReview?
   dispute               Dispute?
+  jobRecord             JobRecord?      @relation("OrderJob")
 
   @@index([customerId])
   @@index([status])
   @@index([phase])
   @@index([serviceCatalogId])
+}
+
+model JobRecord {
+  id                  String    @id @default(cuid())
+  orderId             String    @unique
+  order               Order     @relation("OrderJob", fields: [orderId], references: [id], onDelete: Cascade)
+  status              JobStatus @default(scheduled)
+  scheduledStartAt    DateTime?
+  actualStartAt       DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  cancelReason        String?
+  providerNotes       String?
+  completionPhotos    Json?
+  // Performance metrics for F9 analytics
+  responseTimeMinutes Int?
+  priceDelta          Float?    // final price - original quoted price
+  customerRating      Int?      // 1-5, copied from OrderReview after close
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orderId])
+  @@index([status])
 }
 
 model OrderReview {

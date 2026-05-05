@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import {
   Inbox,
@@ -26,6 +26,7 @@ import { ProviderFinanceSection } from '../components/provider/finance/ProviderF
 import { ProviderScheduleSection } from '../components/provider/schedule/ProviderScheduleSection.js';
 import { ProviderStaffSection } from '../components/provider/staff/ProviderStaffSection.js';
 import { listInbox } from '../services/providerInbox';
+import { getProviderDashboardOverview, type ProviderDashboardOverview } from '../services/orders.js';
 
 type Tab = 'inbox' | 'overview' | 'staff' | 'finance' | 'schedule' | 'b2b' | 'insights' | 'packages' | 'inventory' | 'kyc';
 
@@ -71,11 +72,26 @@ export default function CompanyDashboard() {
   const activeTab = useMemo(() => tabFromSearchParam(searchParams.get('tab')), [searchParams]);
   const [company, setCompany] = useState<any>(null);
   const [inboxMatchedCount, setInboxMatchedCount] = useState(0);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [overviewStats, setOverviewStats] = useState<ProviderDashboardOverview | null>(null);
   const [companyLoading, setCompanyLoading] = useState(true);
   const companyTargetId = activeWorkspaceId ?? user?.companyId;
 
   const showKycTab = user?.role === 'provider' || !!user?.companyId;
   const visibleTabs = useMemo(() => TABS.filter((t) => t.id !== 'kyc' || showKycTab), [showKycTab]);
+  const refreshInboxMatchedCount = useCallback(async () => {
+    if (!activeWorkspaceId) {
+      setInboxMatchedCount(0);
+      return;
+    }
+    try {
+      const r = await listInbox(activeWorkspaceId, ['matched'], 1, 1);
+      setInboxMatchedCount(r.total);
+    } catch {
+      setInboxMatchedCount(0);
+    }
+  }, [activeWorkspaceId]);
 
   useEffect(() => {
     const raw = searchParams.get('tab');
@@ -129,13 +145,48 @@ export default function CompanyDashboard() {
       return;
     }
     let cancelled = false;
-    void listInbox(activeWorkspaceId, ['matched'], 1, 1)
-      .then((r) => {
-        if (!cancelled) setInboxMatchedCount(r.total);
+    void refreshInboxMatchedCount();
+    const onFocus = () => {
+      if (!cancelled) void refreshInboxMatchedCount();
+    };
+    const onVisibility = () => {
+      if (!cancelled && document.visibilityState === 'visible') void refreshInboxMatchedCount();
+    };
+    const interval = window.setInterval(() => {
+      if (!cancelled) void refreshInboxMatchedCount();
+    }, 30000);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [activeWorkspaceId, refreshInboxMatchedCount]);
+
+  useEffect(() => {
+    if (!activeWorkspaceId || activeTab !== 'overview') {
+      setOverviewError(null);
+      if (!activeWorkspaceId) setOverviewStats(null);
+      return;
+    }
+
+    let cancelled = false;
+    setOverviewLoading(true);
+    setOverviewError(null);
+    void getProviderDashboardOverview(activeWorkspaceId)
+      .then((payload) => {
+        if (!cancelled) setOverviewStats(payload);
       })
-      .catch(() => {
-        if (!cancelled) setInboxMatchedCount(0);
+      .catch((e) => {
+        if (!cancelled) setOverviewError(e instanceof Error ? e.message : 'Could not load overview');
+      })
+      .finally(() => {
+        if (!cancelled) setOverviewLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
@@ -249,13 +300,62 @@ export default function CompanyDashboard() {
       ) : activeTab === 'schedule' ? (
         <ProviderScheduleSection />
       ) : activeTab === 'inbox' ? (
-        <ProviderInboxSection />
+        <ProviderInboxSection onInboxMutation={() => void refreshInboxMatchedCount()} />
       ) : activeTab === 'packages' ? (
         <ProviderPackagesSection />
       ) : activeTab === 'inventory' ? (
         <ProviderInventorySection />
       ) : (
         <>
+          {activeTab === 'overview' ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {overviewLoading ? (
+                <div className="sm:col-span-2 lg:col-span-3 rounded-2xl border border-app-border bg-app-card p-6 text-sm text-neutral-500" aria-busy="true">
+                  Loading overview stats...
+                </div>
+              ) : overviewError ? (
+                <div className="sm:col-span-2 lg:col-span-3 rounded-2xl border border-amber-500/40 bg-amber-500/5 p-6 text-sm text-neutral-600 dark:text-neutral-300">
+                  {overviewError}
+                </div>
+              ) : overviewStats ? (
+                <>
+                  <div className="rounded-2xl border border-app-border bg-app-card p-5">
+                    <p className="text-xs font-black uppercase tracking-wider text-neutral-500">Total Orders</p>
+                    <p className="mt-1 text-2xl font-black text-app-text">{overviewStats.totalOrders}</p>
+                  </div>
+                  <div className="rounded-2xl border border-app-border bg-app-card p-5">
+                    <p className="text-xs font-black uppercase tracking-wider text-neutral-500">Pending Orders</p>
+                    <p className="mt-1 text-2xl font-black text-app-text">{overviewStats.pendingOrders}</p>
+                  </div>
+                  <div className="rounded-2xl border border-app-border bg-app-card p-5">
+                    <p className="text-xs font-black uppercase tracking-wider text-neutral-500">Completed Orders</p>
+                    <p className="mt-1 text-2xl font-black text-app-text">{overviewStats.completedOrders}</p>
+                  </div>
+                  <div className="rounded-2xl border border-app-border bg-app-card p-5">
+                    <p className="text-xs font-black uppercase tracking-wider text-neutral-500">Total Earnings (CAD)</p>
+                    <p className="mt-1 text-2xl font-black text-app-text">
+                      {new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(
+                        overviewStats.totalEarnings,
+                      )}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-app-border bg-app-card p-5">
+                    <p className="text-xs font-black uppercase tracking-wider text-neutral-500">Active Staff</p>
+                    <p className="mt-1 text-2xl font-black text-app-text">{overviewStats.activeStaff}</p>
+                  </div>
+                  {overviewStats.totalOrders === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-app-border bg-app-card/70 p-5 text-sm text-neutral-500">
+                      No orders found for this workspace yet.
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="sm:col-span-2 lg:col-span-3 rounded-2xl border border-dashed border-app-border bg-app-card p-6 text-sm text-neutral-500">
+                  No overview data found.
+                </div>
+              )}
+            </div>
+          ) : null}
           {company ? (
             <div className="rounded-3xl border border-app-border p-8 bg-app-card space-y-2">
               <p className="text-xl font-bold">{company.name}</p>

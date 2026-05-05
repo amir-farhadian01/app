@@ -179,6 +179,18 @@ function customerDisplayLabel(item: ProviderInboxItem, revealPii: boolean): stri
   return 'Customer';
 }
 
+function getTrackingIds(item: ProviderInboxItem): { offerId: string; orderId: string; jobId: string | null } {
+  const orderTrace = item.order as {
+    offerId?: string;
+    orderId?: string;
+    jobId?: string | null;
+  };
+  const offerId = typeof orderTrace.offerId === 'string' && orderTrace.offerId ? orderTrace.offerId : item.order.id;
+  const orderId = typeof orderTrace.orderId === 'string' && orderTrace.orderId ? orderTrace.orderId : item.order.id;
+  const jobId = typeof orderTrace.jobId === 'string' && orderTrace.jobId ? orderTrace.jobId : null;
+  return { offerId, orderId, jobId };
+}
+
 export function InboxDetailDrawer({
   open,
   item,
@@ -259,6 +271,7 @@ export function InboxDetailDrawer({
     item!.order.matchedWorkspaceId === activeWorkspaceId &&
     (item!.status === 'accepted' || item!.status === 'matched');
   const contractCloseHint = item ? providerContractCloseHint(item.order.contractSummary) : null;
+  const tracking = item ? getTrackingIds(item) : null;
 
   const badge = item ? lifecycleStatusBadge(item) : '';
   const addrParts = item ? structuredAddressLines(item) : {};
@@ -302,6 +315,12 @@ export function InboxDetailDrawer({
                 <div className="min-w-0 flex-1 space-y-2">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Order</p>
                   <h2 className="text-base font-black leading-snug text-app-text">{serviceBreadcrumb(item)}</h2>
+                  {tracking ? (
+                    <span className="text-xs text-muted-foreground">
+                      Ref: Offer #{tracking.offerId.slice(-6)} · Order #{tracking.orderId.slice(-6)}
+                      {tracking.jobId ? ` · Job #${tracking.jobId.slice(-6)}` : ''}
+                    </span>
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-app-border bg-app-input/50 px-2.5 py-0.5 text-[11px] font-black tracking-wide text-app-text">
                       {badge}

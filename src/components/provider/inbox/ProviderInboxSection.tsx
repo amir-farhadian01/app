@@ -27,7 +27,11 @@ function statusForSegment(seg: SegmentId): InboxStatus[] {
   return ['superseded'];
 }
 
-export function ProviderInboxSection() {
+type ProviderInboxSectionProps = {
+  onInboxMutation?: () => void;
+};
+
+export function ProviderInboxSection({ onInboxMutation }: ProviderInboxSectionProps = {}) {
   const { activeWorkspaceId } = useWorkspace();
   const { showToast } = useSoftToast();
   const [segment, setSegment] = useState<SegmentId>('awaiting');
@@ -124,6 +128,7 @@ export function ProviderInboxSection() {
       setAckOpen(false);
       setTarget(null);
       await load();
+      onInboxMutation?.();
       if (openId && activeWorkspaceId) {
         const d = await getInboxItem(activeWorkspaceId, openId);
         setDetail(d);
@@ -143,6 +148,7 @@ export function ProviderInboxSection() {
       showToast('Order marked complete.');
       setSegment('accepted');
       await load();
+      onInboxMutation?.();
       if (openId && activeWorkspaceId) {
         const d = await getInboxItem(activeWorkspaceId, openId);
         setDetail(d);
@@ -192,6 +198,7 @@ export function ProviderInboxSection() {
           : 'Declined. No more providers available - admin notified.',
       );
       await load();
+      onInboxMutation?.();
       if (openId && result.newAttemptId) {
         setOpenId(result.newAttemptId);
       } else if (openId) {
@@ -217,6 +224,7 @@ export function ProviderInboxSection() {
       patchItem(attemptId, () => updated);
       setLostFeedbackDoneIds((prev) => ({ ...prev, [attemptId]: true }));
       showToast('Thanks — your feedback helps us match you better next time.');
+      onInboxMutation?.();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Failed to submit feedback');
     } finally {

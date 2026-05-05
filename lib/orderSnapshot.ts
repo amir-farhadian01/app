@@ -3,6 +3,26 @@ import type { ServiceQuestionnaireV1 } from './serviceDefinitionTypes.js';
 import { isServiceQuestionnaireV1 } from './serviceDefinitionTypes.js';
 import { minimalFallbackQuestionnaire } from './wizardFallbackQuestionnaire.js';
 
+type OrderTraceShape = {
+  id: string;
+  jobRecord?: { id: string } | null;
+};
+
+/**
+ * Attach canonical analytics aliases for the offer -> order -> job chain.
+ */
+export function withOrderTraceIds<T extends Record<string, unknown>>(
+  snapshot: T,
+  order: OrderTraceShape,
+): T & { offerId: string; orderId: string; jobId: string | null } {
+  return {
+    ...snapshot,
+    offerId: order.id,
+    orderId: order.id,
+    jobId: order.jobRecord?.id ?? null,
+  };
+}
+
 /**
  * Canonical F0 questionnaire JSON to store on the order at submit time.
  * Missing or invalid catalog JSON falls back to a minimal questionnaire so

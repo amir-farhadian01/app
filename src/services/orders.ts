@@ -24,6 +24,9 @@ export type OrderPhaseFacetCounts = {
 
 export type OrderRecord = {
   id: string;
+  offerId: string;
+  orderId: string;
+  jobId: string | null;
   customerId: string;
   serviceCatalogId: string;
   schemaSnapshot: unknown;
@@ -165,6 +168,9 @@ function normalizeOrder(raw: unknown): OrderRecord {
   const o = raw as Record<string, unknown>;
   return {
     id: String(o.id ?? ''),
+    offerId: String(o.offerId ?? o.id ?? ''),
+    orderId: String(o.orderId ?? o.id ?? ''),
+    jobId: typeof o.jobId === 'string' ? o.jobId : null,
     customerId: String(o.customerId ?? ''),
     serviceCatalogId: String(o.serviceCatalogId ?? ''),
     schemaSnapshot: o.schemaSnapshot,
@@ -577,8 +583,15 @@ const PROVIDER_SCHEDULE_STATUSES = [
   'contracted',
   'paid',
   'in_progress',
-  'disputed',
 ];
+
+export type ProviderDashboardOverview = {
+  totalOrders: number;
+  pendingOrders: number;
+  completedOrders: number;
+  totalEarnings: number;
+  activeStaff: number;
+};
 
 export async function getProviderPipelineOrders(params?: {
   page?: number;
@@ -615,6 +628,33 @@ export async function getProviderPipelineOrders(params?: {
     page: typeof d.page === 'number' ? d.page : 1,
     pageSize: typeof d.pageSize === 'number' ? d.pageSize : 20,
     ...(facets ? { facets } : {}),
+  };
+}
+
+export async function getProviderDashboardOverview(
+  workspaceId: string,
+): Promise<ProviderDashboardOverview> {
+  const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/dashboard/overview`, {
+    headers: authHeaders(),
+    credentials: 'include',
+  });
+  const data = await parseJson(res);
+  if (res.status === 401) {
+    window.location.href = '/auth';
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || 'Failed to load dashboard overview');
+  }
+  const d = data as Record<string, unknown>;
+  const n = (key: string) =>
+    typeof d[key] === 'number' && Number.isFinite(d[key] as number) ? (d[key] as number) : 0;
+  return {
+    totalOrders: n('totalOrders'),
+    pendingOrders: n('pendingOrders'),
+    completedOrders: n('completedOrders'),
+    totalEarnings: n('totalEarnings'),
+    activeStaff: n('activeStaff'),
   };
 }
 

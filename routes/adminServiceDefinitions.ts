@@ -13,7 +13,7 @@ router.use(authenticate, isAdmin);
 
 const MAX_PAGE = 100;
 
-const SORTABLE = new Set(['name', 'createdAt', 'updatedAt', 'defaultMatchingMode', 'isActive', 'category']);
+const SORTABLE = new Set(['name', 'createdAt', 'updatedAt', 'defaultMatchingMode', 'isActive', 'category', 'showInHomeClient']);
 
 function parsePage(req: AuthRequest) {
   const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
@@ -39,6 +39,14 @@ function parseCommaList(v: unknown): string[] {
   return [];
 }
 
+function normalizeTags(v: unknown): string[] {
+  const raw = Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : [];
+  const normalized = raw
+    .map((x) => String(x).trim().toLowerCase())
+    .filter(Boolean);
+  return Array.from(new Set(normalized));
+}
+
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const { skip, pageSize, page } = parsePage(req);
@@ -48,12 +56,15 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const categoryIds = parseCommaList(req.query.categoryIds);
     const matchModes = parseCommaList(req.query.defaultMatchingMode);
     const isActiveQ = req.query.isActive;
+    const showHomeQ = req.query.showInHomeClient;
     const where: Prisma.ServiceCatalogWhereInput = {};
     if (q) {
       where.OR = [
         { name: { contains: q, mode: 'insensitive' } },
         { slug: { contains: q, mode: 'insensitive' } },
         { category: { contains: q, mode: 'insensitive' } },
+        { icon: { contains: q, mode: 'insensitive' } },
+        { complianceTags: { has: q.toLowerCase() } },
       ];
     }
     if (categoryIds.length) {
@@ -66,6 +77,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     }
     if (isActiveQ === 'true') where.isActive = true;
     else if (isActiveQ === 'false') where.isActive = false;
+    if (showHomeQ === 'true') where.showInHomeClient = true;
+    else if (showHomeQ === 'false') where.showInHomeClient = false;
 
     const d = (sortDir === 'asc' ? 'asc' : 'desc') as Prisma.SortOrder;
     const orderBy: Prisma.ServiceCatalogOrderByWithRelationInput = (() => {
@@ -75,6 +88,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       if (sortBy === 'updatedAt') return { updatedAt: d };
       if (sortBy === 'defaultMatchingMode') return { defaultMatchingMode: d };
       if (sortBy === 'isActive') return { isActive: d };
+      if (sortBy === 'showInHomeClient') return { showInHomeClient: d };
       return { name: 'asc' };
     })();
 
@@ -163,9 +177,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     const category = typeof b.category === 'string' ? b.category : '';
     if (!category) return res.status(400).json({ error: 'category (legacy) is required' });
     const subcategory = b.subcategory === undefined || b.subcategory === null ? null : String(b.subcategory);
-    const complianceTags = Array.isArray(b.complianceTags)
-      ? (b.complianceTags as unknown[]).filter((x): x is string => typeof x === 'string')
-      : [];
+    const complianceTags = normalizeTags(b.complianceTags);
     const categoryId = b.categoryId == null || b.categoryId === '' ? null : String(b.categoryId);
     if (categoryId) {
       const c = await prisma.category.findUnique({ where: { id: categoryId } });
@@ -183,6 +195,11 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       if (clash) return res.status(400).json({ error: 'slug already in use' });
     }
     const isActive = typeof b.isActive === 'boolean' ? b.isActive : true;
+    const showInHomeClient = typeof b.showInHomeClient === 'boolean' ? b.showInHomeClient : false;
+    const icon = b.icon == null || b.icon === '' ? null : String(b.icon).trim();
+    if (icon != null && icon.length > 64) {
+      return res.status(400).json({ error: 'icon must be at most 64 characters' });
+    }
     const dynamicFieldsSchema = b.dynamicFieldsSchema;
     const createData: Prisma.ServiceCatalogUncheckedCreateInput = {
       name: name.trim(),
@@ -194,6 +211,8 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       description: description ?? null,
       slug,
       isActive,
+      showInHomeClient,
+      icon,
     };
     if (dynamicFieldsSchema === null) {
       createData.dynamicFieldsSchema = Prisma.JsonNull;
@@ -228,7 +247,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     if (typeof b.category === 'string') data.category = b.category;
     if (b.subcategory !== undefined) data.subcategory = b.subcategory === null ? null : String(b.subcategory);
     if (Array.isArray(b.complianceTags)) {
-      data.complianceTags = (b.complianceTags as unknown[]).filter((x): x is string => typeof x === 'string');
+      data.complianceTags = normalizeTags(b.complianceTags);
     }
     if (b.categoryId !== undefined) {
       const cid = b.categoryId === null || b.categoryId === '' ? null : String(b.categoryId);
@@ -255,6 +274,14 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       data.slug = slug;
     }
     if (typeof b.isActive === 'boolean') data.isActive = b.isActive;
+    if (typeof b.showInHomeClient === 'boolean') data.showInHomeClient = b.showInHomeClient;
+    if (b.icon !== undefined) {
+      const icon = b.icon == null || b.icon === '' ? null : String(b.icon).trim();
+      if (icon != null && icon.length > 64) {
+        return res.status(400).json({ error: 'icon must be at most 64 characters' });
+      }
+      data.icon = icon;
+    }
     if (b.lockedBookingMode !== undefined) {
       const v = b.lockedBookingMode;
       const newLock: string | null =

@@ -376,8 +376,8 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
     final nav = _navItems(api);
     final viewportWidth = MediaQuery.sizeOf(context).width;
     final barWidth = (viewportWidth * 0.7).clamp(250.0, 560.0);
-    const glassTint = Color(0xFFBCCCDC);
-    const borderColor = Color(0xFFBCCCDC);
+    const glassTint = Color(0xFF1A1D2E);
+    const borderColor = Color(0xFF2A2F4A);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
@@ -393,12 +393,12 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
                 filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: glassTint.withValues(alpha: 0.9),
+                    color: glassTint.withOpacity(0.88),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: borderColor.withValues(alpha: 0.95), width: 1),
+                    border: Border.all(color: borderColor.withOpacity(0.95), width: 1),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
+                        color: Colors.black.withOpacity(0.08),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),

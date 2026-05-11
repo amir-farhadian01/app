@@ -1,717 +1,1348 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import {
-  User,
-  ClipboardList,
-  Calendar,
-  MessageSquare,
-  FileText,
-  CreditCard,
-  Bell,
-  HelpCircle,
-  Settings,
-  LogOut,
-  ChevronRight,
-  MapPin,
-  Lock,
-  Link2,
-  ShieldCheck,
-  Loader2,
+  User, Lock, Shield, Moon, Sun, ChevronRight, LogOut, Camera,
+  Phone, Mail, Check, X, Plus, Trash2, Car, Heart, MapPin,
+  Briefcase, Home, FileText, CreditCard, Package, Eye, EyeOff,
+  AlertCircle, CheckCircle, Clock,
 } from 'lucide-react';
-import PhoneInput from 'react-phone-input-2';
-import 'react-phone-input-2/lib/style.css';
 import { useAuth } from '../lib/AuthContext';
-import { api } from '../lib/api';
-import { handleApiError, OperationType } from '../lib/errors';
+import { api, uploadBinary } from '../lib/api';
+import { useTheme } from '../ThemeContext';
 import { cn } from '../lib/utils';
-import { StatusBanner, type KycBannerModel } from '../components/kyc/personal/StatusBanner';
-import { HistoryCollapsible } from '../components/kyc/personal/HistoryCollapsible';
-import { PersonalKycWizard } from '../components/kyc/personal/PersonalKycWizard';
 
-type SectionId =
-  | 'account'
-  | 'google'
-  | 'password'
-  | 'identity'
-  | 'orders'
-  | 'appointments'
-  | 'messages'
-  | 'contracts'
-  | 'payments'
-  | 'notifications'
-  | 'help'
-  | 'settings';
+// ─── static legal content ──────────────────────────────────────────────────
 
-const SECTIONS: { id: SectionId; label: string; icon: React.ElementType; hint: string }[] = [
-  { id: 'account', label: 'Account', icon: User, hint: 'Name, phone, address' },
-  { id: 'google', label: 'Google', icon: Link2, hint: 'Link Google sign-in' },
-  { id: 'password', label: 'Password', icon: Lock, hint: 'Change password' },
-  { id: 'identity', label: 'KYC', icon: ShieldCheck, hint: 'Identity verification' },
-  { id: 'orders', label: 'My orders', icon: ClipboardList, hint: 'Active · Past · Cancelled' },
-  { id: 'appointments', label: 'Appointments', icon: Calendar, hint: 'Upcoming · Past' },
-  { id: 'messages', label: 'Messages', icon: MessageSquare, hint: 'Chats & tickets' },
-  { id: 'contracts', label: 'Contracts', icon: FileText, hint: 'Read & sign' },
-  { id: 'payments', label: 'Payments', icon: CreditCard, hint: 'Receipts' },
-  { id: 'notifications', label: 'Notifications', icon: Bell, hint: 'Alerts' },
-  { id: 'help', label: 'Help', icon: HelpCircle, hint: 'Support' },
-  { id: 'settings', label: 'Settings', icon: Settings, hint: 'Preferences' },
-];
+const TERMS_CONTENT = `
+**Terms and Conditions – Neighborly Platform**
+*Effective date: January 1, 2025*
 
-const focusRing = 'focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-white focus:ring-offset-2';
+**1. Acceptance**
+By creating a Neighborly account or using our services you agree to these Terms. If you do not agree, please do not use the platform.
 
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+**2. Description of Service**
+Neighborly is a local-services marketplace that connects customers ("Customers") with independent service providers ("Providers"). We provide the technology platform only; we are not a party to any service agreement between Customer and Provider.
 
-export default function ClientAccount() {
-  const { user, logout, refreshUser } = useAuth();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const rawSection = searchParams.get('section');
-  const section = ((rawSection === 'profile' ? 'account' : rawSection) as SectionId) || 'account';
-  const [role, setRole] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [requests, setRequests] = useState<any[]>([]);
-  const [contracts, setContracts] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [tickets, setTickets] = useState<any[]>([]);
-  const [apptTab, setApptTab] = useState<'upcoming' | 'past'>('upcoming');
-  const [notifTab, setNotifTab] = useState<'chat' | 'orders' | 'system'>('chat');
-  const [kycNeedsAttention, setKycNeedsAttention] = useState(false);
+**3. Eligibility**
+You must be at least 18 years old and legally capable of entering binding contracts to use Neighborly. Accounts are personal and non-transferable.
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [googleLinked, setGoogleLinked] = useState(false);
-  const [accountSaving, setAccountSaving] = useState(false);
-  const [accountErr, setAccountErr] = useState<string | null>(null);
+**4. Account Security**
+You are responsible for keeping your credentials secure. Notify us immediately at support@neighborly.app if you suspect unauthorized access. We are not liable for losses arising from your failure to protect your account.
 
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordBusy, setPasswordBusy] = useState(false);
-  const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
-  const [passwordErr, setPasswordErr] = useState<string | null>(null);
+**5. Payments & Fees**
+Service fees are agreed between Customer and Provider. Neighborly may charge a platform fee disclosed at checkout. All payments are processed by our third-party payment partners and are subject to their terms.
 
-  const [bannerModel, setBannerModel] = useState<KycBannerModel>({ submissionStatus: 'none' });
-  const [resubmitNonce, setResubmitNonce] = useState(0);
+**6. Cancellations & Refunds**
+Cancellation and refund policies are set per order. Please review the Provider's policy before booking. Disputes may be escalated through the Neighborly resolution centre.
 
-  const [googleBusy, setGoogleBusy] = useState(false);
-  const [googleErr, setGoogleErr] = useState<string | null>(null);
-  const [googleOk, setGoogleOk] = useState<string | null>(null);
+**7. Prohibited Conduct**
+You may not use Neighborly to: violate any law; transmit harmful or offensive content; attempt to circumvent the platform; solicit Providers off-platform to avoid fees; or engage in fraud or misrepresentation.
 
-  const onRequestResubmit = useCallback(() => {
-    setResubmitNonce((n) => n + 1);
-  }, []);
+**8. Limitation of Liability**
+To the maximum extent permitted by law, Neighborly's total liability arising out of or in connection with these Terms shall not exceed the amount paid by you in the three months preceding the claim.
 
-  const loadAccountFields = useCallback(async () => {
-    if (!user) return;
+**9. Changes to Terms**
+We may update these Terms with 14 days' notice. Continued use of the platform after notice constitutes acceptance.
+
+**10. Governing Law**
+These Terms are governed by the laws of the jurisdiction in which Neighborly operates. Disputes shall be resolved by binding arbitration where permitted.
+
+For questions contact: legal@neighborly.app
+`;
+
+const RULES_CONTENT = `
+**Community Rules – Neighborly Platform**
+*Last updated: January 1, 2025*
+
+Neighborly is built on trust between neighbors. These rules apply to all users.
+
+**1. Be Respectful**
+Treat every person on the platform — Customers, Providers, and staff — with courtesy and respect. Harassment, discrimination, or abusive language will result in immediate account suspension.
+
+**2. Be Honest**
+Provide accurate information in your profile, order requests, and reviews. Misleading information, fake reviews, and identity fraud are grounds for permanent removal.
+
+**3. Safety First**
+Do not share personal financial details (bank numbers, PINs) through the chat. All payments must go through the Neighborly checkout. Off-platform cash deals are not protected by our guarantee.
+
+**4. Keep Appointments**
+If you book a service, be present and prepared. If you need to cancel, do so at least 24 hours in advance. Repeated no-shows may restrict your ability to book.
+
+**5. Protect Privacy**
+Do not photograph, record, or share personal information about other users without explicit consent. Respect the privacy of your neighbors.
+
+**6. No Spam or Solicitation**
+Do not send unsolicited promotional messages. Do not contact users for purposes unrelated to an active order.
+
+**7. Report Issues**
+If you witness rule violations, use the Report button or contact support@neighborly.app. Do not take matters into your own hands.
+
+**8. Fair Reviews**
+Reviews must reflect your genuine experience. Reviewing your own service, coordinating fake reviews, or pressuring users for positive ratings is prohibited.
+
+**Enforcement**
+Violations may result in warnings, temporary suspension, or permanent account removal depending on severity. Decisions by the Neighborly trust & safety team are final.
+`;
+
+const PRIVACY_CONTENT = `
+**Privacy Policy – Neighborly Platform**
+*Effective date: January 1, 2025*
+
+**1. What We Collect**
+- *Account data:* name, email, phone, profile photo, and address when you register.
+- *Usage data:* pages visited, features used, search queries, device and browser information.
+- *Order data:* service requests, chat messages, transaction history.
+- *Location data:* only when you grant permission or enter an address for a booking.
+- *Verification data:* government ID documents submitted for KYC — stored encrypted, accessible only to our compliance team.
+
+**2. How We Use Your Data**
+- To provide, maintain, and improve the Neighborly platform.
+- To process payments and prevent fraud.
+- To send transactional notifications (order updates, receipts).
+- To comply with legal obligations.
+- With your consent: marketing communications (opt-out any time).
+
+**3. Sharing Your Data**
+We do not sell your personal data. We share data only:
+- With the Provider you book, to the extent necessary to fulfil the service.
+- With payment processors, identity verification partners, and cloud infrastructure providers bound by data processing agreements.
+- When required by law or to protect Neighborly's legal rights.
+
+**4. Data Retention**
+Active account data is retained while your account is open. After deletion we retain anonymized transaction records for 7 years to meet accounting requirements.
+
+**5. Your Rights**
+Depending on your jurisdiction you may request access, correction, deletion, or portability of your personal data. Submit requests to privacy@neighborly.app. We respond within 30 days.
+
+**6. Cookies**
+We use essential cookies for session management and analytics cookies (with consent). Manage preferences in your browser settings.
+
+**7. Security**
+We use TLS encryption in transit, AES-256 at rest, and role-based access controls. Despite our efforts, no transmission over the internet is 100% secure.
+
+**8. Children**
+Neighborly is not directed at persons under 18. We do not knowingly collect data from children.
+
+**9. Changes**
+We will notify you of material changes 14 days before they take effect via email or an in-app notice.
+
+Contact our Data Protection Officer: privacy@neighborly.app
+`;
+
+// ─── tiny helpers ───────────────────────────────────────────────────────────
+
+function Avatar({ url, name, size = 80 }: Readonly<{ url?: string | null; name: string; size?: number }>) {
+  const initials = name
+    .split(' ')
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        style={{ width: size, height: size }}
+        className="rounded-full object-cover border-2 border-white shadow-md"
+      />
+    );
+  }
+  return (
+    <div
+      style={{ width: size, height: size, fontSize: size * 0.35 }}
+      className="rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold border-2 border-white shadow-md select-none"
+    >
+      {initials}
+    </div>
+  );
+}
+
+function ToggleSwitch({ checked, onChange }: Readonly<{ checked: boolean; onChange: (v: boolean) => void }>) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none',
+        checked ? 'bg-blue-600' : 'bg-neutral-300 dark:bg-neutral-600',
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+          checked ? 'translate-x-6' : 'translate-x-1',
+        )}
+      />
+    </button>
+  );
+}
+
+function Row({
+  icon: Icon,
+  label,
+  value,
+  onClick,
+  badge,
+  danger,
+}: Readonly<{
+  icon: React.ElementType;
+  label: string;
+  value?: string;
+  onClick?: () => void;
+  badge?: React.ReactNode;
+  danger?: boolean;
+}>) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={cn(
+        'w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-colors text-left',
+        onClick
+          ? 'hover:bg-neutral-100 dark:hover:bg-neutral-800 active:bg-neutral-200 dark:active:bg-neutral-700 cursor-pointer'
+          : 'cursor-default',
+      )}
+    >
+      <Icon
+        size={18}
+        className={cn(danger ? 'text-red-500' : 'text-neutral-500 dark:text-neutral-400')}
+      />
+      <span
+        className={cn(
+          'flex-1 text-sm font-medium',
+          danger
+            ? 'text-red-500'
+            : 'text-neutral-800 dark:text-neutral-100',
+        )}
+      >
+        {label}
+      </span>
+      {badge}
+      {value && (
+        <span className="text-sm text-neutral-400 dark:text-neutral-500 truncate max-w-[140px]">
+          {value}
+        </span>
+      )}
+      {onClick && <ChevronRight size={14} className="text-neutral-400 shrink-0" />}
+    </button>
+  );
+}
+
+function SectionCard({ children, className }: Readonly<{ children: React.ReactNode; className?: string }>) {
+  return (
+    <div
+      className={cn(
+        'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Divider() {
+  return <div className="h-px bg-neutral-100 dark:bg-neutral-800 ml-[52px]" />;
+}
+
+// ─── Modal ──────────────────────────────────────────────────────────────────
+
+function Modal({
+  open,
+  onClose,
+  title,
+  children,
+}: Readonly<{
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}>) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 60, opacity: 0 }}
+            transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-neutral-900 rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl"
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
+              <h2 className="text-base font-bold text-neutral-900 dark:text-neutral-100">{title}</h2>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-5 py-4">{children}</div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─── Legal Modal ────────────────────────────────────────────────────────────
+
+function LegalModal({ open, onClose, title, content }: Readonly<{ open: boolean; onClose: () => void; title: string; content: string }>) {
+  const lines = content.trim().split('\n');
+  return (
+    <Modal open={open} onClose={onClose} title={title}>
+      <div className="space-y-2 text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
+        {lines.map((line, i) => {
+          const trimmed = line.trim();
+          if (!trimmed) return <div key={i} className="h-2" />;
+          if (trimmed.startsWith('**') && trimmed.endsWith('**') && !trimmed.slice(2, -2).includes('**')) {
+            return (
+              <p key={i} className="font-bold text-neutral-900 dark:text-neutral-100 mt-4 first:mt-0">
+                {trimmed.slice(2, -2)}
+              </p>
+            );
+          }
+          const parts = trimmed.split(/(\*\*[^*]+\*\*)/g);
+          return (
+            <p key={i}>
+              {parts.map((part, j) =>
+                part.startsWith('**') && part.endsWith('**') ? (
+                  <strong key={j}>{part.slice(2, -2)}</strong>
+                ) : (
+                  part
+                ),
+              )}
+            </p>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
+// ─── Change Password Modal ───────────────────────────────────────────────────
+
+function ChangePasswordModal({ open, onClose }: Readonly<{ open: boolean; onClose: () => void }>) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNext, setShowNext] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState(false);
+
+  const reset = () => {
+    setCurrent(''); setNext(''); setConfirm('');
+    setErr(''); setOk(false); setSaving(false);
+  };
+
+  const handleClose = () => { reset(); onClose(); };
+
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErr('');
+    if (next.length < 8) { setErr('New password must be at least 8 characters.'); return; }
+    if (next !== confirm) { setErr('Passwords do not match.'); return; }
+    setSaving(true);
     try {
-      const me = await api.me();
-      setFirstName(me.firstName || '');
-      setLastName(me.lastName || '');
-      setPhone(me.phone || '');
-      setAddress(me.address || '');
-      setGoogleLinked(!!me.googleLinked);
-    } catch {
-      /* ignore */
+      await api.post('/api/users/me/change-password', { currentPassword: current, newPassword: next });
+      setOk(true);
+      setTimeout(handleClose, 1500);
+    } catch (e: any) {
+      setErr(e.message || 'Failed to change password.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={handleClose} title="Change Password">
+      {ok ? (
+        <div className="flex flex-col items-center gap-3 py-6">
+          <CheckCircle size={40} className="text-green-500" />
+          <p className="font-semibold text-neutral-800 dark:text-neutral-100">Password updated!</p>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {err && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400">
+              <AlertCircle size={14} />
+              {err}
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-semibold text-neutral-500 mb-1.5">Current Password</label>
+            <div className="relative">
+              <input
+                type={showCurrent ? 'text' : 'password'}
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                required
+                className="w-full px-4 py-2.5 pr-10 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
+                {showCurrent ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-neutral-500 mb-1.5">New Password</label>
+            <div className="relative">
+              <input
+                type={showNext ? 'text' : 'password'}
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                required
+                minLength={8}
+                className="w-full px-4 py-2.5 pr-10 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button type="button" onClick={() => setShowNext(!showNext)} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
+                {showNext ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-neutral-500 mb-1.5">Confirm New Password</label>
+            <input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Saving…' : 'Update Password'}
+          </button>
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+// ─── Add Address Modal ───────────────────────────────────────────────────────
+
+function AddressModal({
+  open,
+  onClose,
+  type,
+  initial,
+  onSave,
+}: Readonly<{
+  open: boolean;
+  onClose: () => void;
+  type: 'home' | 'work';
+  initial: string;
+  onSave: (addr: string) => Promise<void>;
+}>) {
+  const [val, setVal] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => { setVal(initial); }, [initial]);
+
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErr('');
+    if (!val.trim()) { setErr('Please enter an address.'); return; }
+    setSaving(true);
+    try {
+      await onSave(val.trim());
+      onClose();
+    } catch (e: any) {
+      setErr(e.message || 'Failed to save address.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={type === 'home' ? 'Home Address' : 'Work Address'}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {err && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400">
+            <AlertCircle size={14} /> {err}
+          </div>
+        )}
+        <textarea
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          rows={3}
+          placeholder="Enter full address…"
+          className="w-full px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+        >
+          {saving ? 'Saving…' : 'Save Address'}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── Add Vehicle Modal ───────────────────────────────────────────────────────
+
+function AddVehicleModal({
+  open,
+  onClose,
+  onSave,
+}: Readonly<{
+  open: boolean;
+  onClose: () => void;
+  onSave: (v: VehicleEntry) => Promise<void>;
+}>) {
+  const [make, setMake] = useState('');
+  const [model, setModel] = useState('');
+  const [plate, setPlate] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const reset = () => { setMake(''); setModel(''); setPlate(''); setErr(''); };
+  const handleClose = () => { reset(); onClose(); };
+
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErr('');
+    if (!make.trim() || !model.trim()) { setErr('Make and model are required.'); return; }
+    setSaving(true);
+    try {
+      await onSave({ id: Date.now().toString(), make: make.trim(), model: model.trim(), plate: plate.trim() });
+      handleClose();
+    } catch (e: any) {
+      setErr(e.message || 'Failed to add vehicle.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={handleClose} title="Add Vehicle">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {err && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400">
+            <AlertCircle size={14} /> {err}
+          </div>
+        )}
+        {[
+          { label: 'Make (e.g. Toyota)', val: make, set: setMake },
+          { label: 'Model (e.g. Camry)', val: model, set: setModel },
+          { label: 'License Plate (optional)', val: plate, set: setPlate },
+        ].map(({ label, val, set }) => (
+          <div key={label}>
+            <label className="block text-xs font-semibold text-neutral-500 mb-1.5">{label}</label>
+            <input
+              value={val}
+              onChange={(e) => set(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        ))}
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+        >
+          {saving ? 'Saving…' : 'Add Vehicle'}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── types ───────────────────────────────────────────────────────────────────
+
+interface AccountPrefs {
+  homeAddress?: string;
+  workAddress?: string;
+  vehicles?: VehicleEntry[];
+  favorites?: FavoriteEntry[];
+}
+
+interface VehicleEntry {
+  id: string;
+  make: string;
+  model: string;
+  plate?: string;
+}
+
+interface FavoriteEntry {
+  id: string;
+  title: string;
+  category?: string;
+}
+
+interface OrderItem {
+  id: string;
+  status: string;
+  address: string;
+  category?: string;
+  totalAmount?: number;
+  createdAt: string;
+}
+
+interface InvoiceItem {
+  id: string;
+  status: string;
+  amount: number;
+  createdAt: string;
+  description?: string;
+}
+
+// ─── Tab 1: Account ──────────────────────────────────────────────────────────
+
+function AccountTab() {
+  const { user, refreshUser, logout } = useAuth();
+  const { mode, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [firstName, setFirstName] = useState(user?.firstName ?? '');
+  const [lastName, setLastName] = useState(user?.lastName ?? '');
+  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState('');
+  const [saveOk, setSaveOk] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [mfaEnabled, setMfaEnabled] = useState(user?.mfaEnabled ?? false);
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showRules, setShowRules] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setFirstName(user.firstName ?? '');
+      setLastName(user.lastName ?? '');
+      setDisplayName(user.displayName ?? '');
+      setPhone(user.phone ?? '');
+      setMfaEnabled(user.mfaEnabled ?? false);
     }
   }, [user]);
 
-  const setSection = useCallback(
-    (id: SectionId) => {
-      setSearchParams({ section: id }, { replace: true });
-    },
-    [setSearchParams],
+  const handlePhotoClick = () => fileRef.current?.click();
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadBinary(file, file.name);
+      await api.put('/api/users/me', { avatarUrl: url });
+      await refreshUser();
+    } catch {
+      /* silent */
+    } finally {
+      setUploadingPhoto(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const handleSave = async () => {
+    setSaveErr('');
+    setSaving(true);
+    try {
+      await api.put('/api/users/me', {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        displayName: displayName.trim() || `${firstName} ${lastName}`.trim(),
+        phone: phone.trim(),
+      });
+      await refreshUser();
+      setSaveOk(true);
+      setEditing(false);
+      setTimeout(() => setSaveOk(false), 2000);
+    } catch (e: any) {
+      setSaveErr(e.message || 'Failed to save changes.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMfaToggle = async (v: boolean) => {
+    setMfaEnabled(v);
+    try {
+      await api.put('/api/users/me', { mfaEnabled: v });
+      await refreshUser();
+    } catch {
+      setMfaEnabled(!v);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/auth');
+  };
+
+  if (!user) return null;
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.displayName || 'User';
+
+  return (
+    <div className="space-y-4">
+      {/* Avatar */}
+      <SectionCard>
+        <div className="flex items-center gap-4 p-5">
+          <div className="relative shrink-0">
+            <Avatar url={user.avatarUrl} name={fullName} size={72} />
+            <button
+              onClick={handlePhotoClick}
+              disabled={uploadingPhoto}
+              className="absolute -bottom-1 -right-1 w-7 h-7 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center shadow-lg border-2 border-white dark:border-neutral-900 transition-colors"
+            >
+              {uploadingPhoto ? (
+                <span className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Camera size={12} className="text-white" />
+              )}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-neutral-900 dark:text-neutral-100 truncate">{fullName}</p>
+            <p className="text-sm text-neutral-500 truncate">@{user.displayName || user.email.split('@')[0]}</p>
+            <p className="text-xs text-neutral-400 truncate mt-0.5">{user.email}</p>
+          </div>
+          <button
+            onClick={() => { setEditing(!editing); setSaveErr(''); }}
+            className="px-3 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+          >
+            {editing ? 'Cancel' : 'Edit'}
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {editing && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden border-t border-neutral-200 dark:border-neutral-800"
+            >
+              <div className="p-5 space-y-3">
+                {saveErr && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400">
+                    <AlertCircle size={14} /> {saveErr}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'First Name', val: firstName, set: setFirstName },
+                    { label: 'Last Name', val: lastName, set: setLastName },
+                  ].map(({ label, val, set }) => (
+                    <div key={label}>
+                      <label className="block text-xs font-semibold text-neutral-500 mb-1">{label}</label>
+                      <input
+                        value={val}
+                        onChange={(e) => set(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Username</label>
+                  <input
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Email</label>
+                  <input
+                    value={user.email}
+                    readOnly
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800/50 text-sm text-neutral-500 cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Phone</label>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    type="tel"
+                    placeholder="+1 234 567 8900"
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                >
+                  {saving ? (
+                    <span className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                  ) : saveOk ? (
+                    <><Check size={14} /> Saved</>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </SectionCard>
+
+      {/* Settings */}
+      <SectionCard>
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          {mode === 'dark' ? <Moon size={18} className="text-neutral-500" /> : <Sun size={18} className="text-neutral-500" />}
+          <span className="flex-1 text-sm font-medium text-neutral-800 dark:text-neutral-100">
+            {mode === 'dark' ? 'Dark Mode' : 'Light Mode'}
+          </span>
+          <ToggleSwitch checked={mode === 'dark'} onChange={() => toggleTheme()} />
+        </div>
+        <Divider />
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          <Shield size={18} className="text-neutral-500" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">Two-Factor Auth</p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+              {mfaEnabled ? 'Active — your account is more secure' : 'Add extra protection to your account'}
+            </p>
+          </div>
+          <ToggleSwitch checked={mfaEnabled} onChange={handleMfaToggle} />
+        </div>
+        <Divider />
+        <Row icon={Lock} label="Change Password" onClick={() => setShowPassword(true)} />
+      </SectionCard>
+
+      {/* Legal */}
+      <SectionCard>
+        <Row icon={FileText} label="Terms and Conditions" onClick={() => setShowTerms(true)} />
+        <Divider />
+        <Row icon={FileText} label="Community Rules" onClick={() => setShowRules(true)} />
+        <Divider />
+        <Row icon={FileText} label="Privacy Policy" onClick={() => setShowPrivacy(true)} />
+      </SectionCard>
+
+      {/* Log out */}
+      <SectionCard>
+        <Row icon={LogOut} label="Sign Out" onClick={handleLogout} danger />
+      </SectionCard>
+
+      {/* Modals */}
+      <ChangePasswordModal open={showPassword} onClose={() => setShowPassword(false)} />
+      <LegalModal open={showTerms} onClose={() => setShowTerms(false)} title="Terms and Conditions" content={TERMS_CONTENT} />
+      <LegalModal open={showRules} onClose={() => setShowRules(false)} title="Community Rules" content={RULES_CONTENT} />
+      <LegalModal open={showPrivacy} onClose={() => setShowPrivacy(false)} title="Privacy Policy" content={PRIVACY_CONTENT} />
+    </div>
   );
+}
+
+// ─── Tab 2: Personal ─────────────────────────────────────────────────────────
+
+function PersonalTab() {
+  const { user } = useAuth();
+  const [prefs, setPrefs] = useState<AccountPrefs>({});
+  const [loadingPrefs, setLoadingPrefs] = useState(true);
+
+  const [homeModal, setHomeModal] = useState(false);
+  const [workModal, setWorkModal] = useState(false);
+  const [vehicleModal, setVehicleModal] = useState(false);
+  const [verifyTab, setVerifyTab] = useState<'email' | 'phone'>('email');
 
   useEffect(() => {
-    if (!user) return;
-    (async () => {
+    api.get<AccountPrefs>('/api/users/me/account-preferences').then((d) => {
+      setPrefs(d || {});
+    }).catch(() => {}).finally(() => setLoadingPrefs(false));
+  }, []);
+
+  const savePrefs = async (patch: Partial<AccountPrefs>) => {
+    const next = { ...prefs, ...patch };
+    await api.put('/api/users/me/account-preferences', next);
+    setPrefs(next);
+  };
+
+  const handleSaveAddress = (type: 'home' | 'work') => async (addr: string) => {
+    await savePrefs(type === 'home' ? { homeAddress: addr } : { workAddress: addr });
+  };
+
+  const handleAddVehicle = async (v: VehicleEntry) => {
+    await savePrefs({ vehicles: [...(prefs.vehicles ?? []), v] });
+  };
+
+  const handleRemoveVehicle = async (id: string) => {
+    await savePrefs({ vehicles: (prefs.vehicles ?? []).filter((v) => v.id !== id) });
+  };
+
+  const kyc = (user as any)?.kyc;
+  const emailVerified = kyc?.emailVerified ?? user?.isVerified ?? false;
+  const phoneVerified = kyc?.phoneVerified ?? false;
+
+  if (!user) return null;
+
+  return (
+    <div className="space-y-4">
+      {/* Verification */}
+      <SectionCard>
+        <div className="px-4 pt-4 pb-0">
+          <p className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-3">Verification</p>
+          <div className="flex gap-2 mb-3">
+            {(['email', 'phone'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setVerifyTab(t)}
+                className={cn(
+                  'flex-1 py-2 rounded-xl text-sm font-semibold transition-colors',
+                  verifyTab === t
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400',
+                )}
+              >
+                {t === 'email' ? 'Email' : 'Phone'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="px-4 pb-4">
+          {verifyTab === 'email' ? (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800">
+              <Mail size={18} className="text-neutral-500" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">{user.email}</p>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  {emailVerified ? 'Verified — looks good!' : 'Not yet verified'}
+                </p>
+              </div>
+              {emailVerified ? (
+                <span className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-semibold">
+                  <Check size={11} /> Verified
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg text-xs font-semibold">
+                  <Clock size={11} /> Pending
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800">
+              <Phone size={18} className="text-neutral-500" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">
+                  {user.phone || 'No phone number'}
+                </p>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  {phoneVerified ? 'Verified — looks good!' : user.phone ? 'Not yet verified' : 'Add a phone number first'}
+                </p>
+              </div>
+              {phoneVerified ? (
+                <span className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-semibold">
+                  <Check size={11} /> Verified
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg text-xs font-semibold">
+                  <Clock size={11} /> Pending
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
+      {/* Addresses */}
+      <SectionCard>
+        <div className="px-4 pt-4 pb-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-neutral-400">Addresses</p>
+        </div>
+        {loadingPrefs ? (
+          <div className="px-4 py-4 text-sm text-neutral-400">Loading…</div>
+        ) : (
+          <>
+            <button
+              onClick={() => setHomeModal(true)}
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+            >
+              <Home size={18} className="text-neutral-500 shrink-0" />
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">Home Address</p>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                  {prefs.homeAddress || 'Add home address'}
+                </p>
+              </div>
+              <ChevronRight size={14} className="text-neutral-400 shrink-0" />
+            </button>
+            <Divider />
+            <button
+              onClick={() => setWorkModal(true)}
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+            >
+              <Briefcase size={18} className="text-neutral-500 shrink-0" />
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">Work Address</p>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                  {prefs.workAddress || 'Add work address'}
+                </p>
+              </div>
+              <ChevronRight size={14} className="text-neutral-400 shrink-0" />
+            </button>
+          </>
+        )}
+      </SectionCard>
+
+      {/* Vehicles */}
+      <SectionCard>
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-neutral-400">Vehicles</p>
+          <button
+            onClick={() => setVehicleModal(true)}
+            className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+          >
+            <Plus size={12} /> Add
+          </button>
+        </div>
+        {loadingPrefs ? (
+          <div className="px-4 py-3 text-sm text-neutral-400">Loading…</div>
+        ) : (prefs.vehicles ?? []).length === 0 ? (
+          <div className="px-4 pb-4">
+            <button
+              onClick={() => setVehicleModal(true)}
+              className="w-full flex flex-col items-center gap-2 py-6 border-2 border-dashed border-neutral-200 dark:border-neutral-700 rounded-xl text-neutral-400 hover:border-blue-400 hover:text-blue-500 transition-colors"
+            >
+              <Car size={24} />
+              <span className="text-xs font-medium">Add your first vehicle</span>
+            </button>
+          </div>
+        ) : (
+          <div className="pb-2">
+            {(prefs.vehicles ?? []).map((v, idx) => (
+              <React.Fragment key={v.id}>
+                {idx > 0 && <Divider />}
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <Car size={18} className="text-neutral-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">
+                      {v.make} {v.model}
+                    </p>
+                    {v.plate && <p className="text-xs text-neutral-500 mt-0.5">{v.plate}</p>}
+                  </div>
+                  <button
+                    onClick={() => handleRemoveVehicle(v.id)}
+                    className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-neutral-400 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Favorites */}
+      <SectionCard>
+        <div className="px-4 pt-4 pb-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-neutral-400">Favorites</p>
+        </div>
+        {(prefs.favorites ?? []).length === 0 ? (
+          <div className="px-4 pb-4">
+            <div className="w-full flex flex-col items-center gap-2 py-6 border-2 border-dashed border-neutral-200 dark:border-neutral-700 rounded-xl text-neutral-400">
+              <Heart size={24} />
+              <span className="text-xs font-medium">No favorites yet — bookmark services you love</span>
+            </div>
+          </div>
+        ) : (
+          <div className="pb-2">
+            {(prefs.favorites ?? []).map((f, idx) => (
+              <React.Fragment key={f.id}>
+                {idx > 0 && <Divider />}
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <Heart size={18} className="text-red-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">{f.title}</p>
+                    {f.category && <p className="text-xs text-neutral-500 mt-0.5">{f.category}</p>}
+                  </div>
+                </div>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Modals */}
+      <AddressModal
+        open={homeModal}
+        onClose={() => setHomeModal(false)}
+        type="home"
+        initial={prefs.homeAddress ?? ''}
+        onSave={handleSaveAddress('home')}
+      />
+      <AddressModal
+        open={workModal}
+        onClose={() => setWorkModal(false)}
+        type="work"
+        initial={prefs.workAddress ?? ''}
+        onSave={handleSaveAddress('work')}
+      />
+      <AddVehicleModal open={vehicleModal} onClose={() => setVehicleModal(false)} onSave={handleAddVehicle} />
+    </div>
+  );
+}
+
+// ─── Tab 3: Finance ───────────────────────────────────────────────────────────
+
+function FinanceTab() {
+  const [activeSection, setActiveSection] = useState<'invoices' | 'orders'>('orders');
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
       try {
-        const me = await api.me();
-        if (me.role && me.role !== 'customer') {
-          navigate('/profile', { replace: true });
-          return;
+        const [ordersRes, financeRes] = await Promise.allSettled([
+          api.get<any>('/api/orders/me?limit=20'),
+          api.get<any>('/api/transactions/finance-history'),
+        ]);
+
+        if (ordersRes.status === 'fulfilled') {
+          const raw = ordersRes.value;
+          const list: any[] = Array.isArray(raw) ? raw : raw?.orders ?? raw?.data ?? [];
+          setOrders(
+            list.map((o) => ({
+              id: o.id,
+              status: o.status,
+              address: o.address ?? o.location ?? 'No address',
+              category: o.category ?? o.serviceTitle ?? '',
+              totalAmount: o.totalAmount ?? o.price ?? undefined,
+              createdAt: o.createdAt,
+            })),
+          );
         }
-        setRole(me.role);
-      } catch {
-        setRole('customer');
+
+        if (financeRes.status === 'fulfilled') {
+          const raw = financeRes.value;
+          const list: any[] = Array.isArray(raw) ? raw : raw?.history ?? raw?.transactions ?? [];
+          setInvoices(
+            list.map((t) => ({
+              id: t.id,
+              status: t.contractStatus ?? t.status ?? 'unknown',
+              amount: t.amount ?? t.contractAmount ?? 0,
+              createdAt: t.createdAt,
+              description: t.serviceTitle ?? t.description ?? '',
+            })),
+          );
+        }
       } finally {
         setLoading(false);
       }
-    })();
-  }, [user, navigate]);
+    };
+    load();
+  }, []);
 
-  useEffect(() => {
-    loadAccountFields();
-  }, [loadAccountFields]);
-
-  const loadData = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const [reqList, cList, txList, tkList] = await Promise.all([
-        api.get<any[]>('/api/requests'),
-        api.get<any[]>('/api/contracts'),
-        api.get<any[]>('/api/transactions'),
-        api.get<any[]>('/api/tickets'),
-      ]);
-      setRequests(reqList || []);
-      setContracts(cList || []);
-      setTransactions(txList || []);
-      setTickets(tkList || []);
-    } catch (e) {
-      try {
-        await handleApiError(e, OperationType.LIST, 'client-account');
-      } catch {
-        /* noop */
-      }
-    }
-  }, [user?.id]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    if (!user) return;
-    api
-      .get<{ identityVerified?: boolean }>('/api/kyc/me')
-      .then((k) => setKycNeedsAttention(k.identityVerified !== true))
-      .catch(() => setKycNeedsAttention(false));
-  }, [user]);
-
-  useEffect(() => {
-    if (rawSection === 'profile') {
-      setSearchParams({ section: 'account' }, { replace: true });
-    }
-  }, [rawSection, setSearchParams]);
-
-  useEffect(() => {
-    const valid = SECTIONS.some((s) => s.id === section);
-    if (!valid) setSection('account');
-  }, [section, setSection]);
-
-  const saveAccount = async () => {
-    setAccountErr(null);
-    setAccountSaving(true);
-    try {
-      await api.put('/api/users/me', {
-        firstName: firstName.trim() || null,
-        lastName: lastName.trim() || null,
-        phone: phone.trim() || null,
-        address: address.trim() || null,
-      });
-      await refreshUser();
-      await loadAccountFields();
-    } catch (e: unknown) {
-      setAccountErr(e instanceof Error ? e.message : 'Save failed');
-    } finally {
-      setAccountSaving(false);
-    }
+  const statusColor = (s: string) => {
+    if (['completed', 'paid', 'active'].includes(s)) return 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20';
+    if (['pending', 'open', 'submitted'].includes(s)) return 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20';
+    if (['cancelled', 'rejected', 'failed'].includes(s)) return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20';
+    return 'text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800';
   };
 
-  const submitPasswordChange = async () => {
-    setPasswordErr(null);
-    setPasswordMsg(null);
-    if (newPassword.length < 8) {
-      setPasswordErr('New password must be at least 8 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordErr('New password and confirmation do not match.');
-      return;
-    }
-    setPasswordBusy(true);
-    try {
-      await api.post('/api/users/me/change-password', {
-        currentPassword: currentPassword,
-        newPassword,
-      });
-      setPasswordMsg('Password updated.');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (e: unknown) {
-      setPasswordErr(e instanceof Error ? e.message : 'Could not change password');
-    } finally {
-      setPasswordBusy(false);
-    }
-  };
+  const fmtDate = (d: string) =>
+    new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  const onGoogleLinkSuccess = async (cred: CredentialResponse) => {
-    if (!cred.credential) return;
-    setGoogleErr(null);
-    setGoogleOk(null);
-    setGoogleBusy(true);
-    try {
-      await api.post<{ success?: boolean }>('/api/auth/google/link', { idToken: cred.credential });
-      setGoogleOk('Google account linked. You can sign in with Google next time.');
-      await refreshUser();
-      await loadAccountFields();
-    } catch (e: unknown) {
-      setGoogleErr(e instanceof Error ? e.message : 'Link failed');
-    } finally {
-      setGoogleBusy(false);
-    }
-  };
-
-  if (!user) {
-    navigate('/auth');
-    return null;
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <div className="w-8 h-8 border-4 border-app-border border-t-neutral-900 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (role && role !== 'customer') {
-    return null;
-  }
-
-  const totalSpent = transactions.filter((t) => t.type === 'outcome').reduce((s, t) => s + (t.amount || 0), 0);
+  const fmtCurrency = (n: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
   return (
-    <div className="max-w-lg mx-auto pb-28 space-y-4 px-1">
-      <header className="flex items-start justify-between gap-4 px-1">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tight text-app-text">Account</h1>
-          <p className="text-sm text-neutral-500 font-medium mt-1">{user.email}</p>
-        </div>
-      </header>
+    <div className="space-y-4">
+      {/* Toggle */}
+      <div className="flex gap-2 p-1 bg-neutral-100 dark:bg-neutral-800 rounded-2xl">
+        {([['orders', 'My Orders', Package], ['invoices', 'Invoices', CreditCard]] as const).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            onClick={() => setActiveSection(id)}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all',
+              activeSection === id
+                ? 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-sm'
+                : 'text-neutral-500 dark:text-neutral-400',
+            )}
+          >
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
 
-      <div className="sticky top-0 z-30 -mx-1 px-1 py-2 bg-app-bg/90 backdrop-blur-sm border-b border-app-border/60">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          {SECTIONS.map((s) => {
-            const Icon = s.icon;
-            const on = section === s.id;
-            const kycDot = s.id === 'identity' && kycNeedsAttention;
-            return (
+      {loading ? (
+        <div className="flex flex-col items-center gap-3 py-16">
+          <span className="w-8 h-8 border-3 border-neutral-300 border-t-blue-600 rounded-full animate-spin" />
+          <p className="text-sm text-neutral-500">Loading…</p>
+        </div>
+      ) : activeSection === 'orders' ? (
+        orders.length === 0 ? (
+          <SectionCard>
+            <div className="flex flex-col items-center gap-3 py-12 px-4 text-center">
+              <Package size={32} className="text-neutral-300 dark:text-neutral-600" />
+              <p className="font-semibold text-neutral-700 dark:text-neutral-300">No orders yet</p>
+              <p className="text-sm text-neutral-500">Your service orders will appear here.</p>
+            </div>
+          </SectionCard>
+        ) : (
+          <SectionCard>
+            {orders.map((order, idx) => (
+              <React.Fragment key={order.id}>
+                {idx > 0 && <Divider />}
+                <div className="flex items-start gap-3 px-4 py-4">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0 mt-0.5">
+                    <Package size={16} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+                        {order.category || 'Service Order'}
+                      </p>
+                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold shrink-0', statusColor(order.status))}>
+                        {order.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-500 truncate flex items-center gap-1">
+                      <MapPin size={10} className="shrink-0" /> {order.address}
+                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-neutral-400">{fmtDate(order.createdAt)}</p>
+                      {order.totalAmount !== undefined && (
+                        <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                          {fmtCurrency(order.totalAmount)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </React.Fragment>
+            ))}
+          </SectionCard>
+        )
+      ) : invoices.length === 0 ? (
+        <SectionCard>
+          <div className="flex flex-col items-center gap-3 py-12 px-4 text-center">
+            <CreditCard size={32} className="text-neutral-300 dark:text-neutral-600" />
+            <p className="font-semibold text-neutral-700 dark:text-neutral-300">No invoices yet</p>
+            <p className="text-sm text-neutral-500">Completed transactions will appear here.</p>
+          </div>
+        </SectionCard>
+      ) : (
+        <SectionCard>
+          {invoices.map((inv, idx) => (
+            <React.Fragment key={inv.id}>
+              {idx > 0 && <Divider />}
+              <div className="flex items-start gap-3 px-4 py-4">
+                <div className="w-9 h-9 rounded-xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <CreditCard size={16} className="text-green-600 dark:text-green-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+                      {inv.description || 'Transaction'}
+                    </p>
+                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold shrink-0', statusColor(inv.status))}>
+                      {inv.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-xs text-neutral-400">{fmtDate(inv.createdAt)}</p>
+                    <p className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                      {fmtCurrency(inv.amount)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </React.Fragment>
+          ))}
+        </SectionCard>
+      )}
+    </div>
+  );
+}
+
+// ─── Root ────────────────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: 'account', label: 'Account', icon: User },
+  { id: 'personal', label: 'Personal', icon: Shield },
+  { id: 'finance', label: 'Finance', icon: CreditCard },
+] as const;
+
+type TabId = (typeof TABS)[number]['id'];
+
+export default function ClientAccount() {
+  const [tab, setTab] = useState<TabId>('account');
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
+        <div className="max-w-lg mx-auto px-4 pt-4 pb-0">
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 transition-colors"
+            >
+              <X size={18} />
+            </button>
+            <h1 className="text-lg font-bold text-neutral-900 dark:text-neutral-100 flex-1">My Account</h1>
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex gap-0">
+            {TABS.map(({ id, label, icon: Icon }) => (
               <button
-                key={s.id}
-                type="button"
-                onClick={() => setSection(s.id)}
+                key={id}
+                onClick={() => setTab(id)}
                 className={cn(
-                  'relative flex items-center gap-1.5 shrink-0 px-3.5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all',
-                  on
-                    ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-lg'
-                    : 'bg-app-card border border-app-border text-neutral-500 hover:text-app-text',
-                  focusRing,
+                  'flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors',
+                  tab === id
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200',
                 )}
-                title={s.hint}
               >
-                <Icon className="w-3.5 h-3.5" />
-                {s.label}
-                {kycDot ? (
-                  <span className="absolute -top-0.5 -end-0.5 w-2 h-2 rounded-full bg-red-500" aria-hidden />
-                ) : null}
+                <Icon size={14} />
+                {label}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={section}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.2 }}
-          className="space-y-4 px-1"
-        >
-          {section === 'account' && (
-            <div className="bg-app-card border border-app-border rounded-[1.75rem] p-6 space-y-5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Your details</p>
-              {accountErr ? (
-                <p className="text-sm text-red-600" role="alert">
-                  {accountErr}
-                </p>
-              ) : null}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">First name</label>
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-app-border bg-app-input text-app-text"
-                    autoComplete="given-name"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Last name</label>
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-app-border bg-app-input text-app-text"
-                    autoComplete="family-name"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Phone</label>
-                <PhoneInput country={'ca'} value={phone} onChange={setPhone} containerClass="!w-full" inputClass="!w-full !rounded-xl" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Address</label>
-                <div className="relative">
-                  <MapPin className="absolute start-3 top-3 w-4 h-4 text-neutral-400 pointer-events-none" />
-                  <textarea
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    rows={3}
-                    className="w-full ps-10 pe-3 py-3 rounded-xl border border-app-border bg-app-input text-app-text resize-y"
-                    placeholder="Street, city, postal code"
-                    autoComplete="street-address"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={accountSaving}
-                onClick={() => void saveAccount()}
-                className={cn(
-                  'w-full py-3 rounded-2xl bg-neutral-900 text-white font-bold dark:bg-white dark:text-neutral-900 flex items-center justify-center gap-2 disabled:opacity-50',
-                  focusRing,
-                )}
-              >
-                {accountSaving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : null}
-                Save
-              </button>
-            </div>
-          )}
-
-          {section === 'google' && (
-            <div className="bg-app-card border border-app-border rounded-[1.75rem] p-6 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Google</p>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                {googleLinked
-                  ? 'Your Neighborly account is linked with Google. You can sign in with Google on the login page.'
-                  : 'Link your Google account to sign in faster. Your email should match this account.'}
-              </p>
-              {googleOk ? <p className="text-sm text-emerald-600">{googleOk}</p> : null}
-              {googleErr ? (
-                <p className="text-sm text-red-600" role="alert">
-                  {googleErr}
-                </p>
-              ) : null}
-              {!googleClientId ? (
-                <p className="text-xs text-amber-700 dark:text-amber-300 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
-                  Google sign-in is not configured. Set <code className="text-[10px]">VITE_GOOGLE_CLIENT_ID</code> and{' '}
-                  <code className="text-[10px]">GOOGLE_CLIENT_ID</code> in <code className="text-[10px]">.env</code>.
-                </p>
-              ) : googleLinked ? null : (
-                <div className="flex flex-wrap items-center gap-3">
-                  {googleBusy ? <Loader2 className="w-5 h-5 animate-spin text-neutral-500" aria-hidden /> : null}
-                  <GoogleLogin
-                    onSuccess={(c) => void onGoogleLinkSuccess(c)}
-                    onError={() => setGoogleErr('Google popup failed or was closed.')}
-                    text="continue_with"
-                    shape="rectangular"
-                    theme="outline"
-                    size="large"
-                    width="100%"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {section === 'password' && (
-            <div className="bg-app-card border border-app-border rounded-[1.75rem] p-6 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Change password</p>
-              <p className="text-xs text-neutral-500">
-                If you registered with Google only and have no password, use Google sign-in or contact support.
-              </p>
-              {passwordMsg ? <p className="text-sm text-emerald-600">{passwordMsg}</p> : null}
-              {passwordErr ? (
-                <p className="text-sm text-red-600" role="alert">
-                  {passwordErr}
-                </p>
-              ) : null}
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Current password</label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-app-border bg-app-input"
-                  autoComplete="current-password"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">New password</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-app-border bg-app-input"
-                  autoComplete="new-password"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Confirm new</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-app-border bg-app-input"
-                  autoComplete="new-password"
-                />
-              </div>
-              <button
-                type="button"
-                disabled={passwordBusy}
-                onClick={() => void submitPasswordChange()}
-                className={cn(
-                  'w-full py-3 rounded-2xl bg-neutral-900 text-white font-bold dark:bg-white dark:text-neutral-900 disabled:opacity-50',
-                  focusRing,
-                )}
-              >
-                {passwordBusy ? <Loader2 className="w-4 h-4 animate-spin inline" aria-hidden /> : null} Update password
-              </button>
-            </div>
-          )}
-
-          {section === 'identity' && user && (
-            <div className="space-y-6">
-              <StatusBanner model={bannerModel} />
-              <HistoryCollapsible />
-              <PersonalKycWizard
-                userId={user.id}
-                displayName={user.displayName}
-                onBannerChange={setBannerModel}
-                onRequestResubmit={onRequestResubmit}
-                resubmitNonce={resubmitNonce}
-              />
-            </div>
-          )}
-
-          {section === 'orders' && (
-            <div className="space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">My orders</p>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                Active, past, and cancelled bookings from the order wizard are listed together.
-              </p>
-              <Link
-                to="/orders"
-                className={cn(
-                  'flex w-full min-h-[48px] items-center justify-between gap-3 rounded-2xl border border-app-border bg-app-card px-4 py-3 font-bold text-app-text transition-colors hover:border-neutral-400 dark:hover:border-neutral-600',
-                  focusRing,
-                )}
-              >
-                <span>Open order history</span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" aria-hidden />
-              </Link>
-            </div>
-          )}
-
-          {section === 'appointments' && (
-            <div className="space-y-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Appointments</p>
-              <div className="flex rounded-2xl bg-app-card border border-app-border p-1 gap-1">
-                {(
-                  [
-                    { id: 'upcoming' as const, label: 'Upcoming' },
-                    { id: 'past' as const, label: 'Past' },
-                  ] as const
-                ).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setApptTab(t.id)}
-                    className={cn(
-                      'flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all',
-                      apptTab === t.id
-                        ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
-                        : 'text-neutral-500',
-                      focusRing,
-                    )}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <p className="text-sm text-neutral-500 p-4 bg-amber-50/80 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-2xl">
-                When scheduling is connected, your bookings will appear here.
-              </p>
-            </div>
-          )}
-
-          {section === 'messages' && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Messages</p>
-              {tickets.length === 0 ? (
-                <p className="text-sm text-neutral-500 p-6 text-center bg-app-card border border-dashed border-app-border rounded-2xl">
-                  No messages yet. Support tickets will show here.
-                </p>
-              ) : (
-                tickets.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => navigate(`/tickets?id=${t.id}`)}
-                    className="w-full p-4 bg-app-card border border-app-border rounded-2xl flex items-center justify-between"
-                  >
-                    <span className="font-bold text-sm text-left">{t.subject}</span>
-                    <ChevronRight className="w-4 h-4 text-neutral-300" />
-                  </button>
-                ))
-              )}
-              <Link to="/tickets" className="inline-flex items-center gap-1 text-sm font-bold text-blue-600">
-                Open support
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-            </div>
-          )}
-
-          {section === 'contracts' && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Contracts</p>
-              {contracts.length === 0 ? (
-                <p className="text-sm text-neutral-500 p-6 text-center bg-app-card border border-dashed border-app-border rounded-2xl">
-                  No contracts yet.
-                </p>
-              ) : (
-                contracts.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => navigate(`/contract/${c.id}`)}
-                    className="w-full p-4 bg-app-card border border-app-border rounded-2xl flex items-center justify-between"
-                  >
-                    <span className="font-bold text-sm">Contract {String(c.id).slice(0, 8)}</span>
-                    <span
-                      className={cn(
-                        'text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg',
-                        c.status === 'signed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800',
-                      )}
-                    >
-                      {c.status}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-
-          {section === 'payments' && (
-            <div className="space-y-4">
-              <div className="p-5 rounded-[1.5rem] bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">
-                <p className="text-[10px] font-black uppercase tracking-widest text-white/50 dark:text-neutral-500">Total spent</p>
-                <p className="text-3xl font-black mt-1">${totalSpent.toLocaleString()}</p>
-              </div>
-              <div className="bg-app-card border border-app-border rounded-2xl overflow-hidden">
-                <div className="p-4 border-b border-app-border">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">History</p>
-                </div>
-                <div className="max-h-64 overflow-y-auto divide-y divide-app-border">
-                  {transactions.length === 0 ? (
-                    <p className="p-6 text-sm text-neutral-500 text-center">No transactions.</p>
-                  ) : (
-                    transactions.map((t) => (
-                      <div key={t.id} className="p-4 flex justify-between text-sm">
-                        <span className="text-neutral-600 dark:text-neutral-400 truncate pr-2">{t.description || '—'}</span>
-                        <span className="font-bold shrink-0">${t.amount}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {section === 'notifications' && (
-            <div className="space-y-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Notification center</p>
-              <div className="flex rounded-2xl bg-app-card border border-app-border p-1 gap-1">
-                {(
-                  [
-                    { id: 'chat' as const, label: 'Chat' },
-                    { id: 'orders' as const, label: 'Orders' },
-                    { id: 'system' as const, label: 'System' },
-                  ] as const
-                ).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setNotifTab(t.id)}
-                    className={cn(
-                      'flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all',
-                      notifTab === t.id
-                        ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
-                        : 'text-neutral-500',
-                      focusRing,
-                    )}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <Link
-                to="/notifications"
-                className="flex items-center justify-between p-4 bg-app-card border border-app-border rounded-2xl font-bold text-sm"
-              >
-                Open all alerts
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-            </div>
-          )}
-
-          {section === 'help' && (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => navigate('/tickets')}
-                className={cn(
-                  'w-full p-4 bg-app-card border border-app-border rounded-2xl flex items-center justify-between font-bold',
-                  focusRing,
-                )}
-              >
-                Support & tickets
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <p className="text-sm text-neutral-500 p-4 bg-app-card border border-dashed border-app-border rounded-2xl">
-                FAQ and policies can be linked here from CMS later.
-              </p>
-            </div>
-          )}
-
-          {section === 'settings' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-app-card border border-app-border rounded-2xl">
-                <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-3">Push (placeholder)</p>
-                <div className="space-y-3 text-sm">
-                  <label className="flex items-center justify-between">
-                    <span>Order updates</span>
-                    <input type="checkbox" defaultChecked className="rounded" readOnly />
-                  </label>
-                  <label className="flex items-center justify-between">
-                    <span>Chat</span>
-                    <input type="checkbox" defaultChecked className="rounded" readOnly />
-                  </label>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => logout().then(() => navigate('/'))}
-                className={cn(
-                  'w-full py-4 rounded-2xl bg-red-50 text-red-600 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2',
-                  focusRing,
-                )}
-              >
-                <LogOut className="w-4 h-4" />
-                Log out
-              </button>
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+      {/* Body */}
+      <div className="max-w-lg mx-auto px-4 py-5">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+          >
+            {tab === 'account' && <AccountTab />}
+            {tab === 'personal' && <PersonalTab />}
+            {tab === 'finance' && <FinanceTab />}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

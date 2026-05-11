@@ -31,11 +31,11 @@ abstract final class NeighborlyTheme {
       brightness: Brightness.light,
       colorScheme: scheme,
       scaffoldBackgroundColor: NeighborlyColors.lightBg,
-      textTheme: GoogleFonts.interTextTheme().apply(
+      textTheme: GoogleFonts.dmSansTextTheme().apply(
         bodyColor: const Color(0xFF1B3C53),
         displayColor: const Color(0xFF1B3C53),
       ),
-      fontFamily: GoogleFonts.inter().fontFamily,
+      fontFamily: GoogleFonts.dmSans().fontFamily,
       dividerColor: NeighborlyColors.lightBorder,
       splashColor: scheme.primary.withValues(alpha: 0.12),
       highlightColor: scheme.primary.withValues(alpha: 0.06),
@@ -74,39 +74,39 @@ abstract final class NeighborlyTheme {
 
   static ThemeData dark() {
     final scheme = ColorScheme.dark(
-      surface: NeighborlyColors.darkSurface,
-      onSurface: Color(0xFFF8FAFC),
-      primary: NeighborlyColors.darkAccent,
-      onPrimary: NeighborlyColors.darkBg,
-      secondary: const Color(0xFFBEB0A2),
-      onSecondary: NeighborlyColors.darkBg,
-      outline: NeighborlyColors.darkBorder,
-      surfaceContainerHighest: Color(0xFF2A5A7A),
+      surface: const Color(0xFF1E2235),
+      onSurface: const Color(0xFFF0F2FF),
+      primary: const Color(0xFF2B6EFF),
+      onPrimary: Colors.white,
+      secondary: const Color(0xFF0FC98A),
+      onSecondary: const Color(0xFF0D0F1A),
+      outline: const Color(0xFF2A2F4A),
+      surfaceContainerHighest: const Color(0xFF242840),
     );
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: scheme,
-      scaffoldBackgroundColor: NeighborlyColors.darkBg,
-      textTheme: GoogleFonts.interTextTheme(ThemeData(brightness: Brightness.dark).textTheme).apply(
-        bodyColor: const Color(0xFFF8FAFC),
-        displayColor: const Color(0xFFF8FAFC),
+      scaffoldBackgroundColor: const Color(0xFF0D0F1A),
+      textTheme: GoogleFonts.dmSansTextTheme(ThemeData(brightness: Brightness.dark).textTheme).apply(
+        bodyColor: const Color(0xFFF0F2FF),
+        displayColor: const Color(0xFFF0F2FF),
       ),
-      fontFamily: GoogleFonts.inter().fontFamily,
-      dividerColor: NeighborlyColors.darkBorder,
+      fontFamily: GoogleFonts.dmSans().fontFamily,
+      dividerColor: const Color(0xFF2A2F4A),
       splashColor: scheme.primary.withValues(alpha: 0.18),
       highlightColor: scheme.primary.withValues(alpha: 0.10),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: NeighborlyColors.darkSurface,
+        color: const Color(0xFF1E2235),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: NeighborlyColors.darkBorder),
+          side: const BorderSide(color: Color(0xFF2A2F4A)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF2A5A7A),
+        fillColor: const Color(0xFF1A1D2E),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
       ),

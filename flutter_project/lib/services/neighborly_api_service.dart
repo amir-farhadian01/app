@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -551,6 +552,21 @@ class NeighborlyApiService extends ChangeNotifier {
     final responseData = _jsonDecodeBody(res.body) as Map<String, dynamic>;
     _user = UserModel.fromMap(responseData);
     notifyListeners();
+  }
+
+  /// Upload a local [file] to /api/upload and return the public URL path.
+  Future<String> uploadFile(File file, String fieldName) async {
+    final uri = _uri('/api/upload');
+    final req = http.MultipartRequest('POST', uri);
+    if (_accessToken != null) {
+      req.headers['Authorization'] = 'Bearer $_accessToken';
+    }
+    req.files.add(await http.MultipartFile.fromPath(fieldName, file.path));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    await _throwUnlessOk(res);
+    final data = _jsonDecodeBody(res.body);
+    return (data as Map)['url'] as String;
   }
 
   /// Old password + new password (8+ chars). Server: POST /api/users/me/change-password

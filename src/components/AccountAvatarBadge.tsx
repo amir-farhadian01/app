@@ -22,7 +22,7 @@ function initialsFromUser(u: Pick<ApiUser, 'displayName' | 'firstName' | 'lastNa
 export function accountProfileHref(user: ApiUser, role: string | null): string {
   const adminish = ['owner', 'platform_admin', 'support', 'finance'].includes(role || '');
   if (role === 'customer' || (!adminish && user.role === 'customer')) {
-    return '/account?section=account';
+    return '/account?section=settings';
   }
   return '/profile';
 }

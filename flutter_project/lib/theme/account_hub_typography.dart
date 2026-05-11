@@ -3,8 +3,24 @@ import 'package:google_fonts/google_fonts.dart';
 
 /// Typography for customer account hub, safety flows, and pill nav.
 /// Uses tight negative letter-spacing on headlines (common mobility-app rhythm).
-/// Font: Plus Jakarta Sans (freely available; Uber Move is not bundled).
+/// Font: DM Sans for body and Space Grotesk for bold headers.
 abstract final class AccountHubTypography {
+  static TextStyle _dmSans({
+    required double fontSize,
+    required FontWeight fontWeight,
+    required Color color,
+    double height = 1.0,
+    double letterSpacing = 0,
+  }) {
+    return GoogleFonts.dmSans(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      height: height,
+      letterSpacing: letterSpacing,
+      color: color,
+    );
+  }
+
   static TextStyle _pjs({
     required double fontSize,
     required FontWeight fontWeight,
@@ -12,7 +28,23 @@ abstract final class AccountHubTypography {
     double height = 1.0,
     double letterSpacing = 0,
   }) {
-    return GoogleFonts.plusJakartaSans(
+    return _dmSans(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+  }
+
+  static TextStyle _spaceGrotesk({
+    required double fontSize,
+    required FontWeight fontWeight,
+    required Color color,
+    double height = 1.0,
+    double letterSpacing = 0,
+  }) {
+    return GoogleFonts.spaceGrotesk(
       fontSize: fontSize,
       fontWeight: fontWeight,
       height: height,
@@ -22,7 +54,7 @@ abstract final class AccountHubTypography {
   }
 
   // --- Profile hub ---
-  static TextStyle profileDisplayName(Color c) => _pjs(
+  static TextStyle profileDisplayName(Color c) => _spaceGrotesk(
         fontSize: 28,
         fontWeight: FontWeight.w800,
         color: c,
@@ -30,7 +62,7 @@ abstract final class AccountHubTypography {
         letterSpacing: -0.95,
       );
 
-  static TextStyle ratingChip(Color c) => _pjs(fontSize: 13, fontWeight: FontWeight.w700, color: c, letterSpacing: -0.12);
+  static TextStyle ratingChip(Color c) => _dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: c, letterSpacing: -0.12);
 
   static TextStyle quickGridLabel(Color c) =>
       _pjs(fontSize: 15, fontWeight: FontWeight.w700, color: c, letterSpacing: -0.22, height: 1.15);
@@ -64,13 +96,13 @@ abstract final class AccountHubTypography {
 
   // --- Full-screen account / safety modals ---
   static TextStyle screenHero34(Color c) =>
-      _pjs(fontSize: 34, fontWeight: FontWeight.w800, color: c, height: 1.05, letterSpacing: -1.2);
+      _spaceGrotesk(fontSize: 34, fontWeight: FontWeight.w800, color: c, height: 1.05, letterSpacing: -1.2);
 
   static TextStyle screenHero32(Color c) =>
-      _pjs(fontSize: 32, fontWeight: FontWeight.w800, color: c, height: 1.06, letterSpacing: -1.05);
+      _spaceGrotesk(fontSize: 32, fontWeight: FontWeight.w800, color: c, height: 1.06, letterSpacing: -1.05);
 
   static TextStyle settingsPageTitle(Color c) =>
-      _pjs(fontSize: 34, fontWeight: FontWeight.w800, color: c, height: 1.02, letterSpacing: -1.1);
+      _spaceGrotesk(fontSize: 34, fontWeight: FontWeight.w800, color: c, height: 1.02, letterSpacing: -1.1);
 
   static TextStyle safetySectionHeader(Color c) =>
       _pjs(fontSize: 18, fontWeight: FontWeight.w800, color: c, letterSpacing: -0.42, height: 1.2);

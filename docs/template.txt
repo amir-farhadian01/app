@@ -2,22 +2,21 @@
 # Keep Flutter (flutter_project/lib/theme/neighborly_theme.dart) and web (src/index.css)
 # aligned with these hex values when changing the product palette.
 
-# --- Light mode ---
-# Page background
-NL_LIGHT_BG=#F8FAFC
-# Surfaces / cards / glass tint base
-NL_LIGHT_SURFACE=#D9EAFD
-# Borders / dividers / muted fills
-NL_LIGHT_BORDER=#BCCCDC
-# Secondary / helper text
-NL_LIGHT_MUTED=#9AA6B2
-
-# --- Dark mode ---
-# Page background
-NL_DARK_BG=#1B3C53
-# Surfaces / cards / glass tint base
-NL_DARK_SURFACE=#234C6A
-# Borders / dividers / muted fills
-NL_DARK_BORDER=#456882
-# Accent / secondary / warm contrast text
-NL_DARK_ACCENT=#D2C1B6
+# --- Prototype palette ---
+NL_BG=#0D0F1A
+NL_BG_2=#131624
+NL_BG_3=#1A1D2E
+NL_SURFACE=#1E2235
+NL_SURFACE_2=#242840
+NL_PRIMARY=#2B6EFF
+NL_PRIMARY_DIM=#1A3F99
+NL_SECONDARY=#0FC98A
+NL_BUSINESS_ACCENT=#FF7A2B
+NL_WARNING=#FFB800
+NL_DANGER=#FF4D4D
+NL_PURPLE=#8B5CF6
+NL_TEXT=#F0F2FF
+NL_MUTED=#8B90B0
+NL_MUTED_2=#4A4F70
+NL_BORDER=#2A2F4A
+NL_BORDER_2=#363B5E

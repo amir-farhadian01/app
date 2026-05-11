@@ -219,6 +219,31 @@ services:
       - "traefik.http.routers.metabase.middlewares=metabase-strip"
       - "traefik.http.services.metabase.loadbalancer.server.port=3000"
 
+  # ─── React Frontend (Vite dev server) ──────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: neighborly_frontend
+    environment:
+      - VITE_API_URL=http://localhost:3000/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - web-app
+    networks:
+      - neighborly_network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/app`) || PathPrefix(`/auth`) || PathPrefix(`/business`) || PathPrefix(`/admin`) || PathPrefix(`/explore`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.priority=10"
+      - "traefik.http.services.frontend.loadbalancer.server.port=5173"
+
   # ─── Flutter Web (static build served by nginx) ───────────────────────────
   flutter-web:
     build:

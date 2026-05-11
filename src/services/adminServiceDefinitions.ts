@@ -9,6 +9,8 @@ export type ServiceCatalogListItem = {
   category: string;
   subcategory: string | null;
   complianceTags: string[];
+  icon: string | null;
+  showInHomeClient: boolean;
   categoryId: string | null;
   category_: ServiceCatalogCategory | null;
   defaultMatchingMode: string;
@@ -64,6 +66,8 @@ export type CreateServiceDefinitionBody = {
   category: string;
   subcategory?: string | null;
   complianceTags?: string[];
+  icon?: string | null;
+  showInHomeClient?: boolean;
   categoryId?: string | null;
   dynamicFieldsSchema?: ServiceQuestionnaireV1 | null;
   defaultMatchingMode?: string;

@@ -262,6 +262,8 @@ model ServiceCatalog {
   category              String
   subcategory           String?
   complianceTags        String[]  @default([])
+  icon                  String?
+  showInHomeClient      Boolean   @default(false)
   categoryId            String?
   category_             Category? @relation(fields: [categoryId], references: [id])
   dynamicFieldsSchema   Json?

@@ -107,13 +107,13 @@ export default function Auth() {
 
   if (showForgotPassword) {
     return (
-      <div className="max-w-md mx-auto py-12">
-        <div className="bg-app-card p-10 rounded-[3rem] shadow-xl border border-app-border space-y-8">
+      <div className="mx-auto max-w-md py-12">
+        <div className="space-y-8 rounded-[3rem] border border-[#2a2f4a] bg-[#1e2235] p-10 shadow-2xl shadow-black/30">
           <div className="text-center space-y-3">
-            <div className="w-16 h-16 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-[1.5rem] flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-[#2b6eff] text-white rounded-[1.5rem] flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8" />
             </div>
-            <h2 className="text-3xl font-black italic uppercase tracking-tight text-app-text">Reset Password</h2>
+            <h2 className="text-3xl font-black italic uppercase tracking-tight text-white">Reset Password</h2>
             <p className="text-neutral-500 text-xs font-medium uppercase tracking-widest">
               Self-service reset is not enabled for the self-hosted stack
             </p>
@@ -202,15 +202,15 @@ export default function Auth() {
   }
 
   return (
-    <div className="max-w-md mx-auto py-12">
+    <div className="mx-auto max-w-md py-12">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-app-card p-8 rounded-[2.5rem] shadow-xl shadow-neutral-200/50 dark:shadow-none border border-app-border space-y-8"
+        className="space-y-8 rounded-[2.5rem] border border-[#2a2f4a] bg-[#1e2235] p-8 shadow-2xl shadow-black/30"
       >
         <div className="text-center space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight text-app-text">Sign in</h2>
-          <p className="text-neutral-500 text-sm">Use your admin or account email and password</p>
+          <h2 className="text-3xl font-bold tracking-tight text-white">Sign in</h2>
+          <p className="text-sm text-[#8b90b0]">Use your admin or account email and password</p>
         </div>
 
         <form onSubmit={handleAuth} className="space-y-4">

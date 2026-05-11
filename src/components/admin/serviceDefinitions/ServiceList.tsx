@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pencil, Copy, Plus, Loader2, Trash2 } from 'lucide-react';
+import { Pencil, FilePenLine, Copy, Plus, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '../../../lib/AuthContext';
 import { CrmTable } from '../../crm/CrmTable.js';
 import type { CrmColumnDef, FilterValue, Sort } from '../../crm/types.js';
@@ -18,6 +18,7 @@ type Props = {
   /** Changes here refetch the list (e.g. after duplicate) */
   refreshKey?: number;
   onEdit: (id: string) => void;
+  onOpenFormEditor?: (id: string) => void;
   onNew: () => void;
   onDuplicate: (id: string) => void;
   setNotification: (n: { show: boolean; message: string; type: 'success' | 'error' } | null) => void;
@@ -44,7 +45,15 @@ const MATCHING_OPTS = [
   { value: 'round_robin_5', label: 'Round robin 5' },
 ];
 
-export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNotification, setShowConfirm }: Props) {
+export function ServiceList({
+  refreshKey = 0,
+  onEdit,
+  onOpenFormEditor,
+  onNew,
+  onDuplicate,
+  setNotification,
+  setShowConfirm,
+}: Props) {
   const { user } = useAuth();
   const canDelete = ['owner', 'platform_admin'].includes(user?.role ?? '');
   const [tree, setTree] = useState<CategoryTreeNode[]>([]);
@@ -58,6 +67,7 @@ export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNot
   const [globalSearch, setGlobalSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, FilterValue>>({
     isActive: { type: 'boolean', value: null },
+    showInHomeClient: { type: 'boolean', value: null },
     categoryId: { type: 'checkbox', values: [] },
     defaultMatchingMode: { type: 'checkbox', values: [] },
   });
@@ -101,6 +111,10 @@ export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNot
       if (m?.type === 'checkbox' && m.values.length) {
         (q as Record<string, string>).defaultMatchingMode = m.values.join(',');
       }
+      const sh = f.showInHomeClient;
+      if (sh?.type === 'boolean' && sh.value !== null) {
+        q.showInHomeClient = sh.value ? 'true' : 'false';
+      }
       const res = await listServiceDefinitions(q);
       setData(res.items);
       setTotal(res.total);
@@ -138,6 +152,40 @@ export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNot
     await load();
   };
 
+  const askDeleteOne = (row: ServiceCatalogListItem) => {
+    if (!canDelete) {
+      setNotification({ show: true, message: 'Not permitted to delete', type: 'error' });
+      return;
+    }
+    setShowConfirm({
+      show: true,
+      title: 'Delete service definition',
+      message: `Delete "${row.name}"? This action cannot be undone.`,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteServiceDefinition(row.id);
+          setNotification({ show: true, message: 'Service definition deleted', type: 'success' });
+          await load();
+        } catch (e) {
+          setNotification({
+            show: true,
+            message: e instanceof Error ? e.message : 'Delete failed',
+            type: 'error',
+          });
+        } finally {
+          setShowConfirm({
+            show: false,
+            title: '',
+            message: '',
+            onConfirm: () => {},
+            type: 'info',
+          });
+        }
+      },
+    });
+  };
+
   const columns: CrmColumnDef<ServiceCatalogListItem>[] = useMemo(
     () => [
       {
@@ -152,18 +200,22 @@ export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNot
       },
       {
         id: 'categoryId',
-        header: 'Category',
+        header: 'Parent / Category',
         accessor: (r) => r.categoryId,
         cell: (r) => <span className="text-sm text-neutral-600 dark:text-neutral-400">{byId(r.categoryId)}</span>,
         width: 220,
         filter: { kind: 'checkbox' as const, options: categoryOptions },
       },
       {
-        id: 'fieldsCount',
-        header: 'Fields',
-        accessor: (r) => (r.dynamicFieldsSchema && 'fields' in (r.dynamicFieldsSchema as object) ? (r.dynamicFieldsSchema as { fields: unknown[] }).fields.length : 0),
-        width: 80,
-        align: 'right',
+        id: 'tags',
+        header: 'Tags',
+        accessor: (r) => r.complianceTags.join(', '),
+        cell: (r) => (
+          <span className="line-clamp-1 text-xs text-neutral-500">
+            {r.complianceTags.length ? r.complianceTags.join(', ') : '—'}
+          </span>
+        ),
+        width: 190,
       },
       {
         id: 'defaultMatchingMode',
@@ -194,6 +246,33 @@ export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNot
         filter: { kind: 'boolean' as const, trueLabel: 'Active', falseLabel: 'Inactive' },
       },
       {
+        id: 'showInHomeClient',
+        header: 'Home',
+        sortable: true,
+        accessor: (r) => r.showInHomeClient,
+        width: 100,
+        cell: (r) => (
+          <span
+            className={cn(
+              'px-2 py-0.5 rounded-lg text-[10px] font-black uppercase',
+              r.showInHomeClient
+                ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300'
+                : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+            )}
+          >
+            {r.showInHomeClient ? 'shown' : 'hidden'}
+          </span>
+        ),
+        filter: { kind: 'boolean' as const, trueLabel: 'Shown in home', falseLabel: 'Hidden from home' },
+      },
+      {
+        id: 'icon',
+        header: 'Icon',
+        accessor: (r) => r.icon,
+        width: 130,
+        cell: (r) => <span className="text-xs text-neutral-500">{r.icon || '—'}</span>,
+      },
+      {
         id: 'updatedAt',
         header: 'Updated',
         sortable: true,
@@ -204,18 +283,10 @@ export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNot
         ),
       },
       {
-        id: 'listings',
-        header: 'Listings',
-        sortable: false,
-        accessor: (r) => r._count.services,
-        width: 90,
-        align: 'right',
-      },
-      {
         id: 'actions',
-        header: '',
+        header: 'Actions',
         accessor: () => null,
-        width: 120,
+        width: 180,
         cell: (r) => (
           <div className="flex items-center justify-end gap-1">
             <button
@@ -233,6 +304,17 @@ export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNot
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                (onOpenFormEditor ?? onEdit)(r.id);
+              }}
+              className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              title="Open form editor"
+            >
+              <FilePenLine className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
                 onDuplicate(r.id);
               }}
               className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
@@ -240,12 +322,25 @@ export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNot
             >
               <Copy className="h-4 w-4" />
             </button>
+            {canDelete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  askDeleteOne(r);
+                }}
+                className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                title="Delete"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         ),
         hideable: false,
       },
     ],
-    [byId, onEdit, onDuplicate, categoryOptions]
+    [askDeleteOne, byId, canDelete, categoryOptions, onEdit, onDuplicate, onOpenFormEditor]
   );
 
   const bulkActions = useMemo(
@@ -299,6 +394,8 @@ export function ServiceList({ refreshKey = 0, onEdit, onNew, onDuplicate, setNot
     if (c?.type === 'checkbox' && c.values.length) return true;
     const m = filters.defaultMatchingMode;
     if (m?.type === 'checkbox' && m.values.length) return true;
+    const sh = filters.showInHomeClient;
+    if (sh?.type === 'boolean' && sh.value !== null) return true;
     return false;
   }, [filters, globalSearch]);
 

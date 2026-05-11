@@ -133,7 +133,7 @@ class NeighborlySettingsScreen extends StatelessWidget {
                 Navigator.of(context).push<void>(
                   MaterialPageRoute<void>(
                     fullscreenDialog: true,
-                    builder: (_) => const NeighborlyAccountScreen(initialTab: 3),
+                    builder: (_) => const NeighborlyAccountScreen(initialTab: 0),
                   ),
                 );
               },

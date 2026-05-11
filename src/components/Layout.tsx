@@ -7,22 +7,20 @@ import {
   Home,
   User as UserIcon,
   Bell,
-  Sparkles,
   Building2,
+  BriefcaseBusiness,
   ClipboardList,
   MessageSquare,
   Users,
   Menu,
   X,
   DollarSign,
-  Sun,
-  Moon,
   Search,
   History,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { useTheme, useCmsProps } from '../ThemeContext';
+import { useCmsProps } from '../ThemeContext';
 import { AccountAvatarBadge } from './AccountAvatarBadge';
 
 interface LayoutProps {
@@ -36,7 +34,6 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { mode, toggleTheme } = useTheme();
   const navProps = useCmsProps('navbar', 'Global Navbar');
 
   const isAdmin = isStaffPlatformRole(role);
@@ -69,19 +66,15 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
   
   const customerNav = [
     { label: 'Home', icon: Home, path: '/' },
-    { label: 'Chat AI', icon: Sparkles, path: '/ai-consultant' },
-    { label: 'Explore', icon: Search, path: '/services', isMiddle: true },
+    { label: 'Explore', icon: Search, path: '/services' },
     { label: 'Orders', icon: History, path: '/orders' },
-    { label: 'Account', icon: UserIcon, path: '/account' },
-    { label: 'My Hub', icon: ClipboardList, path: '/dashboard' },
+    { label: 'Business', icon: BriefcaseBusiness, path: '/dashboard', isBusiness: true },
   ];
 
   const guestNav = [
     { label: 'Home', icon: Home, path: '/' },
-    { label: 'Chat AI', icon: Sparkles, path: '/ai-consultant' },
-    { label: 'Explore', icon: Search, path: '/services', isMiddle: true },
+    { label: 'Explore', icon: Search, path: '/services' },
     { label: 'Orders', icon: History, path: '/orders' },
-    { label: 'Account', icon: UserIcon, path: '/account' },
   ];
 
   const providerNav = [
@@ -133,10 +126,12 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
     }
   }
 
+  const isClientHome = !isAdmin && location.pathname === '/';
+
   return (
-    <div className="min-h-screen bg-app-bg font-sans text-app-text">
+    <div className="client-shell min-h-screen bg-[#0d0f1a] font-sans text-app-text">
       <header 
-        className="sticky top-0 z-50 bg-app-card/80 backdrop-blur-md border-b border-app-border"
+        className="sticky top-0 z-50 border-b border-app-border bg-[#0d0f1a]/95 backdrop-blur-xl"
         style={{
           ...navProps.styles,
           borderBottomWidth: navProps.styles?.borderWidth || '1px',
@@ -145,7 +140,13 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
       >
         <div className="w-full px-3 sm:px-5 lg:px-6 h-16 flex items-center">
           <Link to={isAdmin && !isPanel ? '/' : isAdmin ? '/dashboard' : '/'} className="flex items-center gap-2 shrink-0">
-            <span className="font-bold text-xl tracking-tight italic uppercase text-app-text">Neighborly</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#2b6eff]/30 bg-[#2b6eff]/15 text-[#2b6eff]">
+              <Home className="h-5 w-5 fill-current" />
+            </span>
+            <span>
+              <span className="block text-lg font-black tracking-tight text-white">NeighborHub</span>
+              <span className="hidden text-[10px] font-bold uppercase tracking-[0.12em] text-[#4a4f70] sm:block">Canada local app</span>
+            </span>
           </Link>
 
           <div className="ml-auto flex items-center gap-6 lg:gap-8">
@@ -157,7 +158,11 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
                     to={item.path}
                     className={cn(
                       "text-[10px] font-black uppercase tracking-[0.2em] transition-all",
-                      location.pathname === item.path ? "text-app-text" : "text-neutral-400 hover:text-neutral-600"
+                      'isBusiness' in item && item.isBusiness
+                        ? "text-[#ff7a2b] hover:text-[#ff9a5f]"
+                        : location.pathname === item.path
+                          ? "text-[#2b6eff]"
+                          : "text-[#8b90b0] hover:text-white"
                     )}
                   >
                     {item.label}
@@ -173,40 +178,29 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
             )}
 
             <div className="flex items-center gap-3 sm:gap-4">
-              <button 
-                onClick={toggleTheme}
-                className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl transition-all text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
-                title={mode === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-              >
-                {mode === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-              </button>
               {user && !isAdmin && (
-                <button 
-                  onClick={() => setIsMenuOpen(true)}
-                  className="p-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 rounded-xl transition-all relative"
+                <Link
+                  to="/notifications"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#2a2f4a] bg-[#1e2235] text-[#8b90b0] transition hover:border-[#2b6eff] hover:text-white"
+                  aria-label="Notifications"
+                  title="Notifications"
                 >
-                  <Menu className="w-5 h-5 text-app-text" />
-                  <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-                </button>
+                  <Bell className="h-5 w-5" />
+                  <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#ff4d4d] ring-2 ring-[#1e2235]" />
+                </Link>
               )}
-              {user ? (
-                <button 
-                  onClick={() => logout().then(() => navigate('/auth'))}
-                  className="p-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 rounded-xl transition-all text-neutral-400 hover:text-red-500"
-                  title="Sign out"
-                  aria-label="Sign out"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
-              ) : location.pathname !== '/' ? (
-                <Link 
+              {user && !isAdmin ? (
+                <AccountAvatarBadge user={user} role={role} />
+              ) : !user && !isAdmin ? (
+                <Link
                   to="/auth"
-                  className="px-5 py-2 bg-neutral-900 text-white text-sm font-bold rounded-full hover:bg-neutral-800 transition-all shadow-sm"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#2b6eff] bg-[#1a3f99] text-[#9fbdff] transition hover:bg-[#245be0] hover:text-white"
+                  aria-label="Sign in"
+                  title="Sign in"
                 >
-                  Get Started
+                  <UserIcon className="h-5 w-5" />
                 </Link>
               ) : null}
-              {user && <AccountAvatarBadge user={user} role={role} />}
             </div>
           </div>
         </div>
@@ -227,11 +221,11 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 bottom-0 w-80 bg-app-card z-[110] shadow-2xl p-8 flex flex-col"
+                  className="fixed bottom-0 right-0 top-0 z-[110] flex w-80 flex-col border-l border-[#2a2f4a] bg-[#0d0f1a] p-8 shadow-2xl"
             >
               <div className="flex justify-between items-center mb-12">
                 <h2 className="text-2xl font-black italic uppercase tracking-tight text-app-text">Menu</h2>
-                <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-app-input rounded-full transition-colors text-app-text">
+                <button onClick={() => setIsMenuOpen(false)} className="rounded-full border border-[#2a2f4a] bg-[#1e2235] p-2 text-app-text transition-colors hover:border-[#2b6eff]">
                   <X className="w-6 h-6 text-app-text" />
                 </button>
               </div>
@@ -244,8 +238,8 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
                     to={item.path}
                     onClick={() => setIsMenuOpen(false)}
                     className={cn(
-                      "flex items-center gap-4 p-4 rounded-2xl transition-all",
-                      location.pathname === item.path ? "bg-neutral-900 text-white shadow-xl" : "hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                      "flex items-center gap-4 rounded-2xl border p-4 transition-all",
+                      location.pathname === item.path ? "border-[#2b6eff]/30 bg-[#2b6eff]/15 text-[#2b6eff]" : "border-transparent text-[#8b90b0] hover:border-[#2a2f4a] hover:bg-[#1e2235] hover:text-white"
                     )}
                   >
                     <item.icon className="w-5 h-5" />
@@ -262,8 +256,8 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
                         to={item.path}
                         onClick={() => setIsMenuOpen(false)}
                         className={cn(
-                          "flex items-center gap-4 p-4 rounded-2xl transition-all",
-                          location.pathname === item.path || (item.path.includes('?') && location.search === '?' + item.path.split('?')[1]) ? "bg-neutral-900 text-white shadow-xl" : "hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                          "flex items-center gap-4 rounded-2xl border p-4 transition-all",
+                          location.pathname === item.path || (item.path.includes('?') && location.search === '?' + item.path.split('?')[1]) ? "border-[#2b6eff]/30 bg-[#2b6eff]/15 text-[#2b6eff]" : "border-transparent text-[#8b90b0] hover:border-[#2a2f4a] hover:bg-[#1e2235] hover:text-white"
                         )}
                       >
                         <item.icon className="w-5 h-5" />
@@ -282,8 +276,8 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
                         to={item.path}
                         onClick={() => setIsMenuOpen(false)}
                         className={cn(
-                          "flex items-center gap-4 p-4 rounded-2xl transition-all",
-                          location.pathname === item.path || (item.path.includes('?') && location.search === '?' + item.path.split('?')[1]) ? "bg-neutral-900 text-white shadow-xl" : "hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                          "flex items-center gap-4 rounded-2xl border p-4 transition-all",
+                          location.pathname === item.path || (item.path.includes('?') && location.search === '?' + item.path.split('?')[1]) ? "border-[#2b6eff]/30 bg-[#2b6eff]/15 text-[#2b6eff]" : "border-transparent text-[#8b90b0] hover:border-[#2a2f4a] hover:bg-[#1e2235] hover:text-white"
                         )}
                       >
                         <item.icon className="w-5 h-5" />
@@ -308,60 +302,42 @@ export default function Layout({ children, role, companyId }: LayoutProps) {
         )}
       </AnimatePresence>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
+      <main className={cn(
+        "flex-1 bg-[#0d0f1a]",
+        isClientHome ? "mx-auto w-full max-w-2xl px-0 pb-24 pt-0" : "mx-auto w-full max-w-7xl px-4 py-8 pb-28 sm:px-6 lg:px-8",
+      )}>
         {children}
       </main>
 
       {/* Mobile Bottom Navigation for Customers & Guests (never on admin-only port) */}
       {!isPanel && (role === 'customer' || !user) && (
-        <nav className="md:hidden fixed bottom-2 left-1/2 -translate-x-1/2 z-[100] w-[70vw] max-w-[420px] min-w-[260px] rounded-3xl border border-[#BCCCDC] bg-[#BCCCDC]/90 backdrop-blur-xl px-2 py-1.5 flex items-center justify-between shadow-[0_6px_18px_rgba(0,0,0,0.12)]">
+        <nav className="fixed bottom-0 left-0 right-0 z-[100] flex items-center justify-around border-t border-[#2a2f4a] bg-[#0d0f1a] px-0 pb-[max(22px,env(safe-area-inset-bottom))] pt-2.5 backdrop-blur-xl md:hidden">
           {(!user ? guestNav : customerNav).map((item) => {
             const isActive = location.pathname === item.path || (item.path.includes('?') && location.search === '?' + item.path.split('?')[1]);
-            
-            if (item.isMiddle) {
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => navigate(item.path)}
-                  className="relative -mt-10 group"
-                >
-                  <div className={cn(
-                    "w-16 h-16 rounded-3xl flex items-center justify-center transition-all duration-500 shadow-2xl",
-                    isActive 
-                      ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 scale-110 rotate-12" 
-                      : "bg-neutral-900/90 dark:bg-white/90 text-white dark:text-neutral-900"
-                  )}>
-                    <item.icon className="w-8 h-8" />
-                  </div>
-                  <div className="absolute inset-x-0 -bottom-6 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-app-text">{item.label}</span>
-                  </div>
-                </button>
-              );
-            }
+            const isBusiness = 'isBusiness' in item && item.isBusiness;
 
             return (
               <button
                 key={item.label}
                 onClick={() => navigate(item.path)}
-                className="flex flex-col items-center gap-1 group"
+                className="group flex flex-1 cursor-pointer flex-col items-center gap-1 transition-all duration-200"
               >
                 <div className={cn(
-                  "p-2 rounded-xl transition-all duration-300",
-                  isActive ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900" : "text-neutral-400 group-hover:text-neutral-600"
+                  "transition-all duration-200",
+                  isBusiness ? "text-[#ff7a2b]" : isActive ? "text-[#2b6eff]" : "text-[#4a4f70] group-hover:text-[#8b90b0]"
                 )}>
-                  <item.icon className="w-5 h-5" />
+                  <item.icon className="h-[22px] w-[22px]" strokeWidth={2} />
                 </div>
                 <span className={cn(
-                  "text-[8px] font-black uppercase tracking-widest transition-all",
-                  isActive ? "text-app-text opacity-100" : "text-neutral-400 opacity-60"
+                  "text-[10px] font-medium leading-none transition-all",
+                  isBusiness ? "text-[#ff7a2b]" : isActive ? "text-[#2b6eff]" : "text-[#4a4f70] opacity-90"
                 )}>
                   {item.label}
                 </span>
-                {isActive && (
+                {isActive && !isBusiness && (
                   <motion.div 
                     layoutId="mobileNavDot"
-                    className="w-1 h-1 bg-neutral-900 dark:bg-white rounded-full mt-0.5"
+                    className="mt-0.5 h-1 w-1 rounded-full bg-[#2b6eff]"
                   />
                 )}
               </button>

@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeighborHub – Admin Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0B0D17;--bg2:#10121F;--bg3:#161929;--card:#1C1F31;--card2:#222538;
+  --primary:#2B6EFF;--primary-dim:rgba(43,110,255,.12);--primary-glow:rgba(43,110,255,.25);
+  --secondary:#0FC98A;--accent:#FF7A2B;--warn:#FFB800;--red:#FF4D4D;--purple:#8B5CF6;
+  --text:#F0F2FF;--text2:#8B90B0;--text3:#4A4F70;
+  --border:#1E2238;--border2:#2A2F4A;
+  --sidebar-w:240px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;overflow:hidden;}
+
+/* ===== SIDEBAR ===== */
+.sidebar{
+  width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--bg2);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;
+  height:100vh;position:fixed;left:0;top:0;z-index:100;
+  overflow-y:auto;scrollbar-width:none;
+}
+.sidebar::-webkit-scrollbar{display:none;}
+.sidebar-logo{
+  padding:22px 20px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:11px;
+}
+.logo-icon{
+  width:36px;height:36px;border-radius:10px;background:var(--primary-dim);
+  border:1px solid var(--primary-glow);display:flex;align-items:center;justify-content:center;
+}
+.logo-icon svg{width:20px;height:20px;fill:var(--primary);}
+.logo-text{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;color:var(--text);}
+.logo-badge{font-size:10px;color:var(--text3);margin-top:1px;}
+.sidebar-section{padding:18px 12px 6px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;}
+.sidebar-item{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;
+  margin:2px 8px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;
+  transition:all .18s;border:1px solid transparent;position:relative;
+}
+.sidebar-item:hover{background:var(--card);color:var(--text);}
+.sidebar-item.active{background:var(--primary-dim);color:var(--primary);border-color:var(--primary-glow);}
+.sidebar-item svg{width:16px;height:16px;stroke:currentColor;fill:none;flex-shrink:0;}
+.sidebar-badge{
+  margin-left:auto;background:var(--red);border-radius:10px;
+  padding:2px 7px;font-size:10px;font-weight:700;color:#fff;
+}
+.sidebar-badge.warn{background:var(--warn);color:#000;}
+.sidebar-badge.green{background:var(--secondary);color:#000;}
+.sidebar-divider{height:1px;background:var(--border);margin:10px 16px;}
+.sidebar-user{
+  padding:14px 16px;border-top:1px solid var(--border);margin-top:auto;
+  display:flex;align-items:center;gap:10px;
+}
+.user-av{
+  width:34px;height:34px;border-radius:50%;background:var(--primary-dim);
+  border:1.5px solid var(--primary);display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;color:var(--primary);flex-shrink:0;
+}
+.user-name{font-size:13px;font-weight:600;color:var(--text);}
+.user-role{font-size:11px;color:var(--text3);}
+
+/* ===== MAIN ===== */
+.main{
+  margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;
+  height:100vh;overflow:hidden;
+}
+
+/* ===== TOP NAV ===== */
+.topnav{
+  height:60px;background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 28px;gap:14px;flex-shrink:0;
+}
+.topnav-title{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:var(--text);}
+.topnav-sub{font-size:12px;color:var(--text3);margin-top:2px;}
+.topnav-spacer{flex:1;}
+.search-bar{
+  display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border2);
+  border-radius:10px;padding:8px 14px;width:240px;
+}
+.search-bar svg{width:14px;height:14px;stroke:var(--text3);fill:none;flex-shrink:0;}
+.search-bar input{
+  background:transparent;border:none;outline:none;font-size:13px;
+  color:var(--text);font-family:'DM Sans',sans-serif;width:100%;
+}
+.search-bar input::placeholder{color:var(--text3);}
+.topnav-btn{
+  display:flex;align-items:center;gap:6px;background:var(--card);
+  border:1px solid var(--border2);border-radius:9px;padding:8px 14px;
+  font-size:13px;color:var(--text2);cursor:pointer;transition:all .2s;
+}
+.topnav-btn:hover{border-color:var(--primary);color:var(--primary);}
+.topnav-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;}
+.notif-btn{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:38px;height:38px;background:var(--card);border:1px solid var(--border2);border-radius:9px;}
+.notif-btn svg{width:16px;height:16px;stroke:var(--text2);fill:none;}
+.notif-btn .dot{position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--red);border-radius:50%;border:1.5px solid var(--bg2);}
+
+/* ===== CONTENT AREA ===== */
+.content{flex:1;overflow-y:auto;padding:24px 28px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent;}
+.content::-webkit-scrollbar{width:5px;}
+.content::-webkit-scrollbar-track{background:transparent;}
+.content::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+/* Screen switching */
+.panel{display:none;}
+.panel.active{display:block;}
+
+/* ===== GRID HELPERS ===== */
+.row{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;}
+.col-1{flex:1;min-width:160px;}
+.col-2{flex:2;min-width:260px;}
+.col-3{flex:3;min-width:320px;}
+
+/* ===== CARDS ===== */
+.card{background:var(--card);border-radius:16px;border:1px solid var(--border);padding:20px;}
+.card-sm{background:var(--card);border-radius:14px;border:1px solid var(--border);padding:16px;}
+.card-title{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.card-sub{font-size:12px;color:var(--text3);}
+
+/* ===== STAT CARDS ===== */
+.stat-card{
+  background:var(--card);border-radius:16px;border:1px solid var(--border);
+  padding:20px;display:flex;flex-direction:column;gap:8px;cursor:pointer;
+  transition:border-color .2s;
+}
+.stat-card:hover{border-color:var(--primary-glow);}
+.stat-top{display:flex;justify-content:space-between;align-items:flex-start;}
+.stat-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;}
+.stat-icon svg{width:20px;height:20px;stroke:currentColor;fill:none;}
+.stat-num{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--text);}
+.stat-label{font-size:12px;color:var(--text3);}
+.stat-trend{font-size:12px;display:flex;align-items:center;gap:4px;}
+.trend-up{color:var(--secondary);}
+.trend-dn{color:var(--red);}
+.stat-bar{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-top:4px;}
+.stat-bar-fill{height:100%;border-radius:2px;}
+
+/* ===== TABLE ===== */
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+thead th{
+  padding:10px 14px;text-align:left;font-size:11px;font-weight:700;
+  color:var(--text3);letter-spacing:.07em;text-transform:uppercase;
+  border-bottom:1px solid var(--border);background:var(--bg3);
+}
+thead th:first-child{border-radius:10px 0 0 0;}
+thead th:last-child{border-radius:0 10px 0 0;}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;cursor:pointer;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--card2);}
+tbody td{padding:12px 14px;font-size:13px;color:var(--text2);}
+tbody td.bold{color:var(--text);font-weight:600;}
+.badge{
+  display:inline-flex;align-items:center;gap:4px;border-radius:7px;
+  padding:3px 10px;font-size:11px;font-weight:700;
+}
+.badge-green{background:rgba(15,201,138,.12);color:var(--secondary);}
+.badge-yellow{background:rgba(255,184,0,.12);color:var(--warn);}
+.badge-red{background:rgba(255,77,77,.12);color:var(--red);}
+.badge-blue{background:rgba(43,110,255,.12);color:var(--primary);}
+.badge-purple{background:rgba(139,92,246,.12);color:var(--purple);}
+.badge-gray{background:rgba(139,144,176,.12);color:var(--text2);}
+
+/* ===== AVATAR ===== */
+.av{
+  width:32px;height:32px;border-radius:9px;display:flex;align-items:center;
+  justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;
+}
+.av-row{display:flex;align-items:center;gap:9px;}
+.av-name{font-size:13px;font-weight:600;color:var(--text);}
+.av-sub{font-size:11px;color:var(--text3);}
+
+/* ===== BUTTONS ===== */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;border-radius:9px;
+  padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;
+  border:none;font-family:'DM Sans',sans-serif;transition:all .2s;
+}
+.btn-primary{background:var(--primary);color:#fff;}
+.btn-primary:hover{opacity:.88;}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border2);}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary);}
+.btn-danger{background:rgba(255,77,77,.12);color:var(--red);border:1px solid rgba(255,77,77,.2);}
+.btn-success{background:rgba(15,201,138,.12);color:var(--secondary);border:1px solid rgba(15,201,138,.2);}
+.btn svg{width:14px;height:14px;stroke:currentColor;fill:none;}
+
+/* ===== PAGE HEADER ===== */
+.page-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;}
+.page-title{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;color:var(--text);}
+.page-sub{font-size:13px;color:var(--text3);margin-top:4px;}
+.page-actions{display:flex;gap:8px;align-items:center;}
+
+/* ===== MINI CHART (CSS bars) ===== */
+.mini-chart{display:flex;align-items:flex-end;gap:4px;height:48px;}
+.mini-bar{
+  flex:1;border-radius:4px 4px 0 0;background:var(--primary-dim);
+  border:1px solid var(--primary-glow);transition:height .4s;min-width:6px;
+}
+.mini-bar.active{background:rgba(43,110,255,.4);}
+
+/* ===== DONUT (CSS) ===== */
+.donut-wrap{display:flex;align-items:center;gap:20px;}
+.donut{
+  width:80px;height:80px;border-radius:50%;flex-shrink:0;
+  background:conic-gradient(var(--primary) 0% 42%,var(--secondary) 42% 65%,var(--accent) 65% 80%,var(--purple) 80% 90%,var(--border2) 90% 100%);
+  display:flex;align-items:center;justify-content:center;position:relative;
+}
+.donut::after{content:'';position:absolute;width:50px;height:50px;background:var(--card);border-radius:50%;}
+.donut-legend{display:flex;flex-direction:column;gap:7px;}
+.donut-item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);}
+.donut-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+/* ===== MAP PLACEHOLDER ===== */
+.map-placeholder{
+  background:var(--bg3);border-radius:12px;height:200px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--border);position:relative;overflow:hidden;
+}
+.map-grid{
+  position:absolute;inset:0;
+  background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:30px 30px;opacity:.4;
+}
+.map-pin{position:absolute;font-size:22px;}
+.map-label{position:relative;z-index:2;font-size:13px;color:var(--text3);}
+.map-pulse{
+  position:absolute;width:60px;height:60px;border-radius:50%;
+  background:rgba(43,110,255,.1);border:2px solid rgba(43,110,255,.3);
+  top:50%;left:50%;transform:translate(-50%,-50%);
+}
+
+/* ===== ACTIVITY FEED ===== */
+.activity-item{
+  display:flex;gap:12px;padding:12px 0;
+  border-bottom:1px solid var(--border);align-items:flex-start;
+}
+.activity-item:last-child{border-bottom:none;}
+.act-icon{
+  width:34px;height:34px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;font-size:15px;flex-shrink:0;
+}
+.act-text{font-size:13px;color:var(--text);line-height:1.5;}
+.act-time{font-size:11px;color:var(--text3);margin-top:3px;}
+.act-tag{
+  margin-left:auto;font-size:11px;font-weight:600;border-radius:6px;
+  padding:2px 8px;flex-shrink:0;
+}
+
+/* ===== FORM ===== */
+.form-row{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap;}
+.form-group{flex:1;min-width:180px;}
+.form-label{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:6px;}
+.form-input{
+  width:100%;background:var(--bg3);border:1.5px solid var(--border2);border-radius:10px;
+  padding:10px 14px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;
+  outline:none;transition:border-color .2s;
+}
+.form-input:focus{border-color:var(--primary);}
+.form-input::placeholder{color:var(--text3);}
+.form-select{
+  width:100%;background:var(--bg3);border:1.5px solid var(--border2);border-radius:10px;
+  padding:10px 14px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;
+  outline:none;cursor:pointer;
+}
+.form-textarea{
+  width:100%;background:var(--bg3);border:1.5px solid var(--border2);border-radius:10px;
+  padding:10px 14px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;
+  outline:none;resize:vertical;min-height:90px;
+}
+
+/* ===== TOGGLE ===== */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);}
+.toggle-row:last-child{border-bottom:none;}
+.toggle-label{font-size:13px;font-weight:600;color:var(--text);}
+.toggle-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.toggle{position:relative;width:40px;height:22px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{
+  position:absolute;inset:0;border-radius:11px;background:var(--border2);
+  cursor:pointer;transition:.3s;
+}
+.toggle-slider::before{
+  content:'';position:absolute;width:16px;height:16px;border-radius:50%;
+  background:#fff;bottom:3px;left:3px;transition:.3s;
+}
+.toggle input:checked + .toggle-slider{background:var(--primary);}
+.toggle input:checked + .toggle-slider::before{transform:translateX(18px);}
+
+/* ===== NOTIFICATION DROPDOWN ===== */
+.notif-dropdown{
+  position:absolute;top:58px;right:28px;width:340px;
+  background:var(--bg2);border:1px solid var(--border2);border-radius:14px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:999;display:none;overflow:hidden;
+}
+.notif-dropdown.open{display:block;}
+.notif-drop-header{
+  padding:14px 16px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.notif-drop-title{font-size:14px;font-weight:700;color:var(--text);font-family:'Space Grotesk',sans-serif;}
+.notif-drop-clear{font-size:12px;color:var(--primary);cursor:pointer;}
+.notif-drop-item{
+  display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);
+  cursor:pointer;transition:background .15s;
+}
+.notif-drop-item:hover{background:var(--card);}
+.notif-drop-item.unread{background:var(--primary-dim);}
+.notif-drop-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.notif-drop-text{font-size:12px;color:var(--text);font-weight:500;line-height:1.5;}
+.notif-drop-time{font-size:11px;color:var(--text3);margin-top:2px;}
+.notif-udot{width:7px;height:7px;border-radius:50%;background:var(--primary);flex-shrink:0;margin-top:6px;margin-left:auto;}
+
+/* ===== PROGRESS ===== */
+.progress-row{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.progress-label{font-size:12px;color:var(--text2);width:80px;flex-shrink:0;}
+.progress-bar{flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:3px;}
+.progress-val{font-size:12px;color:var(--text2);width:36px;text-align:right;flex-shrink:0;}
+
+/* ===== TABS ===== */
+.tab-bar{display:flex;gap:4px;background:var(--bg3);border-radius:10px;padding:4px;margin-bottom:20px;width:fit-content;}
+.tab{padding:7px 16px;border-radius:7px;font-size:13px;font-weight:500;color:var(--text3);cursor:pointer;transition:all .18s;}
+.tab.active{background:var(--card);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.3);}
+
+/* ===== BROADCAST BOX ===== */
+.broadcast-box{background:var(--bg3);border:1px solid var(--border2);border-radius:14px;padding:16px;}
+.bc-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.bc-icon{width:36px;height:36px;border-radius:10px;background:var(--primary-dim);display:flex;align-items:center;justify-content:center;}
+.bc-icon svg{width:18px;height:18px;stroke:var(--primary);fill:none;}
+.bc-title{font-size:14px;font-weight:700;color:var(--text);}
+.bc-sub{font-size:11px;color:var(--text3);}
+.zone-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.zone-chip{
+  background:var(--card);border:1px solid var(--border2);border-radius:8px;
+  padding:5px 12px;font-size:12px;color:var(--text2);cursor:pointer;transition:all .2s;
+}
+.zone-chip.selected{background:var(--primary-dim);border-color:var(--primary);color:var(--primary);}
+
+/* ===== USER DETAIL SIDE PANEL ===== */
+.side-panel{
+  position:fixed;right:-400px;top:0;bottom:0;width:380px;
+  background:var(--bg2);border-left:1px solid var(--border2);z-index:200;
+  transition:right .3s;overflow-y:auto;scrollbar-width:none;
+}
+.side-panel.open{right:0;}
+.side-panel::-webkit-scrollbar{display:none;}
+.sp-header{padding:20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.sp-close{cursor:pointer;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--card);}
+.sp-close svg{width:16px;height:16px;stroke:var(--text2);fill:none;}
+.sp-body{padding:20px;}
+.sp-avatar{width:64px;height:64px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;font-family:'Space Grotesk',sans-serif;margin:0 auto 16px;}
+.sp-field{margin-bottom:14px;}
+.sp-field-label{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.07em;margin-bottom:5px;}
+.sp-field-val{font-size:14px;color:var(--text);font-weight:500;}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- SIDEBAR -->
+<!-- ============================================================ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="var(--bg)"/></svg>
+    </div>
+    <div>
+      <div class="logo-text">NeighborHub</div>
+      <div class="logo-badge">Admin Panel v1.0</div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">Overview</div>
+  <div class="sidebar-item active" onclick="showPanel('dashboard')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    Dashboard
+  </div>
+  <div class="sidebar-item" onclick="showPanel('analytics')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    Analytics
+  </div>
+  <div class="sidebar-item" onclick="showPanel('map')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><polygon points="1,6 1,22 8,18 16,22 23,18 23,2 16,6 8,2"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+    Zone Map
+  </div>
+
+  <div class="sidebar-section">Users</div>
+  <div class="sidebar-item" onclick="showPanel('users')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    All Users
+    <span class="sidebar-badge">12.4k</span>
+  </div>
+  <div class="sidebar-item" onclick="showPanel('businesses')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    Businesses
+    <span class="sidebar-badge warn">8</span>
+  </div>
+  <div class="sidebar-item" onclick="showPanel('verification')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+    Verification Queue
+    <span class="sidebar-badge">23</span>
+  </div>
+  <div class="sidebar-item" onclick="showPanel('reports')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    Reports &amp; Flags
+    <span class="sidebar-badge">5</span>
+  </div>
+
+  <div class="sidebar-section">Content</div>
+  <div class="sidebar-item" onclick="showPanel('broadcast')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.87 11a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 0h3a2 2 0 0 1 2 1.72"/><path d="M16 2a4 4 0 0 1 4 4"/><path d="M16 6a8 8 0 0 1 8 8"/></svg>
+    Broadcast
+  </div>
+  <div class="sidebar-item" onclick="showPanel('ads')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    Ads &amp; Banners
+  </div>
+  <div class="sidebar-item" onclick="showPanel('events')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Events
+  </div>
+  <div class="sidebar-item" onclick="showPanel('news')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/></svg>
+    Local News Feed
+  </div>
+
+  <div class="sidebar-section">Settings</div>
+  <div class="sidebar-item" onclick="showPanel('settings')">
+    <svg viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M6.34 17.66l-1.41 1.41M20 12h-2M6 12H4M17.66 17.66l-1.41-1.41M6.34 6.34L4.93 4.93"/></svg>
+    System Settings
+  </div>
+
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-user">
+    <div class="user-av">S</div>
+    <div>
+      <div class="user-name">Super Admin</div>
+      <div class="user-role">Full Access</div>
+    </div>
+  </div>
+</nav>
+
+<!-- ============================================================ -->
+<!-- MAIN AREA -->
+<!-- ============================================================ -->
+<div class="main">
+
+  <!-- TOP NAV -->
+  <div class="topnav">
+    <div>
+      <div class="topnav-title" id="topnav-title">Dashboard</div>
+      <div class="topnav-sub" id="topnav-sub">Welcome back, Admin · May 6, 2026</div>
+    </div>
+    <div class="topnav-spacer"></div>
+    <div class="search-bar">
+      <svg viewBox="0 0 24 24" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" placeholder="Search users, businesses...">
+    </div>
+    <button class="topnav-btn">
+      <svg viewBox="0 0 24 24" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New Broadcast
+    </button>
+    <div class="notif-btn" onclick="toggleAdminNotif()" style="position:relative;">
+      <svg viewBox="0 0 24 24" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <div class="dot"></div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATION DROPDOWN -->
+  <div class="notif-dropdown" id="admin-notif">
+    <div class="notif-drop-header">
+      <div class="notif-drop-title">Notifications</div>
+      <div class="notif-drop-clear" onclick="clearAdminNotif()">Mark all read</div>
+    </div>
+    <div class="notif-drop-item unread">
+      <div class="notif-drop-icon" style="background:rgba(255,77,77,.15);">🚨</div>
+      <div style="flex:1;"><div class="notif-drop-text">New report: Spam content on @autofix_vaughan post</div><div class="notif-drop-time">2 min ago</div></div>
+      <div class="notif-udot"></div>
+    </div>
+    <div class="notif-drop-item unread">
+      <div class="notif-drop-icon" style="background:rgba(255,184,0,.15);">⏳</div>
+      <div style="flex:1;"><div class="notif-drop-text">23 business accounts awaiting verification</div><div class="notif-drop-time">14 min ago</div></div>
+      <div class="notif-udot"></div>
+    </div>
+    <div class="notif-drop-item unread">
+      <div class="notif-drop-icon" style="background:rgba(15,201,138,.15);">📈</div>
+      <div style="flex:1;"><div class="notif-drop-text">Platform hit 12,400 registered users!</div><div class="notif-drop-time">1 hr ago</div></div>
+      <div class="notif-udot"></div>
+    </div>
+    <div class="notif-drop-item">
+      <div class="notif-drop-icon" style="background:rgba(43,110,255,.15);">🏢</div>
+      <div style="flex:1;"><div class="notif-drop-text">BeautyStudio Pro account approved</div><div class="notif-drop-time">3 hrs ago</div></div>
+    </div>
+    <div class="notif-drop-item">
+      <div class="notif-drop-icon" style="background:rgba(139,92,246,.15);">🎯</div>
+      <div style="flex:1;"><div class="notif-drop-text">Vaughan zone radius expanded to 5.2 km avg</div><div class="notif-drop-time">Yesterday</div></div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- ======================================================== -->
+    <!-- PANEL: DASHBOARD -->
+    <!-- ======================================================== -->
+    <div class="panel active" id="panel-dashboard">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Platform Dashboard</div>
+          <div class="page-sub">Real-time overview of NeighborHub activity across all Canadian zones</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-ghost"><svg viewBox="0 0 24 24" stroke-width="2"><polyline points="1,4 1,10 7,10"/><path d="M3.51 15a9 9 0 1 0 .49-3.08"/></svg>Refresh</button>
+          <button class="btn btn-primary"><svg viewBox="0 0 24 24" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export</button>
+        </div>
+      </div>
+
+      <!-- Stat cards row -->
+      <div class="row">
+        <div class="col-1 stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-label">Total Users</div>
+              <div class="stat-num">12,441</div>
+            </div>
+            <div class="stat-icon" style="background:var(--primary-dim);">
+              <svg viewBox="0 0 24 24" style="stroke:var(--primary);" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+          </div>
+          <div class="stat-trend trend-up">↑ +342 this week</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:72%;background:var(--primary);"></div></div>
+        </div>
+        <div class="col-1 stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-label">Business Accounts</div>
+              <div class="stat-num">1,083</div>
+            </div>
+            <div class="stat-icon" style="background:rgba(255,122,43,.1);">
+              <svg viewBox="0 0 24 24" style="stroke:var(--accent);" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            </div>
+          </div>
+          <div class="stat-trend trend-up">↑ +28 this week</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:55%;background:var(--accent);"></div></div>
+        </div>
+        <div class="col-1 stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-label">Active Zones</div>
+              <div class="stat-num">47</div>
+            </div>
+            <div class="stat-icon" style="background:rgba(15,201,138,.1);">
+              <svg viewBox="0 0 24 24" style="stroke:var(--secondary);" stroke-width="2"><polygon points="1,6 1,22 8,18 16,22 23,18 23,2 16,6 8,2"/></svg>
+            </div>
+          </div>
+          <div class="stat-trend trend-up">↑ +3 new zones</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:47%;background:var(--secondary);"></div></div>
+        </div>
+        <div class="col-1 stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-label">Posts Today</div>
+              <div class="stat-num">2,890</div>
+            </div>
+            <div class="stat-icon" style="background:rgba(139,92,246,.1);">
+              <svg viewBox="0 0 24 24" style="stroke:var(--purple);" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+          </div>
+          <div class="stat-trend trend-up">↑ +18% vs yesterday</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:83%;background:var(--purple);"></div></div>
+        </div>
+        <div class="col-1 stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-label">Open Reports</div>
+              <div class="stat-num" style="color:var(--red);">5</div>
+            </div>
+            <div class="stat-icon" style="background:rgba(255,77,77,.1);">
+              <svg viewBox="0 0 24 24" style="stroke:var(--red);" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+            </div>
+          </div>
+          <div class="stat-trend trend-dn">↑ 2 new today</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:15%;background:var(--red);"></div></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <!-- Activity chart -->
+        <div class="col-2 card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+            <div>
+              <div class="card-title">User Activity — Last 14 Days</div>
+              <div class="card-sub">New signups + daily active users</div>
+            </div>
+            <div class="tab-bar" style="margin:0;">
+              <div class="tab active" style="font-size:11px;padding:5px 10px;">Signups</div>
+              <div class="tab" style="font-size:11px;padding:5px 10px;">DAU</div>
+            </div>
+          </div>
+          <div class="mini-chart" style="height:100px;gap:6px;">
+            <div class="mini-bar" style="height:40%;"></div>
+            <div class="mini-bar" style="height:52%;"></div>
+            <div class="mini-bar" style="height:38%;"></div>
+            <div class="mini-bar" style="height:65%;"></div>
+            <div class="mini-bar" style="height:58%;"></div>
+            <div class="mini-bar" style="height:72%;"></div>
+            <div class="mini-bar" style="height:60%;"></div>
+            <div class="mini-bar" style="height:80%;"></div>
+            <div class="mini-bar" style="height:74%;"></div>
+            <div class="mini-bar" style="height:88%;"></div>
+            <div class="mini-bar" style="height:76%;"></div>
+            <div class="mini-bar" style="height:92%;"></div>
+            <div class="mini-bar" style="height:84%;"></div>
+            <div class="mini-bar active" style="height:100%;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;">
+            <span style="font-size:10px;color:var(--text3);">Apr 23</span>
+            <span style="font-size:10px;color:var(--text3);">May 6</span>
+          </div>
+        </div>
+
+        <!-- Category breakdown -->
+        <div class="col-1 card">
+          <div class="card-title" style="margin-bottom:3px;">Business Categories</div>
+          <div class="card-sub" style="margin-bottom:16px;">Active service types</div>
+          <div class="donut-wrap">
+            <div class="donut"></div>
+            <div class="donut-legend">
+              <div class="donut-item"><div class="donut-dot" style="background:var(--primary);"></div>Auto Repair — 42%</div>
+              <div class="donut-item"><div class="donut-dot" style="background:var(--secondary);"></div>Beauty — 23%</div>
+              <div class="donut-item"><div class="donut-dot" style="background:var(--accent);"></div>Building — 15%</div>
+              <div class="donut-item"><div class="donut-dot" style="background:var(--purple);"></div>Transport — 10%</div>
+              <div class="donut-item"><div class="donut-dot" style="background:var(--border2);"></div>Other — 10%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <!-- Recent activity -->
+        <div class="col-2 card">
+          <div class="card-title" style="margin-bottom:14px;">Recent Platform Activity</div>
+          <div class="activity-item">
+            <div class="act-icon" style="background:rgba(43,110,255,.12);">👤</div>
+            <div style="flex:1;"><div class="act-text"><strong>amir_farhadian</strong> registered as a new user</div><div class="act-time">2 min ago · Vaughan, ON</div></div>
+            <div class="act-tag badge badge-blue">New User</div>
+          </div>
+          <div class="activity-item">
+            <div class="act-icon" style="background:rgba(255,184,0,.12);">🏢</div>
+            <div style="flex:1;"><div class="act-text"><strong>GreenBuild Inc.</strong> submitted business verification</div><div class="act-time">8 min ago · Woodbridge, ON</div></div>
+            <div class="act-tag badge badge-yellow">Pending</div>
+          </div>
+          <div class="activity-item">
+            <div class="act-icon" style="background:rgba(255,77,77,.12);">🚨</div>
+            <div style="flex:1;"><div class="act-text">Content flagged as spam on post #44821</div><div class="act-time">22 min ago · Social Feed</div></div>
+            <div class="act-tag badge badge-red">Report</div>
+          </div>
+          <div class="activity-item">
+            <div class="act-icon" style="background:rgba(15,201,138,.12);">✅</div>
+            <div style="flex:1;"><div class="act-text"><strong>BeautyStudio VG</strong> approved as Pro Account</div><div class="act-time">1 hr ago · Admin: Sarah K.</div></div>
+            <div class="act-tag badge badge-green">Approved</div>
+          </div>
+          <div class="activity-item">
+            <div class="act-icon" style="background:rgba(139,92,246,.12);">📡</div>
+            <div style="flex:1;"><div class="act-text">Broadcast sent to Vaughan zone — 3,420 users reached</div><div class="act-time">2 hrs ago</div></div>
+            <div class="act-tag badge badge-purple">Broadcast</div>
+          </div>
+        </div>
+
+        <!-- Top zones -->
+        <div class="col-1 card">
+          <div class="card-title" style="margin-bottom:14px;">Top Active Zones</div>
+          <div class="progress-row"><div class="progress-label">Vaughan</div><div class="progress-bar"><div class="progress-fill" style="width:88%;background:var(--primary);"></div></div><div class="progress-val">3.4k</div></div>
+          <div class="progress-row"><div class="progress-label">Woodbridge</div><div class="progress-bar"><div class="progress-fill" style="width:72%;background:var(--secondary);"></div></div><div class="progress-val">2.8k</div></div>
+          <div class="progress-row"><div class="progress-label">Richmond Hill</div><div class="progress-bar"><div class="progress-fill" style="width:60%;background:var(--accent);"></div></div><div class="progress-val">2.3k</div></div>
+          <div class="progress-row"><div class="progress-label">Maple</div><div class="progress-bar"><div class="progress-fill" style="width:48%;background:var(--purple);"></div></div><div class="progress-val">1.8k</div></div>
+          <div class="progress-row"><div class="progress-label">Thornhill</div><div class="progress-bar"><div class="progress-fill" style="width:36%;background:var(--warn);"></div></div><div class="progress-val">1.4k</div></div>
+          <div class="progress-row"><div class="progress-label">Kleinburg</div><div class="progress-bar"><div class="progress-fill" style="width:22%;background:var(--text3);"></div></div><div class="progress-val">0.8k</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- PANEL: USERS -->
+    <!-- ======================================================== -->
+    <div class="panel" id="panel-users">
+      <div class="page-header">
+        <div>
+          <div class="page-title">All Users</div>
+          <div class="page-sub">12,441 registered accounts · 9,820 verified</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-ghost"><svg viewBox="0 0 24 24" stroke-width="2"><polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46"/></svg>Filter</button>
+          <button class="btn btn-primary"><svg viewBox="0 0 24 24" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Username</th>
+                <th>Location</th>
+                <th>Account Type</th>
+                <th>Score</th>
+                <th>Reach</th>
+                <th>Joined</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr onclick="openSidePanel('Amir Farhadian','amir_farhadian','Vaughan ON','General','2,840','3.2 km','Apr 12, 2026','Active')">
+                <td><div class="av-row"><div class="av" style="background:var(--primary);">A</div><div><div class="av-name">Amir Farhadian</div><div class="av-sub">amir@email.com</div></div></div></td>
+                <td class="bold">@amir_farhadian</td>
+                <td>Vaughan, ON</td>
+                <td><span class="badge badge-blue">General</span></td>
+                <td class="bold" style="color:var(--secondary);">2,840</td>
+                <td>3.2 km</td>
+                <td>Apr 12</td>
+                <td><span class="badge badge-green">Active</span></td>
+                <td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">View</button></td>
+              </tr>
+              <tr onclick="openSidePanel('Sarah Kim','beautystudio_vg','Woodbridge ON','Pro','8,920','6.4 km','Mar 2, 2026','Active')">
+                <td><div class="av-row"><div class="av" style="background:var(--purple);">S</div><div><div class="av-name">Sarah Kim</div><div class="av-sub">sarah@beautystudio.ca</div></div></div></td>
+                <td class="bold">@beautystudio_vg</td>
+                <td>Woodbridge, ON</td>
+                <td><span class="badge badge-purple">Pro</span></td>
+                <td class="bold" style="color:var(--secondary);">8,920</td>
+                <td>6.4 km</td>
+                <td>Mar 2</td>
+                <td><span class="badge badge-green">Active</span></td>
+                <td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">View</button></td>
+              </tr>
+              <tr onclick="openSidePanel('Mike Chen','autofix_vaughan','Vaughan ON','Business','14,300','9.1 km','Jan 15, 2026','Active')">
+                <td><div class="av-row"><div class="av" style="background:var(--accent);">M</div><div><div class="av-name">Mike Chen</div><div class="av-sub">mike@autofix.ca</div></div></div></td>
+                <td class="bold">@autofix_vaughan</td>
+                <td>Vaughan, ON</td>
+                <td><span class="badge badge-yellow">Business</span></td>
+                <td class="bold" style="color:var(--secondary);">14,300</td>
+                <td>9.1 km</td>
+                <td>Jan 15</td>
+                <td><span class="badge badge-green">Active</span></td>
+                <td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">View</button></td>
+              </tr>
+              <tr>
+                <td><div class="av-row"><div class="av" style="background:var(--secondary);">J</div><div><div class="av-name">John Malhotra</div><div class="av-sub">john@email.ca</div></div></div></td>
+                <td class="bold">@john_m_vg</td>
+                <td>Maple, ON</td>
+                <td><span class="badge badge-blue">General</span></td>
+                <td class="bold" style="color:var(--text2);">540</td>
+                <td>1.0 km</td>
+                <td>May 1</td>
+                <td><span class="badge badge-yellow">Unverified</span></td>
+                <td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">View</button></td>
+              </tr>
+              <tr>
+                <td><div class="av-row"><div class="av" style="background:var(--red);">R</div><div><div class="av-name">Robert D.</div><div class="av-sub">rob@email.com</div></div></div></td>
+                <td class="bold">@rob_spam22</td>
+                <td>Richmond Hill, ON</td>
+                <td><span class="badge badge-blue">General</span></td>
+                <td class="bold" style="color:var(--red);">-120</td>
+                <td>0 km</td>
+                <td>May 4</td>
+                <td><span class="badge badge-red">Suspended</span></td>
+                <td><button class="btn btn-danger" style="padding:5px 10px;font-size:11px;">Review</button></td>
+              </tr>
+              <tr>
+                <td><div class="av-row"><div class="av" style="background:var(--warn);">L</div><div><div class="av-name">Lisa Park</div><div class="av-sub">lisa@greenbuild.ca</div></div></div></td>
+                <td class="bold">@greenbuild_vg</td>
+                <td>Woodbridge, ON</td>
+                <td><span class="badge badge-yellow">Business</span></td>
+                <td class="bold" style="color:var(--warn);">3,100</td>
+                <td>4.8 km</td>
+                <td>Feb 20</td>
+                <td><span class="badge badge-yellow">Pending KYC</span></td>
+                <td><button class="btn btn-success" style="padding:5px 10px;font-size:11px;">Approve</button></td>
+              </tr>
+              <tr>
+                <td><div class="av-row"><div class="av" style="background:#1E40AF;">D</div><div><div class="av-name">David Russo</div><div class="av-sub">david@moveit.ca</div></div></div></td>
+                <td class="bold">@moveit_transport</td>
+                <td>Vaughan, ON</td>
+                <td><span class="badge badge-purple">Pro</span></td>
+                <td class="bold" style="color:var(--secondary);">5,670</td>
+                <td>5.5 km</td>
+                <td>Mar 18</td>
+                <td><span class="badge badge-green">Active</span></td>
+                <td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">View</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- PANEL: VERIFICATION QUEUE -->
+    <!-- ======================================================== -->
+    <div class="panel" id="panel-verification">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Verification Queue</div>
+          <div class="page-sub">23 accounts awaiting review · KYC, License &amp; Business Registration</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-ghost">Filter by Type</button>
+          <button class="btn btn-primary">Bulk Approve</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Business</th>
+                <th>Type</th>
+                <th>Submitted</th>
+                <th>License #</th>
+                <th>Registration</th>
+                <th>Insurance</th>
+                <th>Documents</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="av-row"><div class="av" style="background:var(--secondary);">G</div><div><div class="av-name">GreenBuild Inc.</div><div class="av-sub">greenbuild.ca</div></div></div></td>
+                <td><span class="badge badge-yellow">Business Corp</span></td>
+                <td>8 min ago</td>
+                <td class="bold">ON-4421-BUILD</td>
+                <td class="bold">Corp: 889244</td>
+                <td><span class="badge badge-green">✓ Provided</span></td>
+                <td><span class="badge badge-blue">3 docs</span></td>
+                <td style="display:flex;gap:6px;padding:12px 14px;">
+                  <button class="btn btn-success" style="padding:5px 12px;font-size:11px;">Approve</button>
+                  <button class="btn btn-danger" style="padding:5px 12px;font-size:11px;">Reject</button>
+                </td>
+              </tr>
+              <tr>
+                <td><div class="av-row"><div class="av" style="background:var(--purple);">N</div><div><div class="av-name">NailBar Studio</div><div class="av-sub">nailbar.ca</div></div></div></td>
+                <td><span class="badge badge-purple">Pro Account</span></td>
+                <td>2 hrs ago</td>
+                <td class="bold">ON-7731-BEAUTY</td>
+                <td class="bold">Sole Prop</td>
+                <td><span class="badge badge-red">✗ Missing</span></td>
+                <td><span class="badge badge-blue">2 docs</span></td>
+                <td style="display:flex;gap:6px;padding:12px 14px;">
+                  <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;">Request Info</button>
+                </td>
+              </tr>
+              <tr>
+                <td><div class="av-row"><div class="av" style="background:var(--accent);">F</div><div><div class="av-name">FastMove Transport</div><div class="av-sub">fastmove.ca</div></div></div></td>
+                <td><span class="badge badge-yellow">Business Corp</span></td>
+                <td>Yesterday</td>
+                <td class="bold">ON-2290-TRANS</td>
+                <td class="bold">Corp: 771023</td>
+                <td><span class="badge badge-green">✓ Provided</span></td>
+                <td><span class="badge badge-blue">4 docs</span></td>
+                <td style="display:flex;gap:6px;padding:12px 14px;">
+                  <button class="btn btn-success" style="padding:5px 12px;font-size:11px;">Approve</button>
+                  <button class="btn btn-danger" style="padding:5px 12px;font-size:11px;">Reject</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- PANEL: BROADCAST -->
+    <!-- ======================================================== -->
+    <div class="panel" id="panel-broadcast">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Broadcast &amp; Push Notifications</div>
+          <div class="page-sub">Send targeted messages to specific zones, user types, or the entire platform</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-2">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title" style="margin-bottom:16px;">Create New Broadcast</div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">BROADCAST TYPE</div>
+                <select class="form-select">
+                  <option>Push Notification</option>
+                  <option>In-App Alert</option>
+                  <option>Local News Item</option>
+                  <option>Event Announcement</option>
+                  <option>Police / Emergency Alert</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <div class="form-label">TARGET AUDIENCE</div>
+                <select class="form-select">
+                  <option>All Users</option>
+                  <option>General Users Only</option>
+                  <option>Business Accounts Only</option>
+                  <option>Zone-Specific</option>
+                  <option>By Service Category</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+              <div class="form-label">TITLE</div>
+              <input class="form-input" type="text" placeholder="Broadcast title (shown as notification headline)">
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+              <div class="form-label">MESSAGE BODY</div>
+              <textarea class="form-textarea" placeholder="Write your broadcast message here..."></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+              <div class="form-label">TARGET ZONES</div>
+              <div class="zone-chips">
+                <div class="zone-chip selected" onclick="this.classList.toggle('selected')">Vaughan</div>
+                <div class="zone-chip selected" onclick="this.classList.toggle('selected')">Woodbridge</div>
+                <div class="zone-chip" onclick="this.classList.toggle('selected')">Richmond Hill</div>
+                <div class="zone-chip" onclick="this.classList.toggle('selected')">Maple</div>
+                <div class="zone-chip" onclick="this.classList.toggle('selected')">Thornhill</div>
+                <div class="zone-chip" onclick="this.classList.toggle('selected')">Kleinburg</div>
+                <div class="zone-chip" onclick="this.classList.toggle('selected')">All Zones</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">SCHEDULE (OPTIONAL)</div>
+                <input class="form-input" type="datetime-local">
+              </div>
+              <div class="form-group">
+                <div class="form-label">PRIORITY LEVEL</div>
+                <select class="form-select">
+                  <option>Normal</option>
+                  <option>High</option>
+                  <option>Emergency 🚨</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:8px;">
+              <button class="btn btn-primary" style="flex:1;">Send Broadcast Now</button>
+              <button class="btn btn-ghost">Save as Draft</button>
+              <button class="btn btn-ghost">Preview</button>
+            </div>
+          </div>
+        </div>
+        <div class="col-1">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title" style="margin-bottom:14px;">Broadcast History</div>
+            <div class="activity-item">
+              <div class="act-icon" style="background:var(--primary-dim);">📡</div>
+              <div style="flex:1;"><div class="act-text">Craft Festival Reminder</div><div class="act-time">3,420 reached · May 5 · Vaughan</div></div>
+              <div class="act-tag badge badge-green">Sent</div>
+            </div>
+            <div class="activity-item">
+              <div class="act-icon" style="background:rgba(255,77,77,.12);">🚔</div>
+              <div style="flex:1;"><div class="act-text">Police Alert: Major Mackenzie</div><div class="act-time">8,100 reached · May 5 · All zones</div></div>
+              <div class="act-tag badge badge-red">Emergency</div>
+            </div>
+            <div class="activity-item">
+              <div class="act-icon" style="background:rgba(255,184,0,.12);">🏗️</div>
+              <div style="flex:1;"><div class="act-text">Construction Rate Update</div><div class="act-time">1,220 reached · May 4 · Vaughan</div></div>
+              <div class="act-tag badge badge-green">Sent</div>
+            </div>
+            <div class="activity-item">
+              <div class="act-icon" style="background:rgba(139,92,246,.12);">🎵</div>
+              <div style="flex:1;"><div class="act-text">Music Festival Announcement</div><div class="act-time">5,600 reached · May 3 · All zones</div></div>
+              <div class="act-tag badge badge-green">Sent</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:4px;">Reach Estimate</div>
+            <div class="card-sub" style="margin-bottom:14px;">Based on current zone selection</div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;color:var(--primary);">~5,200</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Users will receive this broadcast</div>
+            <div style="margin-top:12px;display:flex;gap:8px;">
+              <div class="card-sm" style="flex:1;text-align:center;padding:10px;">
+                <div style="font-size:18px;font-weight:700;color:var(--secondary);font-family:'Space Grotesk',sans-serif;">74%</div>
+                <div style="font-size:10px;color:var(--text3);">Avg open rate</div>
+              </div>
+              <div class="card-sm" style="flex:1;text-align:center;padding:10px;">
+                <div style="font-size:18px;font-weight:700;color:var(--accent);font-family:'Space Grotesk',sans-serif;">2</div>
+                <div style="font-size:10px;color:var(--text3);">Active zones</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- PANEL: ADS & BANNERS -->
+    <!-- ======================================================== -->
+    <div class="panel" id="panel-ads">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Ads &amp; Banners</div>
+          <div class="page-sub">Manage promotional content across all app sections</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary"><svg viewBox="0 0 24 24" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add New Ad</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-3">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px;">Active Campaigns</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Campaign</th>
+                    <th>Placement</th>
+                    <th>Zone</th>
+                    <th>Impressions</th>
+                    <th>Clicks</th>
+                    <th>CTR</th>
+                    <th>Status</th>
+                    <th>Expires</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="bold">AutoFix – Summer Deal</td>
+                    <td><span class="badge badge-blue">Home Banner</span></td>
+                    <td>Vaughan</td>
+                    <td>12,440</td>
+                    <td>892</td>
+                    <td class="bold" style="color:var(--secondary);">7.2%</td>
+                    <td><span class="badge badge-green">Live</span></td>
+                    <td>May 31</td>
+                  </tr>
+                  <tr>
+                    <td class="bold">BeautyX – Keratin Week</td>
+                    <td><span class="badge badge-purple">Social Feed</span></td>
+                    <td>All Zones</td>
+                    <td>8,200</td>
+                    <td>540</td>
+                    <td class="bold" style="color:var(--secondary);">6.6%</td>
+                    <td><span class="badge badge-green">Live</span></td>
+                    <td>May 10</td>
+                  </tr>
+                  <tr>
+                    <td class="bold">Craft Festival 2026</td>
+                    <td><span class="badge badge-yellow">Events Section</span></td>
+                    <td>Vaughan</td>
+                    <td>4,100</td>
+                    <td>211</td>
+                    <td class="bold" style="color:var(--warn);">5.1%</td>
+                    <td><span class="badge badge-green">Live</span></td>
+                    <td>May 10</td>
+                  </tr>
+                  <tr>
+                    <td class="bold">RBC – FHSA Promo</td>
+                    <td><span class="badge badge-blue">Public Services</span></td>
+                    <td>All Zones</td>
+                    <td>18,000</td>
+                    <td>320</td>
+                    <td class="bold" style="color:var(--text3);">1.8%</td>
+                    <td><span class="badge badge-yellow">Paused</span></td>
+                    <td>Jun 30</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- PANEL: REPORTS & FLAGS -->
+    <!-- ======================================================== -->
+    <div class="panel" id="panel-reports">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Reports &amp; Flags</div>
+          <div class="page-sub">5 open reports · 2 new today</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-ghost">Filter</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Reported Content</th>
+                <th>Reported By</th>
+                <th>Reason</th>
+                <th>Date</th>
+                <th>Severity</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="bold">Post #44821 · @spam_user</td>
+                <td>@amir_farhadian</td>
+                <td>Spam / Fake offer</td>
+                <td>2 min ago</td>
+                <td><span class="badge badge-yellow">Medium</span></td>
+                <td><span class="badge badge-red">Open</span></td>
+                <td style="display:flex;gap:6px;padding:12px 14px;">
+                  <button class="btn btn-danger" style="padding:5px 10px;font-size:11px;">Remove</button>
+                  <button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Dismiss</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="bold">Account @rob_spam22</td>
+                <td>@mike_chen</td>
+                <td>Fake business profile</td>
+                <td>1 hr ago</td>
+                <td><span class="badge badge-red">High</span></td>
+                <td><span class="badge badge-red">Open</span></td>
+                <td style="display:flex;gap:6px;padding:12px 14px;">
+                  <button class="btn btn-danger" style="padding:5px 10px;font-size:11px;">Suspend</button>
+                  <button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Review</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="bold">Review #1123 · 1-star fake</td>
+                <td>@beautystudio_vg</td>
+                <td>Fraudulent review</td>
+                <td>Yesterday</td>
+                <td><span class="badge badge-yellow">Medium</span></td>
+                <td><span class="badge badge-yellow">Under Review</span></td>
+                <td style="display:flex;gap:6px;padding:12px 14px;">
+                  <button class="btn btn-danger" style="padding:5px 10px;font-size:11px;">Remove</button>
+                  <button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Keep</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- PANEL: SETTINGS -->
+    <!-- ======================================================== -->
+    <div class="panel" id="panel-settings">
+      <div class="page-header">
+        <div>
+          <div class="page-title">System Settings</div>
+          <div class="page-sub">Platform configuration, zone rules, interaction scoring &amp; moderation</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary">Save Changes</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-2">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title" style="margin-bottom:16px;">Interaction Score &amp; Radius Rules</div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">BASE RADIUS (KM)</div>
+                <input class="form-input" type="number" value="1.0">
+              </div>
+              <div class="form-group">
+                <div class="form-label">MAX RADIUS (KM)</div>
+                <input class="form-input" type="number" value="15.0">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">POINTS PER POST</div>
+                <input class="form-input" type="number" value="10">
+              </div>
+              <div class="form-group">
+                <div class="form-label">POINTS PER LIKE RECEIVED</div>
+                <input class="form-input" type="number" value="2">
+              </div>
+              <div class="form-group">
+                <div class="form-label">POINTS PER ORDER</div>
+                <input class="form-input" type="number" value="50">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">RADIUS GAIN PER 1000 PTS</div>
+                <input class="form-input" type="number" value="0.4">
+              </div>
+              <div class="form-group">
+                <div class="form-label">SCORE DECAY (DAYS INACTIVE)</div>
+                <input class="form-input" type="number" value="30">
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="margin-bottom:16px;">Moderation &amp; Safety</div>
+            <div class="toggle-row">
+              <div><div class="toggle-label">Auto-flag spam content</div><div class="toggle-sub">AI scans posts before publishing</div></div>
+              <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div><div class="toggle-label">Phone verification required</div><div class="toggle-sub">Users must verify phone on signup</div></div>
+              <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div><div class="toggle-label">Business license mandatory</div><div class="toggle-sub">Business accounts need valid license</div></div>
+              <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div><div class="toggle-label">Story auto-delete after 24h</div><div class="toggle-sub">Stories removed from public feed</div></div>
+              <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div><div class="toggle-label">Maintenance mode</div><div class="toggle-sub">Disable app access for all users</div></div>
+              <label class="toggle"><input type="checkbox"><span class="toggle-slider"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-1">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title" style="margin-bottom:14px;">Platform Health</div>
+            <div class="progress-row"><div class="progress-label">Server Load</div><div class="progress-bar"><div class="progress-fill" style="width:34%;background:var(--secondary);"></div></div><div class="progress-val" style="color:var(--secondary);">34%</div></div>
+            <div class="progress-row"><div class="progress-label">DB Usage</div><div class="progress-bar"><div class="progress-fill" style="width:61%;background:var(--warn);"></div></div><div class="progress-val" style="color:var(--warn);">61%</div></div>
+            <div class="progress-row"><div class="progress-label">Storage</div><div class="progress-bar"><div class="progress-fill" style="width:48%;background:var(--primary);"></div></div><div class="progress-val">48%</div></div>
+            <div class="progress-row"><div class="progress-label">API Calls</div><div class="progress-bar"><div class="progress-fill" style="width:22%;background:var(--secondary);"></div></div><div class="progress-val" style="color:var(--secondary);">22%</div></div>
+            <div style="margin-top:14px;background:rgba(15,201,138,.06);border:1px solid rgba(15,201,138,.2);border-radius:10px;padding:12px;text-align:center;">
+              <div style="font-size:12px;font-weight:700;color:var(--secondary);">● All Systems Operational</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px;">Last checked: 30 sec ago</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px;">Admin Accounts</div>
+            <div class="av-row" style="padding:10px 0;border-bottom:1px solid var(--border);">
+              <div class="av" style="background:var(--primary);">S</div>
+              <div style="flex:1;"><div class="av-name">Super Admin</div><div class="av-sub">Full Access</div></div>
+              <span class="badge badge-blue">Owner</span>
+            </div>
+            <div class="av-row" style="padding:10px 0;border-bottom:1px solid var(--border);">
+              <div class="av" style="background:var(--secondary);">K</div>
+              <div style="flex:1;"><div class="av-name">Sarah K.</div><div class="av-sub">Verification Admin</div></div>
+              <span class="badge badge-green">Active</span>
+            </div>
+            <div class="av-row" style="padding:10px 0;">
+              <div class="av" style="background:var(--accent);">T</div>
+              <div style="flex:1;"><div class="av-name">Tim R.</div><div class="av-sub">Content Moderator</div></div>
+              <span class="badge badge-green">Active</span>
+            </div>
+            <button class="btn btn-ghost" style="width:100%;margin-top:12px;justify-content:center;">
+              <svg viewBox="0 0 24 24" stroke-width="2" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Admin
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- PANEL: ANALYTICS -->
+    <!-- ======================================================== -->
+    <div class="panel" id="panel-analytics">
+      <div class="page-header">
+        <div><div class="page-title">Analytics</div><div class="page-sub">Platform-wide data insights and trends</div></div>
+        <div class="page-actions">
+          <div class="tab-bar" style="margin:0;">
+            <div class="tab active">7 Days</div>
+            <div class="tab">30 Days</div>
+            <div class="tab">90 Days</div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-1 stat-card"><div class="stat-top"><div><div class="stat-label">Total Sessions</div><div class="stat-num">84,200</div></div><div class="stat-icon" style="background:var(--primary-dim);"><svg viewBox="0 0 24 24" style="stroke:var(--primary);" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg></div></div><div class="stat-trend trend-up">↑ +14% vs last week</div></div>
+        <div class="col-1 stat-card"><div class="stat-top"><div><div class="stat-label">Avg Session Time</div><div class="stat-num">8m 42s</div></div><div class="stat-icon" style="background:rgba(15,201,138,.1);"><svg viewBox="0 0 24 24" style="stroke:var(--secondary);" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></div></div><div class="stat-trend trend-up">↑ +1m 20s</div></div>
+        <div class="col-1 stat-card"><div class="stat-top"><div><div class="stat-label">Orders Placed</div><div class="stat-num">3,120</div></div><div class="stat-icon" style="background:rgba(255,122,43,.1);"><svg viewBox="0 0 24 24" style="stroke:var(--accent);" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div></div><div class="stat-trend trend-up">↑ +22%</div></div>
+        <div class="col-1 stat-card"><div class="stat-top"><div><div class="stat-label">Total Revenue (Ads)</div><div class="stat-num">$8,420</div></div><div class="stat-icon" style="background:rgba(139,92,246,.1);"><svg viewBox="0 0 24 24" style="stroke:var(--purple);" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div></div><div class="stat-trend trend-up">↑ +$1,200</div></div>
+      </div>
+      <div class="row">
+        <div class="col-2 card">
+          <div class="card-title" style="margin-bottom:16px;">Weekly Activity Breakdown</div>
+          <div class="mini-chart" style="height:120px;gap:10px;">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+              <div class="mini-bar" style="height:60%;width:100%;"></div><span style="font-size:10px;color:var(--text3);">Mon</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+              <div class="mini-bar" style="height:75%;width:100%;"></div><span style="font-size:10px;color:var(--text3);">Tue</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+              <div class="mini-bar" style="height:65%;width:100%;"></div><span style="font-size:10px;color:var(--text3);">Wed</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+              <div class="mini-bar" style="height:90%;width:100%;"></div><span style="font-size:10px;color:var(--text3);">Thu</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+              <div class="mini-bar active" style="height:100%;width:100%;"></div><span style="font-size:10px;color:var(--primary);">Fri</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+              <div class="mini-bar" style="height:82%;width:100%;"></div><span style="font-size:10px;color:var(--text3);">Sat</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+              <div class="mini-bar" style="height:55%;width:100%;"></div><span style="font-size:10px;color:var(--text3);">Sun</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-1 card">
+          <div class="card-title" style="margin-bottom:14px;">Retention Funnel</div>
+          <div class="progress-row"><div class="progress-label">Sign up</div><div class="progress-bar"><div class="progress-fill" style="width:100%;background:var(--primary);"></div></div><div class="progress-val">100%</div></div>
+          <div class="progress-row"><div class="progress-label">Verify phone</div><div class="progress-bar"><div class="progress-fill" style="width:88%;background:var(--primary);"></div></div><div class="progress-val">88%</div></div>
+          <div class="progress-row"><div class="progress-label">Post/interact</div><div class="progress-bar"><div class="progress-fill" style="width:64%;background:var(--secondary);"></div></div><div class="progress-val">64%</div></div>
+          <div class="progress-row"><div class="progress-label">Place order</div><div class="progress-bar"><div class="progress-fill" style="width:38%;background:var(--accent);"></div></div><div class="progress-val">38%</div></div>
+          <div class="progress-row"><div class="progress-label">Return Day 7</div><div class="progress-bar"><div class="progress-fill" style="width:52%;background:var(--purple);"></div></div><div class="progress-val">52%</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- PANEL: ZONE MAP -->
+    <!-- ======================================================== -->
+    <div class="panel" id="panel-map">
+      <div class="page-header">
+        <div><div class="page-title">Zone Map</div><div class="page-sub">Interactive neighborhood zones across Greater Toronto Area</div></div>
+        <div class="page-actions">
+          <button class="btn btn-primary">Add New Zone</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-2">
+          <div class="card">
+            <div class="map-placeholder">
+              <div class="map-grid"></div>
+              <div class="map-pulse"></div>
+              <span style="font-size:28px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">📍</span>
+              <span style="position:absolute;top:28%;left:40%;font-size:18px;">📍</span>
+              <span style="position:absolute;top:60%;left:60%;font-size:18px;">📍</span>
+              <span style="position:absolute;top:35%;left:65%;font-size:14px;color:var(--text2);">Vaughan</span>
+              <span style="position:absolute;top:22%;left:36%;font-size:14px;color:var(--text2);">Woodbridge</span>
+              <span style="position:absolute;top:55%;left:55%;font-size:14px;color:var(--text2);">Richmond Hill</span>
+              <div style="position:absolute;bottom:10px;right:10px;display:flex;gap:6px;">
+                <div style="width:26px;height:26px;background:var(--card);border:1px solid var(--border2);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--text);">+</div>
+                <div style="width:26px;height:26px;background:var(--card);border:1px solid var(--border2);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--text);">−</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-1">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px;">Zone List</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Zone</th><th>Users</th><th>Radius</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td class="bold">Vaughan Core</td><td>3,420</td><td>4.2 km</td><td><span class="badge badge-green">Active</span></td></tr>
+                  <tr><td class="bold">Woodbridge</td><td>2,810</td><td>3.8 km</td><td><span class="badge badge-green">Active</span></td></tr>
+                  <tr><td class="bold">Richmond Hill</td><td>2,300</td><td>3.1 km</td><td><span class="badge badge-green">Active</span></td></tr>
+                  <tr><td class="bold">Maple</td><td>1,800</td><td>2.4 km</td><td><span class="badge badge-green">Active</span></td></tr>
+                  <tr><td class="bold">Thornhill</td><td>1,400</td><td>2.0 km</td><td><span class="badge badge-yellow">Partial</span></td></tr>
+                  <tr><td class="bold">Kleinburg</td><td>711</td><td>1.4 km</td><td><span class="badge badge-yellow">New</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Businesses, Events, News panels (simplified) -->
+    <div class="panel" id="panel-businesses">
+      <div class="page-header"><div><div class="page-title">Business Accounts</div><div class="page-sub">1,083 business and pro accounts · 8 pending approval</div></div><div class="page-actions"><button class="btn btn-primary">Add Business</button></div></div>
+      <div class="card"><div class="table-wrap"><table><thead><tr><th>Business</th><th>Type</th><th>Category</th><th>Zone</th><th>Rating</th><th>Orders</th><th>Score</th><th>Status</th><th>Action</th></tr></thead><tbody>
+        <tr><td><div class="av-row"><div class="av" style="background:var(--accent);">A</div><div><div class="av-name">AutoFix Vaughan</div><div class="av-sub">@autofix_vaughan</div></div></div></td><td><span class="badge badge-yellow">Corp</span></td><td>Auto Repair</td><td>Vaughan</td><td>⭐ 4.9</td><td class="bold">184</td><td style="color:var(--secondary);">14,300</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Manage</button></td></tr>
+        <tr><td><div class="av-row"><div class="av" style="background:var(--purple);">B</div><div><div class="av-name">BeautyStudio VG</div><div class="av-sub">@beautystudio_vg</div></div></div></td><td><span class="badge badge-purple">Pro</span></td><td>Beauty</td><td>Woodbridge</td><td>⭐ 4.8</td><td class="bold">93</td><td style="color:var(--secondary);">8,920</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Manage</button></td></tr>
+        <tr><td><div class="av-row"><div class="av" style="background:var(--secondary);">G</div><div><div class="av-name">GreenBuild Inc.</div><div class="av-sub">@greenbuild_vg</div></div></div></td><td><span class="badge badge-yellow">Corp</span></td><td>Building</td><td>Woodbridge</td><td>—</td><td class="bold">0</td><td style="color:var(--warn);">0</td><td><span class="badge badge-yellow">Pending</span></td><td><button class="btn btn-success" style="padding:5px 10px;font-size:11px;">Approve</button></td></tr>
+      </tbody></table></div></div>
+    </div>
+
+    <div class="panel" id="panel-events">
+      <div class="page-header"><div><div class="page-title">Events</div><div class="page-sub">Manage local events displayed in the app</div></div><div class="page-actions"><button class="btn btn-primary">Create Event</button></div></div>
+      <div class="card"><div class="table-wrap"><table><thead><tr><th>Event</th><th>Date</th><th>Zone</th><th>Category</th><th>Impressions</th><th>RSVPs</th><th>Status</th><th>Action</th></tr></thead><tbody>
+        <tr><td class="bold">Craft Festival 2026</td><td>May 10</td><td>Vaughan</td><td><span class="badge badge-green">Arts</span></td><td>4,100</td><td>312</td><td><span class="badge badge-green">Upcoming</span></td><td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Edit</button></td></tr>
+        <tr><td class="bold">Concert Night</td><td>May 14</td><td>Vaughan</td><td><span class="badge badge-purple">Music</span></td><td>2,800</td><td>188</td><td><span class="badge badge-green">Upcoming</span></td><td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Edit</button></td></tr>
+        <tr><td class="bold">Auto Expo 2026</td><td>May 18</td><td>All Zones</td><td><span class="badge badge-yellow">Auto</span></td><td>6,200</td><td>441</td><td><span class="badge badge-green">Upcoming</span></td><td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Edit</button></td></tr>
+      </tbody></table></div></div>
+    </div>
+
+    <div class="panel" id="panel-news">
+      <div class="page-header"><div><div class="page-title">Local News Feed</div><div class="page-sub">Curate and manage news items shown on the Home screen</div></div><div class="page-actions"><button class="btn btn-primary">Add News Item</button></div></div>
+      <div class="card"><div class="table-wrap"><table><thead><tr><th>Headline</th><th>Category</th><th>Zone</th><th>Source</th><th>Published</th><th>Views</th><th>Status</th><th>Action</th></tr></thead><tbody>
+        <tr><td class="bold">Construction rates up 12% in Vaughan</td><td><span class="badge badge-yellow">Building</span></td><td>Vaughan</td><td>NeighborHub</td><td>Today 9:00 AM</td><td>1,820</td><td><span class="badge badge-green">Live</span></td><td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Edit</button></td></tr>
+        <tr><td class="bold">Police alert: Major Mackenzie closure</td><td><span class="badge badge-red">Safety</span></td><td>All Zones</td><td>York Region Police</td><td>Today 8:14 AM</td><td>4,300</td><td><span class="badge badge-green">Live</span></td><td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Edit</button></td></tr>
+        <tr><td class="bold">Music Festival announced at Vaughan Mills</td><td><span class="badge badge-purple">Events</span></td><td>Vaughan</td><td>NeighborHub</td><td>May 5</td><td>2,100</td><td><span class="badge badge-green">Live</span></td><td><button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;">Edit</button></td></tr>
+      </tbody></table></div></div>
+    </div>
+
+  </div><!-- end content -->
+</div><!-- end main -->
+
+<!-- SIDE PANEL: User detail -->
+<div class="side-panel" id="side-panel">
+  <div class="sp-header">
+    <div style="font-size:15px;font-weight:700;color:var(--text);font-family:'Space Grotesk',sans-serif;">User Detail</div>
+    <div class="sp-close" onclick="closeSidePanel()"><svg viewBox="0 0 24 24" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+  </div>
+  <div class="sp-body">
+    <div class="sp-avatar" id="sp-avatar" style="background:var(--primary);">A</div>
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:18px;font-weight:700;color:var(--text);font-family:'Space Grotesk',sans-serif;" id="sp-name">Amir Farhadian</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:3px;" id="sp-handle">@amir_farhadian</div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px;">
+      <button class="btn btn-success" style="font-size:12px;">Approve</button>
+      <button class="btn btn-danger" style="font-size:12px;">Suspend</button>
+      <button class="btn btn-ghost" style="font-size:12px;">Message</button>
+    </div>
+    <div class="sp-field"><div class="sp-field-label">LOCATION</div><div class="sp-field-val" id="sp-loc">Vaughan, ON</div></div>
+    <div class="sp-field"><div class="sp-field-label">ACCOUNT TYPE</div><div class="sp-field-val" id="sp-type">General</div></div>
+    <div class="sp-field"><div class="sp-field-label">INTERACTION SCORE</div><div class="sp-field-val" id="sp-score" style="color:var(--secondary);">2,840 pts</div></div>
+    <div class="sp-field"><div class="sp-field-label">NEIGHBORHOOD REACH</div><div class="sp-field-val" id="sp-reach">3.2 km radius</div></div>
+    <div class="sp-field"><div class="sp-field-label">JOINED</div><div class="sp-field-val" id="sp-joined">Apr 12, 2026</div></div>
+    <div class="sp-field"><div class="sp-field-label">STATUS</div><div class="sp-field-val" id="sp-status"><span class="badge badge-green">Active</span></div></div>
+    <div style="height:1px;background:var(--border);margin:16px 0;"></div>
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">Recent Activity</div>
+    <div class="activity-item"><div class="act-icon" style="background:var(--primary-dim);">📝</div><div><div class="act-text">Posted to Social Explorer</div><div class="act-time">2 hrs ago</div></div></div>
+    <div class="activity-item"><div class="act-icon" style="background:rgba(15,201,138,.1);">🛒</div><div><div class="act-text">Placed order with AutoFix</div><div class="act-time">Yesterday</div></div></div>
+    <div class="activity-item"><div class="act-icon" style="background:rgba(255,122,43,.1);">❤️</div><div><div class="act-text">Liked 12 posts this week</div><div class="act-time">This week</div></div></div>
+  </div>
+</div>
+
+<script>
+const panelMap = {
+  dashboard:'Dashboard',analytics:'Analytics',map:'Zone Map',
+  users:'All Users',businesses:'Businesses',verification:'Verification Queue',
+  reports:'Reports & Flags',broadcast:'Broadcast',ads:'Ads & Banners',
+  events:'Events',news:'Local News Feed',settings:'System Settings'
+};
+const subMap = {
+  dashboard:'Real-time overview · May 6, 2026',
+  analytics:'Platform-wide insights and trends',
+  map:'Interactive neighborhood zones — GTA',
+  users:'12,441 registered accounts',
+  businesses:'1,083 business and pro accounts',
+  verification:'23 accounts awaiting review',
+  reports:'5 open reports · needs attention',
+  broadcast:'Send targeted messages to zones',
+  ads:'Manage promotional content',
+  events:'Local events management',
+  news:'Curate home screen news feed',
+  settings:'Platform configuration'
+};
+
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  const panel = document.getElementById('panel-' + name);
+  if (panel) panel.classList.add('active');
+  event.currentTarget.classList.add('active');
+  document.getElementById('topnav-title').textContent = panelMap[name] || name;
+  document.getElementById('topnav-sub').textContent = subMap[name] || '';
+}
+
+function toggleAdminNotif() {
+  document.getElementById('admin-notif').classList.toggle('open');
+}
+function clearAdminNotif() {
+  document.querySelectorAll('.notif-drop-item.unread').forEach(r => r.classList.remove('unread'));
+  document.querySelectorAll('.notif-udot').forEach(d => d.remove());
+  document.querySelector('.notif-btn .dot').style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+  const notif = document.getElementById('admin-notif');
+  if (!notif.contains(e.target) && !e.target.closest('.notif-btn')) {
+    notif.classList.remove('open');
+  }
+});
+
+function openSidePanel(name, handle, loc, type, score, reach, joined, status) {
+  document.getElementById('sp-name').textContent = name;
+  document.getElementById('sp-handle').textContent = '@' + handle;
+  document.getElementById('sp-loc').textContent = loc;
+  document.getElementById('sp-type').textContent = type;
+  document.getElementById('sp-score').textContent = score + ' pts';
+  document.getElementById('sp-reach').textContent = reach + ' radius';
+  document.getElementById('sp-joined').textContent = joined;
+  document.getElementById('sp-avatar').textContent = name[0];
+  document.getElementById('side-panel').classList.add('open');
+}
+function closeSidePanel() {
+  document.getElementById('side-panel').classList.remove('open');
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    this.closest('.tab-bar').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+document.querySelectorAll('.zone-chip').forEach(chip => {
+  chip.addEventListener('click', function() { this.classList.toggle('selected'); });
+});
+</script>
+</body>
+</html>

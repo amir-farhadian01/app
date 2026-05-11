@@ -1,10 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Car, Heart, Home, Laptop, LucideIcon, Plus, Search, Star, UserRound } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import {
+  Banknote,
+  Building2,
+  CalendarDays,
+  Car,
+  ChevronRight,
+  HeartPulse,
+  Home,
+  Landmark,
+  MapPin,
+  Newspaper,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Truck,
+  Wrench,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { api } from '../lib/api';
-import { useAuth } from '../lib/AuthContext';
 
 type ServiceRow = {
   id: string;
@@ -18,38 +33,6 @@ type ServiceRow = {
   provider?: { id?: string; displayName?: string | null; avatarUrl?: string | null } | null;
 };
 
-/** Top-level marketplace groups; `homeCategory` matches OrderWizard deep-link resolution (slugified names). */
-const SHOP_TOP_CATEGORIES: { slug: string; label: string; Icon: LucideIcon }[] = [
-  { slug: 'automotive', label: 'Automotive', Icon: Car },
-  { slug: 'home', label: 'Home', Icon: Home },
-  { slug: 'personal-care', label: 'Personal Care', Icon: Heart },
-  { slug: 'tech', label: 'Tech', Icon: Laptop },
-];
-
-type BannerSlide = {
-  key: string;
-  title: string;
-  subtitle: string;
-  cta: string;
-  gradient: string;
-  homeCategory: string;
-  /** Use `topProviders[i].providerId` when present for `prefillProviderId`. */
-  prefillProviderIndex: number;
-  onCta: () => void;
-};
-
-function buildOrderNewDeepLink(homeCategory: string, prefillProviderId?: string | null): string {
-  const p = new URLSearchParams();
-  p.set('from', 'direct');
-  p.set('homeCategory', homeCategory);
-  if (prefillProviderId) p.set('prefillProviderId', prefillProviderId);
-  return `/orders/new?${p.toString()}`;
-}
-
-function picsumUrl(seed: string, w: number, h: number) {
-  return `https://picsum.photos/seed/${encodeURIComponent(seed)}/${w}/${h}`;
-}
-
 type ProviderHighlight = {
   providerId: string;
   displayName: string;
@@ -60,67 +43,84 @@ type ProviderHighlight = {
   score: number;
 };
 
+const MARKET_CATEGORIES = [
+  { slug: 'home', label: 'Building', Icon: Building2 },
+  { slug: 'automotive', label: 'Auto', Icon: Car },
+  { slug: 'personal-care', label: 'Beauty', Icon: Sparkles },
+  { slug: 'transport', label: 'Transport', Icon: Truck },
+  { slug: 'health', label: 'Health', Icon: HeartPulse },
+];
+
+const PUBLIC_SERVICES = [
+  { label: 'TD Bank', Icon: Banknote },
+  { label: 'RBC', Icon: Banknote },
+  { label: 'Scotiabank', Icon: Banknote },
+  { label: 'Credit Score', Icon: Star },
+  { label: 'Insurance', Icon: ShieldCheck },
+  { label: 'ServiceOntario', Icon: Landmark },
+  { label: 'OHIP', Icon: HeartPulse },
+];
+
+const LOCAL_NEWS = [
+  { tone: 'blue', title: 'Construction rates up 12% this week in Vaughan', meta: '2h' },
+  { tone: 'warn', title: 'Police alert: Traffic delay on Major Mackenzie Dr', meta: '45m' },
+  { tone: 'green', title: 'Music Festival announced at Vaughan Mills - May 14', meta: '5h' },
+  { tone: 'blue', title: 'New auto dealerships opening on Vaughan corridor', meta: '1d' },
+  { tone: 'green', title: 'Leasing rates drop for commercial spaces in Woodbridge', meta: '2d' },
+];
+
+const LOCAL_EVENTS = [
+  { title: 'Craft Festival', date: 'May 10 - Vaughan Mills', className: 'from-emerald-800 to-slate-950' },
+  { title: 'Concert Night', date: 'May 14 - Club District', className: 'from-orange-800 to-slate-950' },
+  { title: 'Auto Expo', date: 'May 18 - Convention Ctr', className: 'from-violet-800 to-slate-950' },
+];
+
+function picsumUrl(seed: string, w: number, h: number) {
+  return `https://picsum.photos/seed/${encodeURIComponent(seed)}/${w}/${h}`;
+}
+
 function buildTopProviders(services: ServiceRow[]): ProviderHighlight[] {
   const byPid = new Map<string, ServiceRow[]>();
-  for (const s of services) {
-    if (!s.providerId) continue;
-    const arr = byPid.get(s.providerId) || [];
-    arr.push(s);
-    byPid.set(s.providerId, arr);
+  for (const service of services) {
+    if (!service.providerId) continue;
+    byPid.set(service.providerId, [...(byPid.get(service.providerId) || []), service]);
   }
-  const out: ProviderHighlight[] = [];
+
+  const providers: ProviderHighlight[] = [];
   for (const [providerId, list] of byPid) {
-    if (!list.length) continue;
     const best = list.reduce((a, b) => (Number(a.rating || 0) >= Number(b.rating || 0) ? a : b));
-    const p = best.provider;
-    const name = p?.displayName || 'Provider';
-    const topRating = Number(best.rating || 0);
-    out.push({
+    providers.push({
       providerId,
-      displayName: name,
-      avatarUrl: p?.avatarUrl,
+      displayName: best.provider?.displayName || 'Local provider',
+      avatarUrl: best.provider?.avatarUrl,
       serviceCount: list.length,
-      topRating,
+      topRating: Number(best.rating || 0),
       sampleServiceId: best.id,
-      score: topRating + list.length * 0.01,
+      score: Number(best.rating || 0) + list.length * 0.01,
     });
   }
-  out.sort((a, b) => b.score - a.score);
-  return out.slice(0, 12);
+
+  return providers.sort((a, b) => b.score - a.score).slice(0, 8);
 }
 
 function slugifyCategory(raw: string | null | undefined): string {
-  const t = (raw || '').trim().toLowerCase().replace(/\s+/g, '-');
-  return t.replace(/[^a-z0-9-]/g, '') || 'services';
+  const value = (raw || '').trim().toLowerCase().replace(/\s+/g, '-');
+  return value.replace(/[^a-z0-9-]/g, '') || 'services';
 }
 
-function orderParamsFromService(s: ServiceRow): string {
-  const p = new URLSearchParams();
-  p.set('from', 'direct');
-  if (s.serviceCatalogId) p.set('serviceCatalogId', s.serviceCatalogId);
-  p.set('homeCategory', slugifyCategory(s.category));
-  if (s.providerId) p.set('prefillProviderId', s.providerId);
-  return p.toString();
-}
-
-function initialsFromUser(displayName: string | null | undefined, email: string | undefined): string {
-  const n = (displayName || '').trim();
-  if (n.length) {
-    const parts = n.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase();
-    return n.slice(0, 2).toUpperCase();
-  }
-  const e = (email || '').trim();
-  if (e.length) return e.slice(0, 2).toUpperCase();
-  return '?';
+function orderParamsFromService(service: ServiceRow): string {
+  const params = new URLSearchParams();
+  params.set('from', 'direct');
+  if (service.serviceCatalogId) params.set('serviceCatalogId', service.serviceCatalogId);
+  params.set('homeCategory', slugifyCategory(service.category));
+  if (service.providerId) params.set('prefillProviderId', service.providerId);
+  return params.toString();
 }
 
 export default function CustomerHome() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [services, setServices] = useState<ServiceRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bannerIndex, setBannerIndex] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -138,260 +138,261 @@ export default function CustomerHome() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setBannerIndex((i) => (i + 1) % 3);
-    }, 6000);
-    return () => window.clearInterval(id);
-  }, []);
-
+  const popular = useMemo(() => services.slice(0, 12), [services]);
   const topProviders = useMemo(() => buildTopProviders(services), [services]);
-
-  const goOrderFromService = useCallback(
-    (s: ServiceRow) => {
-      navigate(`/orders/new?${orderParamsFromService(s)}`);
-    },
-    [navigate],
-  );
 
   const goCategoryOrder = useCallback(
     (slug: string) => {
-      const p = new URLSearchParams();
-      p.set('from', 'direct');
-      p.set('homeCategory', slug);
-      navigate(`/orders/new?${p.toString()}`);
+      const params = new URLSearchParams();
+      params.set('from', 'direct');
+      params.set('homeCategory', slug);
+      navigate(`/orders/new?${params.toString()}`);
     },
     [navigate],
   );
 
-  const slides: BannerSlide[] = useMemo(() => {
-    const prefillId = (i: number) => topProviders[i]?.providerId ?? null;
-    const go = (homeCategory: string, prefillIdx: number) => {
-      navigate(buildOrderNewDeepLink(homeCategory, prefillId(prefillIdx)));
-    };
-    return [
-      {
-        key: 'banner-home',
-        title: 'Trusted help nearby',
-        subtitle: 'Book vetted local pros for home repairs, cleaning, and more.',
-        cta: 'Start a booking',
-        gradient: 'from-blue-600 to-blue-800 dark:from-slate-800 dark:to-slate-950',
-        homeCategory: 'home',
-        prefillProviderIndex: 0,
-        onCta: () => go('home', 0),
-      },
-      {
-        key: 'banner-auto',
-        title: 'Keep your vehicle ready',
-        subtitle: 'Maintenance and fixes from providers near you.',
-        cta: 'Book automotive help',
-        gradient: 'from-violet-600 to-violet-900 dark:from-violet-950 dark:to-slate-950',
-        homeCategory: 'automotive',
-        prefillProviderIndex: 1,
-        onCta: () => go('automotive', 1),
-      },
-      {
-        key: 'banner-personal-tech',
-        title: 'Personal care & tech',
-        subtitle: 'Wellness, grooming, and help with devices and setup.',
-        cta: 'Explore services',
-        gradient: 'from-teal-600 to-teal-900 dark:from-teal-950 dark:to-slate-950',
-        homeCategory: 'personal-care',
-        prefillProviderIndex: 2,
-        onCta: () => go('personal-care', 2),
-      },
-    ];
-  }, [navigate, topProviders]);
-
-  const popular = services.slice(0, 20);
+  const goOrderFromService = useCallback(
+    (service: ServiceRow) => {
+      navigate(`/orders/new?${orderParamsFromService(service)}`);
+    },
+    [navigate],
+  );
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-28 pt-3 sm:px-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <Link
-          to={user ? '/account' : '/auth'}
-          className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-app-border bg-app-card text-neutral-500 transition hover:border-neutral-400"
-          aria-label={user ? 'Account' : 'Sign in'}
-        >
-          {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
-          ) : user ? (
-            <span className="text-sm font-extrabold text-app-text">{initialsFromUser(user.displayName, user.email)}</span>
-          ) : (
-            <UserRound className="h-6 w-6 stroke-[1.75]" aria-hidden />
-          )}
-        </Link>
+    <div className="min-h-screen w-full bg-[#0d0f1a] pb-24 text-[#f0f2ff]">
+      <section className="px-4 pt-4">
         <button
           type="button"
-          onClick={() => navigate('/orders/new?from=direct&newOffer=1')}
-          className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border border-app-border bg-app-card text-app-text shadow-sm transition hover:bg-neutral-50 dark:hover:bg-neutral-800/80"
-          aria-label="New offer"
-          title="New offer"
+          onClick={() => navigate('/orders/new?from=direct')}
+          className="group relative flex h-36 w-full overflow-hidden rounded-[1.15rem] bg-gradient-to-br from-[#1a3a80] to-[#07101f] text-left"
         >
-          <Plus className="h-6 w-6" strokeWidth={2.5} />
+          <img
+            src={picsumUrl('central-park-vaughan', 900, 420)}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-45 transition duration-500 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-slate-950/15 to-slate-950/80" />
+          <div className="relative z-10 flex h-full flex-col justify-between p-4">
+            <div className="flex w-fit max-w-full items-center gap-1.5 rounded-full bg-slate-950/45 px-3 py-1 text-[11px] font-bold text-blue-100 backdrop-blur">
+              <MapPin className="h-3.5 w-3.5 shrink-0 fill-[#2b6eff] stroke-[#2b6eff]" />
+              <span className="truncate">Vaughan, ON - Live Location</span>
+            </div>
+            <div>
+            <span className="mb-2 inline-flex w-fit items-center rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold text-blue-100 backdrop-blur">
+              Photo of the Week
+            </span>
+            <h2 className="text-xl font-black tracking-tight text-white">Central Park Vaughan</h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold text-blue-100">13 C - Sunny</span>
+              <span className="rounded-full bg-amber-400/20 px-3 py-1 text-[11px] font-semibold text-amber-300">Police Alert Active</span>
+              <span className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold text-blue-100">3 Local News</span>
+            </div>
+            </div>
+          </div>
         </button>
-      </div>
+      </section>
 
-      {/* Search pill */}
-      <button
-        type="button"
-        onClick={() => navigate('/orders/new?from=direct')}
-        className="flex h-12 w-full min-h-[44px] items-center gap-3 rounded-full border border-app-border bg-app-card px-4 text-left shadow-md shadow-neutral-900/5 transition hover:border-neutral-300 dark:hover:border-neutral-600"
-      >
-        <Search className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-        <span className="truncate text-sm font-medium text-neutral-500 dark:text-neutral-400">
-          Try &quot;deck repair&quot; or &quot;deep clean&quot;
-        </span>
-      </button>
-
-      {/* Banner carousel */}
-      <div className="mt-5">
-        <div className="relative aspect-[16/9] overflow-hidden rounded-2xl">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={slides[bannerIndex].key}
-              role="link"
-              tabIndex={0}
-              aria-label={`${slides[bannerIndex].title}: ${slides[bannerIndex].cta}`}
-              onClick={() => slides[bannerIndex].onCta()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  slides[bannerIndex].onCta();
-                }
-              }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              className={cn(
-                'absolute inset-0 cursor-pointer bg-gradient-to-br p-5 sm:p-6 flex flex-col justify-end',
-                slides[bannerIndex].gradient,
-              )}
-            >
-              <div className="max-w-[90%] space-y-2">
-                <h2 className="text-xl font-extrabold leading-tight text-white sm:text-2xl">{slides[bannerIndex].title}</h2>
-                <p className="text-sm font-medium leading-relaxed text-white/90">{slides[bannerIndex].subtitle}</p>
-                <span
-                  className="mt-2 inline-flex min-h-[44px] cursor-pointer items-center rounded-full bg-white px-4 py-2.5 text-sm font-extrabold text-neutral-900 shadow-sm pointer-events-none"
-                >
-                  {slides[bannerIndex].cta}
-                </span>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-        <div className="mt-3 flex justify-center gap-1.5">
-          {slides.map((s, i) => (
-            <button
-              key={s.key}
-              type="button"
-              aria-label={`Banner ${i + 1}`}
-              onClick={() => setBannerIndex(i)}
-              className={cn(
-                'min-h-[44px] min-w-[44px] flex items-center justify-center',
-              )}
-            >
-              <span
-                className={cn(
-                  'h-1.5 rounded-full transition-all block',
-                  i === bannerIndex ? 'w-5 bg-blue-600 dark:bg-blue-400' : 'w-1.5 bg-neutral-300 dark:bg-neutral-600',
-                )}
-              />
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <h2 className="mt-8 text-base font-extrabold text-app-text">Browse by category</h2>
-      <div className="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
-        {SHOP_TOP_CATEGORIES.map((c) => (
+      <section className="px-4 pt-4">
+        <div className="rounded-[1.15rem] border border-[#2a2f4a] bg-[#1e2235] p-4">
           <button
-            key={c.slug}
             type="button"
-            onClick={() => goCategoryOrder(c.slug)}
-            className="flex min-h-[44px] flex-col items-center gap-1.5 text-center"
+            onClick={() => navigate('/orders/new?from=direct')}
+            className="flex h-11 w-full items-center gap-3 rounded-xl border border-[#2a2f4a] bg-[#0d0f1a] px-4 text-left text-sm font-semibold text-[#8b90b0] transition hover:border-[#2b6eff] hover:text-white"
           >
-            <span className="flex h-14 w-14 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-blue-100 text-blue-900 dark:bg-blue-950/80 dark:text-blue-100">
-              <c.Icon className="h-6 w-6" aria-hidden />
-            </span>
-            <span className="line-clamp-2 w-full text-[10px] font-bold leading-tight text-app-text sm:text-[11px]">
-              {c.label}
-            </span>
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="truncate">Search services in Vaughan...</span>
+          </button>
+
+          <div className="mt-4 grid grid-cols-5 gap-2">
+            {MARKET_CATEGORIES.map(({ slug, label, Icon }) => (
+              <button
+                key={slug}
+                type="button"
+                onClick={() => goCategoryOrder(slug)}
+                className="group flex min-w-0 flex-col items-center gap-1.5"
+              >
+                <span className="flex h-12 w-full min-w-[44px] items-center justify-center rounded-xl border border-[#2a2f4a] bg-[#1a1d2e] text-[#8b90b0] transition group-hover:border-[#2b6eff] group-hover:bg-[#1a3f99]/50 group-hover:text-white">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <span className="w-full truncate text-center text-[10px] font-semibold text-[#8b90b0]">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <SectionTitle icon={Landmark} title="Public & Government Services" />
+      <div className="flex gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {PUBLIC_SERVICES.map(({ label, Icon }) => (
+          <button
+            key={label}
+            type="button"
+            className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl border border-[#2a2f4a] bg-[#1e2235] px-3 text-xs font-semibold text-[#8b90b0] transition hover:border-[#2b6eff] hover:text-white"
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
           </button>
         ))}
       </div>
 
-      <h2 className="mt-8 text-base font-extrabold text-app-text">Popular services</h2>
-      <div className="mt-3 h-[168px]">
+      <SectionTitle icon={Wrench} title="Popular Services" action="Book" onAction={() => navigate('/orders/new?from=direct')} />
+      <div className="min-h-[158px] px-4">
         {loading ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-800 dark:border-neutral-700 dark:border-t-white" />
+          <div className="flex h-32 items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#2a2f4a] border-t-[#2b6eff]" />
           </div>
         ) : !popular.length ? (
-          <p className="text-sm font-semibold text-neutral-500">No public listings yet. Check back soon.</p>
+          <EmptyCard title="No public listings yet" description="Provider services will appear here as soon as they are published." />
         ) : (
-          <div className="flex h-full gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {popular.map((s) => (
+          <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {popular.map((service) => (
               <button
-                key={s.id}
+                key={service.id}
                 type="button"
-                onClick={() => goOrderFromService(s)}
-                className="flex w-[140px] shrink-0 flex-col text-left"
+                onClick={() => goOrderFromService(service)}
+                className="w-36 shrink-0 text-left"
               >
-                <div className="relative aspect-[280/200] w-full overflow-hidden rounded-xl bg-neutral-100 dark:bg-neutral-800">
-                  <img
-                    src={picsumUrl(s.id, 280, 200)}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
+                <div className="relative aspect-[7/5] overflow-hidden rounded-xl bg-[#1e2235]">
+                  <img src={picsumUrl(service.id, 320, 230)} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  <span className="absolute left-2 top-2 rounded-full bg-slate-950/60 px-2 py-1 text-[10px] font-bold text-white backdrop-blur">
+                    ${Number(service.price || 0).toFixed(0)}
+                  </span>
                 </div>
-                <p className="mt-1.5 line-clamp-2 text-xs font-bold leading-snug text-app-text">{s.title}</p>
+                <p className="mt-2 line-clamp-2 text-xs font-bold leading-snug text-white">{service.title}</p>
+                <p className="mt-1 truncate text-[11px] font-semibold text-[#8b90b0]">{service.category || 'Local service'}</p>
               </button>
             ))}
           </div>
         )}
       </div>
 
-      <h2 className="mt-8 text-base font-extrabold text-app-text">Top providers</h2>
-      <div className="mt-3 min-h-[132px]">
-        {loading ? null : !topProviders.length ? (
-          <p className="text-sm font-semibold text-neutral-500">
-            Provider highlights will appear when services are listed.
+      <SectionTitle icon={Newspaper} title="Local News" />
+      <section className="space-y-2 px-4">
+        {LOCAL_NEWS.map((item) => (
+          <button
+            key={item.title}
+            type="button"
+            className="flex w-full items-center gap-3 rounded-xl border border-transparent bg-[#1e2235] px-4 py-3 text-left transition hover:border-[#2a2f4a]"
+          >
+            <span
+              className={cn(
+                'h-2 w-2 shrink-0 rounded-full',
+                item.tone === 'warn' ? 'bg-[#ffb800]' : item.tone === 'green' ? 'bg-[#0fc98a]' : 'bg-[#2b6eff]',
+              )}
+            />
+            <span className="min-w-0 flex-1 text-xs font-semibold leading-5 text-white">{item.title}</span>
+            <span className="shrink-0 text-[11px] font-semibold text-[#4a4f70]">{item.meta}</span>
+          </button>
+        ))}
+      </section>
+
+      <SectionTitle icon={CalendarDays} title="Local Events" />
+      <section className="grid grid-cols-3 gap-2 px-4">
+        {LOCAL_EVENTS.map((event) => (
+          <button
+            key={event.title}
+            type="button"
+            className={cn('flex h-24 min-w-0 flex-col justify-end rounded-xl bg-gradient-to-br p-3 text-left', event.className)}
+          >
+            <span className="truncate text-xs font-black text-white">{event.title}</span>
+            <span className="mt-1 line-clamp-2 text-[10px] font-semibold leading-4 text-white/70">{event.date}</span>
+          </button>
+        ))}
+      </section>
+
+      <section className="px-4 pt-4">
+        <div className="rounded-[1.15rem] border border-[#2a2f4a] bg-[#1e2235] p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#8b90b0]">Your Interaction Score</p>
+              <p className="mt-1 text-3xl font-black tracking-tight text-[#0fc98a]">2,840 pts</p>
+            </div>
+            <div className="rounded-xl border border-[#2b6eff]/30 bg-[#2b6eff]/10 px-4 py-3 text-center">
+              <p className="text-xl font-black text-[#2b6eff]">3.2 km</p>
+              <p className="mt-1 text-[10px] font-semibold text-[#8b90b0]">Your Reach</p>
+            </div>
+          </div>
+          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#0d0f1a]">
+            <div className="h-full w-[56%] rounded-full bg-gradient-to-r from-[#0fc98a] to-[#2b6eff]" />
+          </div>
+          <p className="mt-2 text-[11px] font-medium text-[#8b90b0]">
+            Keep engaging to expand your neighborhood radius and reach more people.
           </p>
-        ) : (
+        </div>
+      </section>
+
+      <SectionTitle icon={Star} title="Top Providers" />
+      <section className="px-4">
+        {!loading && topProviders.length > 0 ? (
           <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {topProviders.map((p) => (
+            {topProviders.map((provider) => (
               <button
-                key={p.providerId}
+                key={provider.providerId}
                 type="button"
                 onClick={() => {
-                  const s = services.find((x) => x.id === p.sampleServiceId);
-                  if (s) goOrderFromService(s);
+                  const service = services.find((item) => item.id === provider.sampleServiceId);
+                  if (service) goOrderFromService(service);
                 }}
-                className="flex w-[148px] shrink-0 flex-col rounded-xl border border-app-border bg-app-card p-3 text-left transition hover:border-neutral-300 dark:hover:border-neutral-600"
+                className="w-36 shrink-0 rounded-xl border border-[#2a2f4a] bg-[#1e2235] p-3 text-left transition hover:border-[#2b6eff]"
               >
-                <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-sm font-extrabold dark:bg-neutral-800">
-                  {p.avatarUrl ? (
-                    <img src={p.avatarUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    (p.displayName[0] || '?').toUpperCase()
-                  )}
+                <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-[#1a3f99] text-sm font-black text-blue-100">
+                  {provider.avatarUrl ? <img src={provider.avatarUrl} alt="" className="h-full w-full object-cover" /> : provider.displayName[0]?.toUpperCase()}
                 </div>
-                <p className="mt-2 line-clamp-2 text-[13px] font-extrabold leading-tight text-app-text">{p.displayName}</p>
-                <div className="mt-auto flex items-center justify-between pt-2 text-xs">
-                  <span className="flex items-center gap-1 font-bold">
-                    <Star className="h-3.5 w-3.5 text-amber-500" />
-                    {p.topRating.toFixed(1)}
+                <p className="mt-3 line-clamp-2 text-xs font-black leading-snug text-white">{provider.displayName}</p>
+                <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-[#8b90b0]">
+                  <span className="inline-flex items-center gap-1 text-amber-300">
+                    <Star className="h-3.5 w-3.5 fill-current" />
+                    {provider.topRating.toFixed(1)}
                   </span>
-                  <span className="font-semibold text-neutral-500">{p.serviceCount} svc</span>
+                  <span>{provider.serviceCount} svc</span>
                 </div>
               </button>
             ))}
           </div>
+        ) : (
+          <EmptyCard title="Provider highlights are warming up" description="They will appear when services are listed." />
         )}
+      </section>
+    </div>
+  );
+}
+
+function SectionTitle({
+  icon: Icon,
+  title,
+  action,
+  onAction,
+}: {
+  icon: typeof Home;
+  title: string;
+  action?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-5">
+      <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-[#8b90b0]">
+        <Icon className="h-4 w-4 shrink-0" />
+        <h2 className="truncate">{title}</h2>
       </div>
+      {action && (
+        <button
+          type="button"
+          onClick={onAction}
+          className="inline-flex items-center gap-1 text-xs font-black text-[#2b6eff]"
+        >
+          {action}
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EmptyCard({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-xl border border-[#2a2f4a] bg-[#1e2235] p-4">
+      <p className="text-sm font-black text-white">{title}</p>
+      <p className="mt-1 text-xs font-medium leading-5 text-[#8b90b0]">{description}</p>
     </div>
   );
 }

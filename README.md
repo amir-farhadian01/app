@@ -1,7 +1,20 @@
-# Neighborly
+# Neighborly 2.0
 
-Local services marketplace (Express + React + Prisma + Flutter).
+Social marketplace platform — part Instagram, part TaskRabbit, part Groupon.
+Local services booking with social feed, KYC verification, and Stripe Connect payouts.
 
-**Documentation:** everything lives under [`docs/`](docs/). Start with [`docs/README.md`](docs/README.md), [`docs/ROADMAP.md`](docs/ROADMAP.md), and [`docs/AGENTS.md`](docs/AGENTS.md).
+## Stack
+- Backend: Node.js + Express + TypeScript + Prisma + PostgreSQL
+- Frontend: React 18 + Vite + TailwindCSS + shadcn/ui
+- Mobile: Flutter (iOS + Android)
+- Infrastructure: Docker + Traefik + Redis + NATS
 
-Quick run: `npm install` → copy `.env.example` to `.env` → `npm run dev`.
+## Getting Started
+1. cp .env.example .env  (fill in required values)
+2. docker compose up -d  (starts postgres, redis, NATS)
+3. npx prisma migrate dev
+4. npm run dev            (starts backend on port 3000)
+5. cd frontend && npm run dev  (starts frontend on port 5173)
+
+## Documentation
+Read docs/ROADMAP.md first.

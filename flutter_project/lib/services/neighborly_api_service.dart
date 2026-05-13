@@ -802,6 +802,23 @@ class NeighborlyApiService extends ChangeNotifier {
     await _throwUnlessOk(res);
   }
 
+  /// POST /api/orders/:id/review — star rating (1–5) + optional comment.
+  Future<void> submitOrderReview(String orderId, {required int rating, String? comment}) async {
+    final res = await _postJson('/api/orders/${Uri.encodeComponent(orderId)}/review', {
+      'rating': rating,
+      if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
+    });
+    await _throwUnlessOk(res);
+  }
+
+  /// POST /api/orders/:id/dispute — open a dispute for a closed order.
+  Future<void> submitOrderDispute(String orderId, {required String reason}) async {
+    final res = await _postJson('/api/orders/${Uri.encodeComponent(orderId)}/dispute', {
+      'reason': reason,
+    });
+    await _throwUnlessOk(res);
+  }
+
   Future<List<Map<String, dynamic>>> fetchAdminUsers() => fetchJsonList('/api/admin/users');
 
   Future<Map<String, dynamic>> fetchAdminStats() => fetchJsonMapRequired('/api/admin/stats');

@@ -714,7 +714,7 @@ class _CreateOrderWizardScreenState extends State<CreateOrderWizardScreen> {
             )
           else
             DropdownButtonFormField<String>(
-              value: _selectedRootCategoryId != null && roots.any((r) => r.id == _selectedRootCategoryId)
+              initialValue: _selectedRootCategoryId != null && roots.any((r) => r.id == _selectedRootCategoryId)
                   ? _selectedRootCategoryId
                   : null,
               decoration: const InputDecoration(
@@ -813,7 +813,7 @@ class _CreateOrderWizardScreenState extends State<CreateOrderWizardScreen> {
                     return const SizedBox.shrink();
                   }
                   return DropdownButtonFormField<String>(
-                    value: _selectedCatalogId != null &&
+                    initialValue: _selectedCatalogId != null &&
                             (_catalogTiles.any((t) => t.id == _selectedCatalogId) || orphanPrefill)
                         ? _selectedCatalogId
                         : null,

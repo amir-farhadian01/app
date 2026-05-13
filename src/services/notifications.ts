@@ -23,3 +23,8 @@ export async function fetchNotifications(): Promise<AppNotification[]> {
   const list = await api.get<AppNotification[]>('/api/notifications');
   return Array.isArray(list) ? list : [];
 }
+
+export async function getUnreadCount(): Promise<number> {
+  const list = await fetchNotifications();
+  return list.filter((n) => !n.read).length;
+}

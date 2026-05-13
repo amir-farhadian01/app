@@ -270,4 +270,3 @@ volumes:
   postgres_media_data: {}
   portainer_data: {}
   minio_data: {}
-  minio_data: {}

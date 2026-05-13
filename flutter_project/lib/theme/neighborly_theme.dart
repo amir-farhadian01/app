@@ -73,15 +73,15 @@ abstract final class NeighborlyTheme {
   }
 
   static ThemeData dark() {
-    final scheme = ColorScheme.dark(
-      surface: const Color(0xFF1E2235),
-      onSurface: const Color(0xFFF0F2FF),
-      primary: const Color(0xFF2B6EFF),
+    const scheme = ColorScheme.dark(
+      surface: Color(0xFF1E2235),
+      onSurface: Color(0xFFF0F2FF),
+      primary: Color(0xFF2B6EFF),
       onPrimary: Colors.white,
-      secondary: const Color(0xFF0FC98A),
-      onSecondary: const Color(0xFF0D0F1A),
-      outline: const Color(0xFF2A2F4A),
-      surfaceContainerHighest: const Color(0xFF242840),
+      secondary: Color(0xFF0FC98A),
+      onSecondary: Color(0xFF0D0F1A),
+      outline: Color(0xFF2A2F4A),
+      surfaceContainerHighest: Color(0xFF242840),
     );
     return ThemeData(
       useMaterial3: true,

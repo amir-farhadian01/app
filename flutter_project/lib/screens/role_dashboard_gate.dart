@@ -5,7 +5,7 @@ import '../services/neighborly_api_service.dart';
 import 'admin_dashboard_screen.dart';
 import 'company_dashboard_screen.dart';
 import 'customer_dashboard_screen.dart';
-import 'provider_onboarding_screen.dart';
+import 'provider_dashboard_screen.dart';
 import '../services/auth_provider.dart';
 
 /// Mirrors React [App.tsx] `/dashboard` branch: admin → company → provider → customer.
@@ -33,7 +33,7 @@ class RoleDashboardGate extends StatelessWidget {
     }
 
     if (user.role == 'provider') {
-      return const ProviderOnboardingScreen();
+      return const ProviderDashboardScreen();
     }
 
     return SafeArea(child: CustomerDashboardScreen(user: appUser));

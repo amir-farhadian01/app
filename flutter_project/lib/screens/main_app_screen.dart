@@ -35,7 +35,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
 
     final dashboardContent = _showingCustomerView || !isProvider
         ? CustomerDashboardScreen(user: user)
-        : ProviderDashboardScreen(user: user);
+        : const ProviderDashboardScreen();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,

@@ -31,7 +31,6 @@ class _GeminiPalette {
   static const border = Color(0xFFBCCCDC);
   static const text = Color(0xFF1B3C53);
   static const textSecondary = Color(0xFF456882);
-  static const userBubble = Color(0xFFBCCCDC);
   static const selectedChip = Color(0xFFBCCCDC);
   static const accent = Color(0xFF1B3C53);
 }

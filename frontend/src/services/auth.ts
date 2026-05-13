@@ -5,7 +5,7 @@ interface LoginPayload { email: string; password: string }
 interface RegisterPayload { email: string; password: string; firstName: string; lastName: string; phone: string }
 
 export async function login(payload: LoginPayload) {
-  const { data } = await api.post<{ token: string; refreshToken: string; user: Parameters<typeof useAuthStore.getState>['0'] extends never ? never : ReturnType<typeof useAuthStore.getState>['user'] }>('/auth/login', payload)
+  const { data } = await api.post<{ token: string; refreshToken: string; user: ReturnType<typeof useAuthStore.getState>['user'] }>('/auth/login', payload)
   return data
 }
 

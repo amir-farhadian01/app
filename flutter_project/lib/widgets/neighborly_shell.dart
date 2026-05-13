@@ -393,12 +393,12 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
                 filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: glassTint.withOpacity(0.88),
+                    color: glassTint.withValues(alpha: 0.88),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: borderColor.withOpacity(0.95), width: 1),
+                    border: Border.all(color: borderColor.withValues(alpha: 0.95), width: 1),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),

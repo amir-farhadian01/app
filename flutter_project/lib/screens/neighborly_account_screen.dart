@@ -140,14 +140,14 @@ class NeighborlyAccountScreen extends StatelessWidget {
                 fontWeight: FontWeight.w700, fontSize: 17),
           ),
           centerTitle: true,
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(44),
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(44),
             child: Align(
               alignment: Alignment.centerLeft,
               child: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                tabs: const [
+                tabs: [
                   Tab(text: 'Account'),
                   Tab(text: 'Personal'),
                   Tab(text: 'Finance'),
@@ -263,7 +263,7 @@ class _RowTile extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: labelColor)),
             ),
-            if (onTap != null && trailing == null)
+            if (onTap != null)
               Icon(LucideIcons.chevronRight,
                   size: 14, color: cs.onSurfaceVariant),
           ],
@@ -507,7 +507,7 @@ class _AccountTabState extends State<_AccountTab> {
     final theme = context.watch<NeighborlyThemeNotifier>();
     final cs = Theme.of(context).colorScheme;
     final parts = [u.firstName, u.lastName]
-        .where((s) => s != null && s!.trim().isNotEmpty)
+        .where((s) => s != null && s.trim().isNotEmpty)
         .map((s) => s!)
         .toList();
     final fullName = parts.isNotEmpty ? parts.join(' ') : u.displayName.trim();
@@ -1208,7 +1208,9 @@ class _PersonalTabState extends State<_PersonalTab> {
                   child: FilledButton(
                     onPressed: () async {
                       if (makeCtrl.text.trim().isEmpty ||
-                          modelCtrl.text.trim().isEmpty) return;
+                          modelCtrl.text.trim().isEmpty) {
+                        return;
+                      }
                       final v = {
                         'id': DateTime.now()
                             .millisecondsSinceEpoch
@@ -1690,7 +1692,7 @@ class _FinanceTabState extends State<_FinanceTab> {
 
         if (_showOrders)
           _orders.isEmpty
-              ? _EmptyCard(
+              ? const _EmptyCard(
                   icon: LucideIcons.package,
                   title: 'No orders yet',
                   sub: 'Your service orders will appear here.')
@@ -1782,7 +1784,7 @@ class _FinanceTabState extends State<_FinanceTab> {
                 )
         else
           _invoices.isEmpty
-              ? _EmptyCard(
+              ? const _EmptyCard(
                   icon: LucideIcons.creditCard,
                   title: 'No invoices yet',
                   sub: 'Completed transactions will appear here.')

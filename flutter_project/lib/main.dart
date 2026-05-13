@@ -16,6 +16,10 @@ import 'screens/home_screen.dart';
 import 'screens/create_order_wizard_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/order_detail_screen.dart';
+import 'screens/provider_order_detail_screen.dart';
+import 'screens/provider_dashboard_screen.dart';
+import 'screens/customer_home_screen.dart';
+import 'screens/my_orders_screen.dart';
 import 'screens/orders_list_screen.dart';
 import 'screens/provider_workspace_company_screen.dart';
 import 'screens/provider_workspace_inventory_screen.dart';
@@ -238,6 +242,12 @@ class NeighborlyApp extends StatelessWidget {
       case '/workspace/company':
         page = const ProviderWorkspaceCompanyScreen();
         break;
+      case '/customer-home':
+        page = const CustomerHomeScreen();
+        break;
+      case '/my-orders':
+        page = const MyOrdersScreen();
+        break;
       case '/orders':
         page = const OrdersListScreen();
         break;
@@ -246,6 +256,9 @@ class NeighborlyApp extends StatelessWidget {
         break;
       case '/provider/orders':
         page = const OrdersListScreen();
+        break;
+      case '/provider/dashboard':
+        page = const ProviderDashboardScreen();
         break;
       case '/provider/notifications':
         page = const NotificationsScreen();
@@ -270,6 +283,13 @@ class NeighborlyApp extends StatelessWidget {
         );
         break;
       default:
+        if (path.startsWith('/provider/orders/')) {
+          final id = path.substring('/provider/orders/'.length);
+          if (id.isNotEmpty && !id.contains('/')) {
+            page = ProviderOrderDetailScreen(orderId: id);
+            break;
+          }
+        }
         if (path.startsWith('/orders/')) {
           final id = path.substring('/orders/'.length);
           if (id.isNotEmpty && !id.contains('/')) {

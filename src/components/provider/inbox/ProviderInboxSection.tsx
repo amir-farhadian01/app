@@ -6,6 +6,7 @@ import {
   acknowledge,
   completeOrder,
   decline,
+  fetchInboxFacets,
   getInboxItem,
   listInbox,
   submitLostFeedback,
@@ -65,19 +66,8 @@ export function ProviderInboxSection({ onInboxMutation }: ProviderInboxSectionPr
 
   const loadCounts = useCallback(async () => {
     if (!activeWorkspaceId) return;
-    const segments: SegmentId[] = ['awaiting', 'accepted', 'declined', 'lost'];
-    const totals = await Promise.all(
-      segments.map(async (seg) => {
-        const res = await listInbox(activeWorkspaceId, statusForSegment(seg), 1, 1);
-        return [seg, res.total] as const;
-      }),
-    );
-    setSegmentCounts({
-      awaiting: totals.find(([k]) => k === 'awaiting')?.[1] ?? 0,
-      accepted: totals.find(([k]) => k === 'accepted')?.[1] ?? 0,
-      declined: totals.find(([k]) => k === 'declined')?.[1] ?? 0,
-      lost: totals.find(([k]) => k === 'lost')?.[1] ?? 0,
-    });
+    const facets = await fetchInboxFacets(activeWorkspaceId);
+    setSegmentCounts(facets);
   }, [activeWorkspaceId]);
 
   const load = useCallback(async () => {

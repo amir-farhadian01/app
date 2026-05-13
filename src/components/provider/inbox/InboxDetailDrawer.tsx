@@ -1,6 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { LayoutList, Loader2, MessageCircle, X } from 'lucide-react';
+import { FileText, LayoutList, Loader2, MessageCircle, X } from 'lucide-react';
+import {
+  fetchContractTemplates,
+  postDraftFromTemplate,
+  postSendContract,
+  type ContractTemplateListItem,
+  type ContractVersionDTO,
+} from '../../../services/orderContracts';
 import { isServiceQuestionnaireV1, type ServiceFieldDef } from '../../../../lib/serviceDefinitionTypes';
 import { resolveMediaUrl } from '../../../lib/resolveMediaUrl';
 import type { ProviderInboxItem } from '../../../services/providerInbox';
@@ -228,15 +235,51 @@ export function InboxDetailDrawer({
   }) => void;
   onMaybeLaterLostFeedback?: (attemptId: string) => void;
 }) {
-  const [mainTab, setMainTab] = useState<'details' | 'chat'>('details');
+  const [mainTab, setMainTab] = useState<'details' | 'chat' | 'contract'>('details');
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Contract tab state
+  const [templates, setTemplates] = useState<ContractTemplateListItem[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [draftedVersion, setDraftedVersion] = useState<ContractVersionDTO | null>(null);
+  const [sendBusyContract, setSendBusyContract] = useState(false);
+  const [contractMsg, setContractMsg] = useState<string | null>(null);
+  const templatesFetchedFor = useRef<string | null>(null);
+  // Live countdown
+  const [, setCountdownTick] = useState(0);
 
   useEffect(() => {
     if (!open) {
       setMainTab('details');
       setLightboxUrl(null);
+      setDraftedVersion(null);
+      setContractMsg(null);
+      setTemplates([]);
+      templatesFetchedFor.current = null;
     }
   }, [open, item?.id]);
+
+  // Tick every minute to refresh countdown display
+  useEffect(() => {
+    if (!item?.expiresAt) return;
+    const id = window.setInterval(() => setCountdownTick((t) => t + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, [item?.expiresAt]);
+
+  // Fetch templates once per order when contract tab is opened
+  useEffect(() => {
+    if (mainTab !== 'contract' || !item) return;
+    const orderId = item.order.id;
+    if (templatesFetchedFor.current === orderId) return;
+    templatesFetchedFor.current = orderId;
+    setTemplatesLoading(true);
+    setTemplatesError(null);
+    fetchContractTemplates(orderId)
+      .then((res) => setTemplates(res.templates))
+      .catch((e) => setTemplatesError(e instanceof Error ? e.message : 'Could not load templates'))
+      .finally(() => setTemplatesLoading(false));
+  }, [mainTab, item]);
 
   const photos = item ? parsePhotos(item.order.photos).slice(0, 5) : [];
   const schema = item?.order.schemaSnapshot;
@@ -263,7 +306,8 @@ export function InboxDetailDrawer({
     const m = (totalMin % 60).toString().padStart(2, '0');
     return `${h}:${m}`;
   })();
-  const countdownDanger = !!item?.expiresAt && new Date(item.expiresAt).getTime() - Date.now() <= 3600 * 1000;
+  // Red when < 2 hours remaining
+  const countdownDanger = !!item?.expiresAt && new Date(item.expiresAt).getTime() - Date.now() <= 2 * 3600 * 1000;
   const showLostPanel = item?.status === 'superseded' || item?.status === 'declined' || item?.status === 'expired';
   const canMarkComplete =
     Boolean(item && activeWorkspaceId) &&
@@ -353,28 +397,26 @@ export function InboxDetailDrawer({
                 </button>
               </div>
               <div className="flex gap-2 rounded-xl border border-app-border bg-app-input/30 p-1">
-                <button
-                  type="button"
-                  className={cn(
-                    'flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-lg text-sm font-bold',
-                    mainTab === 'details' ? 'bg-app-card text-app-text shadow-sm' : 'text-neutral-500',
-                  )}
-                  onClick={() => setMainTab('details')}
-                >
-                  <LayoutList className="h-4 w-4" aria-hidden />
-                  Details
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-lg text-sm font-bold',
-                    mainTab === 'chat' ? 'bg-app-card text-app-text shadow-sm' : 'text-neutral-500',
-                  )}
-                  onClick={() => setMainTab('chat')}
-                >
-                  <MessageCircle className="h-4 w-4" aria-hidden />
-                  Chat
-                </button>
+                {(
+                  [
+                    { id: 'details', label: 'Details', Icon: LayoutList },
+                    { id: 'chat', label: 'Chat', Icon: MessageCircle },
+                    { id: 'contract', label: 'Contract', Icon: FileText },
+                  ] as const
+                ).map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={cn(
+                      'flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-lg text-sm font-bold',
+                      mainTab === id ? 'bg-app-card text-app-text shadow-sm' : 'text-neutral-500',
+                    )}
+                    onClick={() => setMainTab(id)}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden />
+                    {label}
+                  </button>
+                ))}
               </div>
             </header>
 
@@ -513,9 +555,99 @@ export function InboxDetailDrawer({
                     </section>
                   ) : null}
                 </div>
-              ) : (
+              ) : mainTab === 'chat' ? (
                 <div className="flex h-full min-h-0 flex-col overflow-y-auto p-5">
                   <InboxDrawerChat orderId={item.order.id} customer={item.customer} />
+                </div>
+              ) : (
+                /* Contract tab */
+                <div className="h-full space-y-4 overflow-y-auto p-5">
+                  {contractMsg ? (
+                    <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                      {contractMsg}
+                    </div>
+                  ) : null}
+                  {draftedVersion ? (
+                    <section className="space-y-3 rounded-2xl border border-app-border p-4">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Draft ready</h3>
+                      <p className="font-semibold text-app-text">{draftedVersion.title}</p>
+                      <p className="text-xs text-neutral-500">Version {draftedVersion.versionNumber} · {draftedVersion.status}</p>
+                      {draftedVersion.scopeSummary ? (
+                        <p className="text-sm text-app-text">{draftedVersion.scopeSummary}</p>
+                      ) : null}
+                      {draftedVersion.status === 'draft' ? (
+                        <button
+                          type="button"
+                          disabled={sendBusyContract}
+                          onClick={async () => {
+                            setSendBusyContract(true);
+                            setContractMsg(null);
+                            try {
+                              await postSendContract(item.order.id, draftedVersion.id);
+                              setContractMsg('Contract sent to customer.');
+                              setDraftedVersion((v) => v ? { ...v, status: 'sent' } : v);
+                            } catch (e) {
+                              setContractMsg(e instanceof Error ? e.message : 'Send failed');
+                            } finally {
+                              setSendBusyContract(false);
+                            }
+                          }}
+                          className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded-2xl bg-neutral-900 font-bold text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900"
+                        >
+                          {sendBusyContract ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                          Send contract to customer
+                        </button>
+                      ) : (
+                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Contract {draftedVersion.status}.</p>
+                      )}
+                    </section>
+                  ) : (
+                    <section className="space-y-3">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-neutral-500">Pick a template</h3>
+                      {templatesLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-neutral-500">
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                          Loading templates…
+                        </div>
+                      ) : templatesError ? (
+                        <p className="text-sm text-rose-600">{templatesError}</p>
+                      ) : templates.length === 0 ? (
+                        <p className="text-sm text-neutral-500">No templates available.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {templates.map((tpl) => (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              disabled={draftBusy}
+                              onClick={async () => {
+                                setDraftBusy(true);
+                                setContractMsg(null);
+                                try {
+                                  const res = await postDraftFromTemplate(item.order.id, tpl.id);
+                                  setDraftedVersion(res.version);
+                                } catch (e) {
+                                  setContractMsg(e instanceof Error ? e.message : 'Draft failed');
+                                } finally {
+                                  setDraftBusy(false);
+                                }
+                              }}
+                              className="flex w-full items-start gap-3 rounded-2xl border border-app-border bg-app-input/30 p-3 text-left hover:border-neutral-400 disabled:opacity-60"
+                            >
+                              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" aria-hidden />
+                              <div className="min-w-0">
+                                <p className="font-bold text-app-text">{tpl.title}</p>
+                                {tpl.description ? (
+                                  <p className="mt-0.5 text-xs text-neutral-500">{tpl.description}</p>
+                                ) : null}
+                              </div>
+                              {draftBusy ? <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin" aria-hidden /> : null}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )}
                 </div>
               )}
             </div>

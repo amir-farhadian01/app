@@ -265,6 +265,8 @@ export default function OrderDetail() {
 
   const contractViewerRole: 'customer' | 'provider' = isCustomer ? 'customer' : 'provider';
   const showPaymentCard = isCustomer && ['contracted', 'paid', 'in_progress', 'completed', 'closed'].includes(order.status);
+  const contractApprovedForPayment =
+    !order.customerContract || order.customerContract.currentVersion?.status === 'approved';
   const showTrackingBar = order.phase === 'order' || order.phase === 'job';
   const shortId = (value: string | null | undefined) => (value ? value.slice(-6) : '—');
 
@@ -556,7 +558,7 @@ export default function OrderDetail() {
                   Last update: {new Date(paymentStatus.payment.timestamp).toLocaleString()}
                 </p>
               ) : null}
-              {paymentStatus?.payment?.status !== 'paid' ? (
+              {paymentStatus?.payment?.status !== 'paid' && contractApprovedForPayment ? (
                 <button
                   type="button"
                   disabled={paymentBusy}
@@ -580,6 +582,10 @@ export default function OrderDetail() {
                 >
                   {paymentBusy ? 'Creating session…' : 'Create payment session'}
                 </button>
+              ) : paymentStatus?.payment?.status !== 'paid' && !contractApprovedForPayment ? (
+                <p className="mt-3 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                  Approve the contract in the Contract tab to enable payment.
+                </p>
               ) : null}
             </>
           )}

@@ -246,6 +246,23 @@ export type LostFeedbackReason =
   | 'unclear_brief'
   | 'other';
 
+export type InboxFacets = { awaiting: number; accepted: number; declined: number; lost: number };
+
+export async function fetchInboxFacets(workspaceId: string): Promise<InboxFacets> {
+  const [awaiting, accepted, declined, lost] = await Promise.all([
+    listInbox(workspaceId, ['invited', 'matched'], 1, 1),
+    listInbox(workspaceId, ['accepted'], 1, 1),
+    listInbox(workspaceId, ['declined', 'expired'], 1, 1),
+    listInbox(workspaceId, ['superseded'], 1, 1),
+  ]);
+  return {
+    awaiting: awaiting.total,
+    accepted: accepted.total,
+    declined: declined.total,
+    lost: lost.total,
+  };
+}
+
 export async function submitLostFeedback(
   workspaceId: string,
   attemptId: string,

@@ -4,9 +4,12 @@ import { useAuth } from '../lib/AuthContext';
 import { api } from '../lib/api';
 import { handleApiError, OperationType } from '../lib/errors';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, MapPin, Star, Clock, CheckCircle2, AlertCircle, Sparkles, Send, ArrowRight, ShieldCheck, Briefcase, ChevronRight, LayoutDashboard, ClipboardList, MessageSquare, DollarSign, Calendar, Filter, Plus, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Sparkles, ArrowRight, Briefcase, ChevronRight, LayoutDashboard, ClipboardList, MessageSquare, DollarSign, Plus, X, CalendarClock } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getAIConsultantResponse } from '../services/aiService';
+import { getUnreadCount } from '../services/notifications';
+import { QuickActionCard } from '../components/customer/home/QuickActionCard';
+import { ActiveOrdersStrip } from '../components/customer/home/ActiveOrdersStrip';
 
 export default function CustomerDashboard() {
   const { user } = useAuth();
@@ -22,6 +25,7 @@ export default function CustomerDashboard() {
   const [loading, setLoading] = useState(true);
   const [showBecomeProvider, setShowBecomeProvider] = useState(false);
   const [requestFilter, setRequestFilter] = useState({ category: 'All', status: 'All', search: '' });
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const [notification, setNotification] = useState<{ show: boolean; message: string; type: 'success' | 'error' } | null>(null);
 
@@ -68,6 +72,7 @@ export default function CustomerDashboard() {
         );
         setKycData(kycRow && Object.keys(kycRow).length ? kycRow : null);
         setLoading(false);
+        getUnreadCount().then(setUnreadCount).catch(() => {});
       } catch (e) {
         try {
           await handleApiError(e, OperationType.LIST, 'customer-dashboard');
@@ -363,156 +368,70 @@ export default function CustomerDashboard() {
       );
     }
 
+    // ── Home tab ──────────────────────────────────────────────────────────────
+    const firstName = user?.firstName || user?.displayName?.split(' ')[0] || 'there';
+    const initials = [
+      (user?.firstName?.[0] ?? ''),
+      (user?.lastName?.[0] ?? ''),
+    ].join('').toUpperCase() || (user?.displayName?.[0]?.toUpperCase() ?? '?');
+
     return (
-      <div className="space-y-12 pb-20">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-1">
-            <h1 className="text-5xl font-black tracking-tighter uppercase italic text-app-text">Terminal</h1>
-            <p className="text-neutral-500 font-medium">Welcome back, {user?.displayName?.split(' ')[0]}. Your neighborhood awaits.</p>
+      <div className="space-y-8 pb-20">
+        {/* Greeting header */}
+        <header className="flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#2b6eff]/20 text-lg font-black text-[#2b6eff]">
+            {user?.avatarUrl
+              ? <img src={user.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+              : initials}
           </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setShowBecomeProvider(true)}
-              className="px-6 py-3 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-2xl font-bold text-sm flex items-center gap-2 hover:scale-105 transition-all shadow-xl shadow-neutral-900/20"
-            >
-              <Briefcase className="w-4 h-4" />
-              Become a Provider
-            </button>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[#4a4f70]">Welcome back</p>
+            <h1 className="text-2xl font-black text-white">Hello, {firstName}</h1>
           </div>
+          <button
+            onClick={() => setShowBecomeProvider(true)}
+            className="ml-auto flex items-center gap-2 rounded-xl border border-[#2a2f4a] bg-[#1e2235] px-4 py-2 text-[11px] font-black uppercase tracking-widest text-[#8b90b0] transition hover:border-[#2b6eff] hover:text-white"
+          >
+            <Briefcase className="h-4 w-4" />
+            Become a Provider
+          </button>
         </header>
 
-        {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {[
-              { label: 'Total Spent', value: `$${totalSpent.toLocaleString()}`, icon: DollarSign, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' },
-              { label: 'Active Jobs', value: requests.filter(r => r.status !== 'completed' && r.status !== 'declined').length, icon: Briefcase, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
-              { label: 'Reward Points', value: '450', icon: Sparkles, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
-              { label: 'Open Tickets', value: tickets.filter(t => t.status === 'open').length, icon: MessageSquare, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20' },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-app-card p-6 rounded-[2rem] border border-app-border space-y-2 shadow-sm">
-                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", stat.color)}>
-                  <stat.icon className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{stat.label}</p>
-                  <p className="text-2xl font-black text-app-text">{stat.value}</p>
-                </div>
-              </div>
-            ))}
+        {/* Quick action cards */}
+        <section>
+          <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-[#4a4f70]">Quick Actions</p>
+          <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <QuickActionCard
+              label="Book a Service"
+              path="/orders/new"
+              icon={<Plus className="h-5 w-5" />}
+            />
+            <QuickActionCard
+              label="My Active Orders"
+              path="/orders?tab=active"
+              icon={<ClipboardList className="h-5 w-5" />}
+            />
+            <QuickActionCard
+              label="Messages"
+              path="/orders"
+              icon={<MessageSquare className="h-5 w-5" />}
+              badge={unreadCount}
+            />
+            <QuickActionCard
+              label="Schedule"
+              path="/dashboard?tab=schedule"
+              icon={<CalendarClock className="h-5 w-5" />}
+            />
           </div>
+        </section>
 
-        <div className="grid lg:grid-cols-3 gap-12">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-16">
-            
-            {/* Featured Services Grid */}
-            <section className="space-y-8">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-black tracking-tight italic uppercase text-app-text">Recommended</h2>
-                <button onClick={() => navigate('/services')} className="text-xs font-black uppercase tracking-widest text-neutral-400 hover:text-app-text">View All</button>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                {services.slice(0, 4).map(service => (
-                  <div 
-                    key={service.id}
-                    onClick={() => navigate(`/service/${service.id}`)}
-                    className="group relative aspect-square bg-neutral-100 dark:bg-neutral-800 rounded-[2rem] overflow-hidden cursor-pointer"
-                  >
-                    <img src={`https://picsum.photos/seed/${service.id}/600/600`} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent p-6 flex flex-col justify-end">
-                      <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">{service.category}</p>
-                      <h4 className="text-white font-black text-lg leading-tight">{service.title}</h4>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Active Requests Preview */}
-            <section className="space-y-8">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-black tracking-tight italic uppercase text-app-text">Active Jobs</h2>
-                <button onClick={() => navigate('/dashboard?tab=requests')} className="text-xs font-black uppercase tracking-widest text-neutral-400 hover:text-app-text">Manage</button>
-              </div>
-              
-              <div className="space-y-4">
-                {requests.slice(0, 2).map((req) => (
-                  <div key={req.id} className="p-6 bg-app-card border border-app-border rounded-[2rem] flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-xl flex items-center justify-center font-black italic">
-                        {req.status[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-sm text-app-text">Job #{req.id.slice(0, 8).toUpperCase()}</h4>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">{req.status}</p>
-                        {req.status === 'accepted' && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const contract = contracts.find(c => c.requestId === req.id);
-                              if (contract) navigate(`/contract/${contract.id}`);
-                            }}
-                            className="text-[10px] font-black uppercase tracking-widest text-blue-500 hover:underline mt-1"
-                          >
-                            Sign Contract
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-neutral-200" />
-                  </div>
-                ))}
-                {requests.length === 0 && (
-                  <div className="p-12 text-center bg-app-card rounded-[2rem] border border-dashed border-app-border">
-                    <p className="text-xs font-bold text-neutral-400">No active jobs found.</p>
-                  </div>
-                )}
-              </div>
-            </section>
+        {/* Active orders strip */}
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#4a4f70]">Active Orders</p>
           </div>
-
-          {/* Sidebar */}
-          <div className="space-y-12">
-            {/* Quick Stats */}
-            <div className="bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 p-10 rounded-[3rem] space-y-8 shadow-2xl shadow-neutral-900/20">
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-white/40 dark:text-neutral-400 uppercase tracking-widest">Neighborhood Points</p>
-                <h3 className="text-4xl font-black italic">450 <span className="text-sm font-bold not-italic text-white/60 dark:text-neutral-500">XP</span></h3>
-              </div>
-              <div className="space-y-4">
-                <div className="h-2 bg-white/10 dark:bg-neutral-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-white dark:bg-neutral-900 w-2/3" />
-                </div>
-                <p className="text-[10px] font-bold text-white/40 dark:text-neutral-400 uppercase tracking-widest">Level 4 Neighbor • 150 XP to Level 5</p>
-              </div>
-            </div>
-
-            {/* Quick Links */}
-            <div className="space-y-4">
-              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-neutral-400 ml-6">Quick Access</h3>
-              <div className="space-y-2">
-                {[
-                  { label: 'Book a service', icon: Plus, path: '/orders/new' },
-                  { label: 'AI Consultant', icon: Sparkles, path: '/ai-consultant' },
-                  { label: 'Address Book', icon: MapPin, path: '/account?section=account' },
-                  { label: 'Support Center', icon: AlertCircle, path: '/account?section=help' },
-                ].map((link) => (
-                  <button 
-                    key={link.label} 
-                    onClick={() => navigate(link.path)}
-                    className="w-full p-6 bg-app-card border border-app-border rounded-[2rem] flex items-center justify-between group hover:border-neutral-900 dark:hover:border-white transition-all"
-                  >
-                    <div className="flex items-center gap-4">
-                      <link.icon className="w-5 h-5 text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors" />
-                      <span className="font-bold text-sm text-app-text">{link.label}</span>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-neutral-200 group-hover:text-neutral-900 dark:group-hover:text-white group-hover:translate-x-1 transition-all" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
+          <ActiveOrdersStrip />
+        </section>
       </div>
     );
   };

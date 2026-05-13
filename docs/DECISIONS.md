@@ -413,3 +413,15 @@ Shared validation and sibling resequencing live in `lib/categoryTreeOps.ts`
 **Context:** `Order` already spans offer/order/job lifecycle states, but Sprint N needs a traceable offer-to-job chain with analytics-ready job metrics while preserving backward compatibility.
 **Decision:** Keep `Order` as the canonical lifecycle entity and add `Order.broadcastList` plus a 1:1 `JobRecord` (`orderId @unique`, relation `OrderJob`) to hold operational job timestamps, cancellation metadata, and analytics fields (`responseTimeMinutes`, `priceDelta`, `customerRating`) with `JobStatus`.
 **Consequences:** ✅ additive migration with minimal API break risk ❌ job-level reporting now joins across `Order` and `JobRecord` until dedicated read models exist.
+
+## ADR-0059 — Web direction: `frontend/` greenfield shell vs root `src/` SPA
+**Date:** 2026-05-13 **Status:** Accepted
+**Context:** The repository ships two React+Vite web surfaces: the root SPA (`index.html` → `src/main.tsx`, `npm run dev`) and a separate app under `frontend/` (README: `cd frontend && npm run dev`). `docs/ROADMAP.md` Phase 0 calls for scaffolding the new shell alongside the existing backend; `docs/ui.txt` specifies provider/company IA for the new UX.
+**Decision:** Treat **`frontend/`** as the **default target** for new web IA and provider UX alignment with `docs/ui.txt` and Phase 0+. Keep **`src/`** as the **continuing legacy + admin + broader feature** bundle until a future ADR explicitly migrates routes or deprecates the root SPA.
+**Consequences:** ✅ agents have a single written default when choosing where to add net-new web UX ❌ temporary duplication of web effort across two bundles until cutover.
+
+## ADR-0060 — Client surfaces: Flutter and web are both first-class
+**Date:** 2026-05-13 **Status:** Accepted
+**Context:** `flutter_project/` and web clients all consume `/api/*`. The roadmap defers specific Flutter scope (for example order-wizard parity) while still listing Flutter parity as a cross-cutting goal.
+**Decision:** **Both** Flutter and web are **first-class** product surfaces. Prefer **`frontend/`** for new web shell work per ADR-0059; do **not** treat Flutter as secondary to web or vice versa in planning—coordinate API contracts across bundles. Roadmap deferrals describe **schedule**, not **deprecation** of a client.
+**Consequences:** ✅ avoids false either/or prioritization in documentation ❌ requires discipline to keep API behavior backward-compatible for multiple clients.

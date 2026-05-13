@@ -114,6 +114,10 @@ Flutter web local scripts:
 - Same React+Vite application as main site; server.ts creates two HTTP servers in dev: PORT (customer/provider shell) and ADMIN_PORT (admin entry). Production serves same dist on both.
 - Access: roles owner, platform_admin (full admin per docs/AGENTS.md), plus support/finance and other staff where routes allow. amirfarhadian569@gmail.com is documented hardcoded platform owner email in project rules.
 
+3.4 Greenfield web shell (frontend/) vs root src/ SPA
+- docs/ROADMAP.md Phase 0 scaffolds a separate Vite app under frontend/ (neighborly-frontend package) with its own router (public /app/* customer, /business/:workspaceId business, /admin).
+- Default product direction: treat frontend/ as the intended next web shell for new IA and docs/ui.txt provider UX; root src/ remains the legacy + admin + feature-complete surface until an explicit migration ADR schedules cutover. See docs/DECISIONS.md ADR-0059 and ADR-0060.
+
 ================================================================================
 4) BACKEND
 ================================================================================

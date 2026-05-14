@@ -13,7 +13,7 @@ import ServiceDetail from '../pages/public/ServiceDetail'
 import Login from '../pages/auth/Login'
 import Register from '../pages/auth/Register'
 
-import CustomerHome from '../pages/customer/CustomerHome'
+import CustomerDashboard from '../pages/customer/CustomerDashboard'
 import MyOrders from '../pages/customer/MyOrders'
 import OrderDetail from '../pages/customer/OrderDetail'
 import Messages from '../pages/customer/Messages'
@@ -50,7 +50,7 @@ export const router = createBrowserRouter([
   {
     element: <RequireAuth roles={['CUSTOMER']}><CustomerLayout /></RequireAuth>,
     children: [
-      { path: '/app/home', element: <CustomerHome /> },
+      { path: '/app/home', element: <CustomerDashboard /> },
       { path: '/app/orders', element: <MyOrders /> },
       { path: '/app/orders/:id', element: <OrderDetail /> },
       { path: '/app/messages', element: <Messages /> },
@@ -58,7 +58,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '/business/:workspaceId',
-    element: <RequireAuth roles={['BUSINESS_OWNER', 'EMPLOYEE']}><BusinessLayout /></RequireAuth>,
+    element: <RequireAuth roles={['BUSINESS_OWNER', 'SOLO_PROVIDER', 'EMPLOYEE']}><BusinessLayout /></RequireAuth>,
     children: [
       { index: true, element: <BusinessDashboard /> },
       { path: 'inbox', element: <Inbox /> },

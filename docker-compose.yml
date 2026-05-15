@@ -14,7 +14,7 @@ services:
       - "--log.level=INFO"
     ports:
       - "80:80"
-      - "8080:8080"       # Traefik dashboard
+      - "8080:8080"       # Traefik dashboard  →  http://localhost:8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -35,7 +35,6 @@ services:
     networks:
       - neighborly_network
     restart: unless-stopped
-    # For host `npm run dev` (Flutter / IDE): connect to 127.0.0.1:5432
     ports:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
@@ -44,7 +43,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Dedicated media metadata DB (for Explorer videos/images + Metabase) ──
+  # ─── Dedicated media metadata DB ──────────────────────────────────────────
   postgres-media:
     image: postgres:16-alpine
     container_name: neighborly_media_db
@@ -66,7 +65,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Object storage for videos/images (S3-compatible) ─────────────────────
+  # ─── Object storage (S3-compatible) ───────────────────────────────────────
   minio:
     image: minio/minio:latest
     container_name: neighborly_minio
@@ -80,8 +79,8 @@ services:
       - neighborly_network
     restart: unless-stopped
     ports:
-      - "9002:9000"
-      - "9003:9001"
+      - "9002:9000"   # MinIO API
+      - "9003:9001"   # MinIO Console
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.minio.rule=PathPrefix(`/minio`)"
@@ -89,19 +88,6 @@ services:
       - "traefik.http.middlewares.minio-strip.stripprefix.prefixes=/minio"
       - "traefik.http.routers.minio.middlewares=minio-strip"
       - "traefik.http.services.minio.loadbalancer.server.port=9001"
-
-  # ─── Cache ────────────────────────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: neighborly_cache
-    networks:
-      - neighborly_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # ─── Message Bus ──────────────────────────────────────────────────────────
   nats:
@@ -122,8 +108,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-EagleRock901}@postgres:5432/${DB_NAME:-neighborly_db}?schema=public
       MEDIA_DATABASE_URL: postgresql://${MEDIA_DB_USER:-postgres}:${MEDIA_DB_PASSWORD:-EagleRock901}@postgres-media:5432/${MEDIA_DB_NAME:-media_db}
-      REDIS_URL: redis://redis:6379
       NATS_URL: nats://nats:4222
+      # REDIS_URL removed — cache is now in-memory (lib/cache.ts)
     volumes:
       - .:/app
       - /app/node_modules
@@ -132,17 +118,14 @@ services:
         condition: service_healthy
       postgres-media:
         condition: service_healthy
-      redis:
-        condition: service_healthy
       nats:
         condition: service_started
     networks:
       - neighborly_network
     restart: unless-stopped
     ports:
-      - "3000:8080"
-      # Admin panel (Vite+React; second listen from npm run dev). Must match ADMIN_PORT in .env.
-      - "${ADMIN_PORT:-9090}:${ADMIN_PORT:-9090}"
+      - "3000:8080"                          # Backend API  →  http://localhost:3000
+      - "${ADMIN_PORT:-9090}:${ADMIN_PORT:-9090}"  # Admin panel  →  http://localhost:9090
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.web-app.rule=PathPrefix(`/`)"
@@ -150,7 +133,7 @@ services:
       - "traefik.http.routers.web-app.priority=1"
       - "traefik.http.services.web-app.loadbalancer.server.port=8080"
 
-  # ─── Container Management ────────────────────────────────────────────────
+  # ─── Container Management ─────────────────────────────────────────────────
   portainer:
     image: portainer/portainer-ce:latest
     container_name: neighborly_portainer
@@ -161,7 +144,7 @@ services:
       - neighborly_network
     restart: unless-stopped
     ports:
-      - "9000:9000"
+      - "9000:9000"   # Portainer UI  →  http://localhost:9000
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.portainer.rule=PathPrefix(`/portainer`)"
@@ -170,7 +153,7 @@ services:
       - "traefik.http.routers.portainer.middlewares=portainer-strip"
       - "traefik.http.services.portainer.loadbalancer.server.port=9000"
 
-  # ─── Container logs (no Loki) — Dozzle; Traefik path: /dozzle/ (see DOZZLE_BASE)
+  # ─── Container logs ────────────────────────────────────────────────────────
   dozzle:
     image: amir20/dozzle:latest
     container_name: neighborly_dozzle
@@ -182,7 +165,7 @@ services:
       - neighborly_network
     restart: unless-stopped
     ports:
-      - "8888:8080"
+      - "8888:8080"   # Dozzle UI  →  http://localhost:8888
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dozzle.rule=PathPrefix(`/dozzle`)"
@@ -208,9 +191,7 @@ services:
       - neighborly_network
     restart: unless-stopped
     ports:
-      - "3001:3000"           # Metabase direct access
-    # For structured app events in Metabase: add a second data source to the app DB (neighborly_db) and
-    # query the "AuditLog" table — sample: docker/metabase-audit-log-sample.sql
+      - "3001:3000"   # Metabase UI  →  http://localhost:3001
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.metabase.rule=PathPrefix(`/metabase`)"
@@ -219,7 +200,7 @@ services:
       - "traefik.http.routers.metabase.middlewares=metabase-strip"
       - "traefik.http.services.metabase.loadbalancer.server.port=3000"
 
-  # ─── React Frontend (Vite dev server) ──────────────────────────────────────
+  # ─── React Frontend (Vite dev server) ─────────────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -231,7 +212,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "5173:5173"
+      - "5173:5173"   # Vite frontend  →  http://localhost:5173
     depends_on:
       - web-app
     networks:
@@ -244,7 +225,7 @@ services:
       - "traefik.http.routers.frontend.priority=10"
       - "traefik.http.services.frontend.loadbalancer.server.port=5173"
 
-  # ─── Flutter Web (static build served by nginx) ───────────────────────────
+  # ─── Flutter Web (nginx static) ───────────────────────────────────────────
   flutter-web:
     build:
       context: ./flutter_project
@@ -253,6 +234,7 @@ services:
     networks:
       - neighborly_network
     restart: unless-stopped
+    # No host port — only reachable via Traefik at http://localhost/flutter
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.flutter.rule=PathPrefix(`/flutter`)"

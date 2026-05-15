@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../services/api_service.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Explore Screen (Redesigned)
+/// Explore Screen (Redesigned — Wired to Real API)
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Sticky search bar, filter bottom sheet, 2-column results grid.
-/// All data is hardcoded mock.
+/// Sticky search bar, category chips from API, filter bottom sheet,
+/// 2-column results grid from real backend data.
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class ExploreScreen extends StatefulWidget {
@@ -17,31 +18,65 @@ class ExploreScreen extends StatefulWidget {
 }
 
 class _ExploreScreenState extends State<ExploreScreen> {
+  // ── API state ────────────────────────────────────────────────────
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _categories = [];
+  List<Map<String, dynamic>> _services = [];
+
   // ── Filter state ─────────────────────────────────────────────────
-  final Set<String> _selectedCategories = {'Plumbing'};
+  String? _selectedCategory; // null = All
   double _distanceRange = 10;
   int _minRating = 0;
 
-  // ── Mock results ─────────────────────────────────────────────────
-  static const List<_ServiceResult> _allResults = [
-    _ServiceResult(name: 'Pipe Repair', provider: 'Mike D.', category: 'Plumbing', price: '\$40/hr', rating: 4.8, icon: Icons.plumbing),
-    _ServiceResult(name: 'Drain Cleaning', provider: 'Sara J.', category: 'Plumbing', price: '\$35/hr', rating: 4.6, icon: Icons.plumbing),
-    _ServiceResult(name: 'Outlet Installation', provider: 'Reza M.', category: 'Electrical', price: '\$50/hr', rating: 4.9, icon: Icons.electrical_services),
-    _ServiceResult(name: 'Wiring Repair', provider: 'Tom K.', category: 'Electrical', price: '\$45/hr', rating: 4.7, icon: Icons.electrical_services),
-    _ServiceResult(name: 'Deep Cleaning', provider: 'Layla K.', category: 'Cleaning', price: '\$25/hr', rating: 4.9, icon: Icons.cleaning_services),
-    _ServiceResult(name: 'Carpet Cleaning', provider: 'Nadia R.', category: 'Cleaning', price: '\$30/hr', rating: 4.5, icon: Icons.cleaning_services),
-    _ServiceResult(name: 'Interior Painting', provider: 'Layla K.', category: 'Painting', price: '\$35/hr', rating: 4.8, icon: Icons.format_paint),
-    _ServiceResult(name: 'Exterior Painting', provider: 'Omar S.', category: 'Painting', price: '\$45/hr', rating: 4.6, icon: Icons.format_paint),
-  ];
+  // ── Search ───────────────────────────────────────────────────────
+  final TextEditingController _searchController = TextEditingController();
 
-  List<_ServiceResult> get _filteredResults {
-    return _allResults.where((r) {
-      if (_selectedCategories.isNotEmpty && !_selectedCategories.contains(r.category)) return false;
-      if (_minRating > 0 && r.rating < _minRating) return false;
-      return true;
-    }).toList();
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+    _loadServices();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // ── Data loading ─────────────────────────────────────────────────
+  Future<void> _loadCategories() async {
+    try {
+      final result = await ApiService.getCategories();
+      if (!mounted) return;
+      setState(() => _categories = result.cast<Map<String, dynamic>>());
+    } catch (_) {
+      // categories load silently — UI falls back gracefully
+    }
+  }
+
+  Future<void> _loadServices({String? category, String? search}) async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await ApiService.getServices(
+        category: category,
+        search: search,
+      );
+      if (!mounted) return;
+      setState(() {
+        _services = result.cast<Map<String, dynamic>>();
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connection error')),
+      );
+    }
+  }
+
+  // ── Filter sheet ─────────────────────────────────────────────────
   void _showFilterSheet() {
     showModalBottomSheet(
       context: context,
@@ -50,27 +85,29 @@ class _ExploreScreenState extends State<ExploreScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => _FilterSheet(
-        selectedCategories: Set.from(_selectedCategories),
+        categories: _categories,
+        selectedCategory: _selectedCategory,
         distanceRange: _distanceRange,
         minRating: _minRating,
-        onApply: (cats, dist, rating) {
+        onApply: (cat, dist, rating) {
           setState(() {
-            _selectedCategories
-              ..clear()
-              ..addAll(cats);
+            _selectedCategory = cat;
             _distanceRange = dist;
             _minRating = rating;
           });
+          _loadServices(
+            category: cat,
+            search: _searchController.text.trim(),
+          );
           Navigator.pop(ctx);
         },
       ),
     );
   }
 
+  // ── Build ────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final results = _filteredResults;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -82,14 +119,28 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm,
               ),
               child: SearchBar(
+                controller: _searchController,
                 hintText: 'Search services in Vaughan...',
                 leading: const Icon(Icons.search, color: AppColors.textMuted),
                 trailing: [
+                  if (_searchController.text.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.close, color: AppColors.textMuted),
+                      onPressed: () {
+                        _searchController.clear();
+                        _loadServices(category: _selectedCategory);
+                      },
+                    ),
                   IconButton(
                     icon: const Icon(Icons.tune, color: AppColors.primary),
                     onPressed: _showFilterSheet,
                   ),
                 ],
+                onSubmitted: (val) => _loadServices(
+                  category: _selectedCategory,
+                  search: val,
+                ),
+                onChanged: (_) => setState(() {}), // rebuild trailing clear btn
                 backgroundColor: WidgetStateProperty.all(AppColors.surface),
                 elevation: WidgetStateProperty.all(0),
                 side: WidgetStateProperty.all(
@@ -112,13 +163,53 @@ class _ExploreScreenState extends State<ExploreScreen> {
               ),
             ),
 
+            // ── Category Chips ─────────────────────────────────────
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                children: [
+                  // "All" chip
+                  _CategoryChip(
+                    label: 'All',
+                    selected: _selectedCategory == null,
+                    onTap: () {
+                      setState(() => _selectedCategory = null);
+                      _loadServices(search: _searchController.text.trim());
+                    },
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  // Real categories from API
+                  ..._categories.map((cat) {
+                    final name = cat['name'] as String;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: AppSpacing.sm),
+                      child: _CategoryChip(
+                        label: name,
+                        selected: _selectedCategory == name,
+                        onTap: () {
+                          setState(() => _selectedCategory = name);
+                          _loadServices(
+                            category: name,
+                            search: _searchController.text.trim(),
+                          );
+                        },
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+
             // ── Results count ──────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Row(
                 children: [
                   Text(
-                    '${results.length} services found',
+                    '${_services.length} services found',
                     style: AppTextStyles.bodySmall(color: AppColors.textMuted),
                   ),
                 ],
@@ -128,74 +219,113 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
             // ── Results Grid ───────────────────────────────────────
             Expanded(
-              child: results.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.search_off, size: 64, color: AppColors.textFaint),
-                          const SizedBox(height: AppSpacing.md),
-                          Text(
-                            'No services found',
-                            style: AppTextStyles.titleMedium(color: AppColors.textMuted),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            'Try adjusting your filters',
-                            style: AppTextStyles.bodySmall(color: AppColors.textMuted),
-                          ),
-                        ],
-                      ),
-                    )
-                  : GridView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                      itemCount: results.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: AppSpacing.md,
-                        crossAxisSpacing: AppSpacing.md,
-                        childAspectRatio: 0.85,
-                      ),
-                      itemBuilder: (context, index) {
-                        final item = results[index];
-                        return _ResultCard(item: item);
-                      },
-                    ),
+              child: _buildResults(),
             ),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildResults() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+
+    if (_services.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.search_off, size: 64, color: AppColors.textFaint),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'No services found',
+              style: AppTextStyles.titleMedium(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Try adjusting your filters',
+              style: AppTextStyles.bodySmall(color: AppColors.textMuted),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      itemCount: _services.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: AppSpacing.md,
+        crossAxisSpacing: AppSpacing.md,
+        childAspectRatio: 0.85,
+      ),
+      itemBuilder: (context, index) {
+        final s = _services[index];
+        return _ResultCard(service: s);
+      },
+    );
+  }
 }
 
-/// ── Service Result Model ─────────────────────────────────────────────
-class _ServiceResult {
-  final String name;
-  final String provider;
-  final String category;
-  final String price;
-  final double rating;
-  final IconData icon;
+/// ── Category Chip Widget ─────────────────────────────────────────────
+class _CategoryChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
-  const _ServiceResult({
-    required this.name,
-    required this.provider,
-    required this.category,
-    required this.price,
-    required this.rating,
-    required this.icon,
+  const _CategoryChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.chip),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : AppColors.textPrimary,
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// ── Result Card Widget ───────────────────────────────────────────────
 class _ResultCard extends StatelessWidget {
-  final _ServiceResult item;
+  final Map<String, dynamic> service;
 
-  const _ResultCard({required this.item});
+  const _ResultCard({required this.service});
 
   @override
   Widget build(BuildContext context) {
+    final title = service['title'] ?? service['name'] ?? 'Service';
+    final provider = service['provider']?['displayName'] ?? '';
+    final category = service['category'] ?? '';
+    final price = service['basePrice'] != null
+        ? '\$${service['basePrice']}'
+        : (service['price']?.toString() ?? '');
+    final rating = service['rating']?.toString() ?? '—';
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -218,7 +348,7 @@ class _ResultCard extends StatelessWidget {
             height: 90,
             width: double.infinity,
             color: AppColors.primaryLight,
-            child: Icon(item.icon, size: 36, color: AppColors.primary),
+            child: const Icon(Icons.build_circle, size: 36, color: AppColors.primary),
           ),
           // ── Info ─────────────────────────────────────────────────
           Padding(
@@ -227,14 +357,14 @@ class _ResultCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.name,
+                  title,
                   style: AppTextStyles.titleMedium(color: AppColors.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  item.provider,
+                  provider,
                   style: AppTextStyles.caption(color: AppColors.textMuted),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -245,12 +375,12 @@ class _ResultCard extends StatelessWidget {
                     const Icon(Icons.star, size: 12, color: AppColors.star),
                     const SizedBox(width: 2),
                     Text(
-                      item.rating.toString(),
+                      rating,
                       style: AppTextStyles.caption(color: AppColors.textSecondary),
                     ),
                     const Spacer(),
                     Text(
-                      item.price,
+                      price,
                       style: AppTextStyles.bodySmall(color: AppColors.primary),
                     ),
                   ],
@@ -266,13 +396,15 @@ class _ResultCard extends StatelessWidget {
 
 /// ── Filter Bottom Sheet ──────────────────────────────────────────────
 class _FilterSheet extends StatefulWidget {
-  final Set<String> selectedCategories;
+  final List<Map<String, dynamic>> categories;
+  final String? selectedCategory;
   final double distanceRange;
   final int minRating;
-  final void Function(Set<String> categories, double distance, int rating) onApply;
+  final void Function(String? category, double distance, int rating) onApply;
 
   const _FilterSheet({
-    required this.selectedCategories,
+    required this.categories,
+    required this.selectedCategory,
     required this.distanceRange,
     required this.minRating,
     required this.onApply,
@@ -283,18 +415,14 @@ class _FilterSheet extends StatefulWidget {
 }
 
 class _FilterSheetState extends State<_FilterSheet> {
-  late Set<String> _selectedCategories;
+  String? _selectedCategory;
   late double _distanceRange;
   late int _minRating;
-
-  static const List<String> _allCategories = [
-    'Plumbing', 'Electrical', 'Cleaning', 'Painting', 'Moving', 'Garden',
-  ];
 
   @override
   void initState() {
     super.initState();
-    _selectedCategories = Set.from(widget.selectedCategories);
+    _selectedCategory = widget.selectedCategory;
     _distanceRange = widget.distanceRange;
     _minRating = widget.minRating;
   }
@@ -340,33 +468,15 @@ class _FilterSheetState extends State<_FilterSheet> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _allCategories.map((cat) {
-              final selected = _selectedCategories.contains(cat);
-              return FilterChip(
-                label: Text(cat),
-                selected: selected,
-                onSelected: (val) {
-                  setState(() {
-                    if (val) {
-                      _selectedCategories.add(cat);
-                    } else {
-                      _selectedCategories.remove(cat);
-                    }
-                  });
-                },
-                selectedColor: AppColors.primary,
-                checkmarkColor: Colors.white,
-                labelStyle: TextStyle(
-                  color: selected ? Colors.white : AppColors.textPrimary,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                ),
-                side: BorderSide.none,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.chip),
-                ),
-              );
-            }).toList(),
+            children: [
+              // "All" option
+              _buildCategoryChip(null, 'All'),
+              // Real categories from API
+              ...widget.categories.map((cat) {
+                final name = cat['name'] as String;
+                return _buildCategoryChip(name, name);
+              }),
+            ],
           ),
           const SizedBox(height: AppSpacing.xl),
 
@@ -429,7 +539,7 @@ class _FilterSheetState extends State<_FilterSheet> {
             width: double.infinity,
             child: FilledButton(
               onPressed: () => widget.onApply(
-                _selectedCategories,
+                _selectedCategory,
                 _distanceRange,
                 _minRating,
               ),
@@ -437,6 +547,30 @@ class _FilterSheetState extends State<_FilterSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip(String? value, String label) {
+    final selected = _selectedCategory == value;
+    return FilterChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (val) {
+        setState(() {
+          _selectedCategory = val ? value : null;
+        });
+      },
+      selectedColor: AppColors.primary,
+      checkmarkColor: Colors.white,
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : AppColors.textPrimary,
+        fontWeight: FontWeight.w500,
+        fontSize: 13,
+      ),
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.chip),
       ),
     );
   }

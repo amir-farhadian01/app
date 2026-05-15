@@ -132,10 +132,15 @@ class ApiService {
   }
 
   // ─── Services ──────────────────────────────────────────────────────────────
-  static Future<List<dynamic>> getServices({String? category, String? providerId}) =>
+  static Future<List<dynamic>> getServices({
+    String? category,
+    String? providerId,
+    String? search,
+  }) =>
       get('/api/services', params: {
         if (category != null) 'category': category,
         if (providerId != null) 'providerId': providerId,
+        if (search != null && search.isNotEmpty) 'search': search,
       }).then((v) => v as List);
 
   static Future<dynamic> getService(String id) => get('/api/services/$id');

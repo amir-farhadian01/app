@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
-import '../../core/router/app_router.dart';
+import '../../core/app_theme.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /// Splash Screen
@@ -16,48 +15,16 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _fadeIn;
-  late final Animation<double> _scale;
-
+class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
 
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-
-    _fadeIn = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0, 0.6, curve: Curves.easeIn),
-      ),
-    );
-
-    _scale = Tween<double>(begin: 0.8, end: 1).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0, 0.6, curve: Curves.easeOutBack),
-      ),
-    );
-
-    _controller.forward();
-
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
+        Navigator.pushReplacementNamed(context, '/onboarding');
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 
   @override
@@ -65,55 +32,54 @@ class _SplashScreenState extends State<SplashScreen>
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: NeighborlyColors.bgPrimary,
       body: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return Opacity(
-              opacity: _fadeIn.value,
-              child: Transform.scale(
-                scale: _scale.value,
-                child: child,
-              ),
-            );
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                ),
-                child: Center(
-                  child: Text(
-                    'N',
-                    style: theme.textTheme.displayLarge?.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 40,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Neighborly',
-                style: theme.textTheme.displayLarge?.copyWith(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Logo "N" with accent gradient
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [NeighborlyColors.accent, NeighborlyColors.accentTeal],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ).createShader(bounds),
+              child: const Text(
+                'N',
+                style: TextStyle(
+                  fontSize: 72,
+                  fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Connect. Help. Thrive.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.white70,
-                ),
+            ),
+            const SizedBox(height: NeighborlySpacing.s8),
+            // App name
+            Text(
+              'Neighborly',
+              style: theme.textTheme.displayLarge?.copyWith(
+                color: NeighborlyColors.textPrimary,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: NeighborlySpacing.s8),
+            // Tagline
+            Text(
+              'Your neighbourhood marketplace',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: NeighborlyColors.textSecondary,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: NeighborlySpacing.s48),
+            // Progress indicator
+            const SizedBox(
+              width: 200,
+              child: LinearProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(NeighborlyColors.accent),
+                backgroundColor: Color(0x335B5FEF), // accent.withValues(alpha: 0.2)
+              ),
+            ),
+          ],
         ),
       ),
     );

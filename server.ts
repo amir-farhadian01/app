@@ -53,6 +53,7 @@ import feedRoutes from "./routes/feed.js";
 import utilityLinksRoutes from "./routes/utilityLinks.js";
 import adminMediaRoutes from "./routes/adminMedia.js";
 import adminUtilityLinksRoutes from "./routes/adminUtilityLinks.js";
+import providersRoutes from "./routes/providers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -99,6 +100,7 @@ function mountApiRoutes(app: Express) {
   app.use("/api/utility-links", utilityLinksRoutes);
   app.use("/api/admin/media", adminMediaRoutes);
   app.use("/api/admin/utility-links", adminUtilityLinksRoutes);
+  app.use("/api/providers", providersRoutes);
 }
 
 function createWebApp(): Express {

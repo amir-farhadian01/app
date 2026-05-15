@@ -23,23 +23,28 @@
 ### Stack
 | Layer | Technology |
 |---|---|
-| Backend API | Node.js + TypeScript, Fastify, `server.ts` at root |
+| Backend API | Node.js + TypeScript, Express, `server.ts` at root |
 | ORM | Prisma **5.x** (DO NOT upgrade) |
 | Database | PostgreSQL |
 | Web Frontend | `frontend/` — Vite + React |
 | Mobile + Web App | `flutter_project/` — Flutter 3.x |
 | Auth | JWT (`JWT_SECRET` in `.env`) |
 | Realtime | Firebase (config in `firebase-applet-config.json`) |
-| Infra | Docker + docker-compose |
+| Infra | Docker + docker-compose + Traefik |
 
-### Ports (NEVER change these)
-| Service | Port |
-|---|---|
-| Backend API | 3000 |
-| Web Frontend (Vite) | 5173 |
-| Flutter Web | 5174 |
-| Flutter Android | emulator/device |
-| Flutter iOS | simulator/device |
+### Ports
+> ⚠️ See **PORTS.md** for the complete port registry.
+> Below are the ports used in LOCAL DEV (no Docker).
+
+| Service | Local Dev Port | Docker Host Port | Notes |
+|---|---|---|---|
+| Backend API | **8080** | 3000 | `PORT` env var, default 8080 |
+| Admin API | **9090** | 9090 | `ADMIN_PORT` env var |
+| Vite React Frontend | **5173** | 5173 | `cd frontend && npm run dev` |
+| Flutter Web | **7357** | via Traefik | `flutter run -d web-server --web-port 7357` |
+| Flutter Mobile | emulator/device | — | `flutter run -d <device-id>` |
+
+> ❌ NEVER use port 3000 as the backend in local dev — that was legacy. Backend runs on **8080** locally.
 
 ---
 
@@ -54,9 +59,9 @@
 
 ## 🚧 CURRENT PHASE
 
-**Phase: Dev Environment Setup**
+**Phase: New Flutter UI Design**
 - Backend + Web Frontend + Flutter Web running locally ✅
-- Flutter Android / iOS wired up
+- Port registry documented in PORTS.md ✅
 - Next: New UI design on Flutter → connect to backend
 
 ---
@@ -73,6 +78,7 @@
 8. **READ before WRITE** — read every file fully before editing it
 9. **No new business logic** unless explicitly instructed by the architect
 10. **Each service runs in its OWN process** — never combine backend + frontend in one command
+11. **After completing changes: `git add -A && git commit -m "..." && git push`** — always push, never leave local-only
 
 ---
 
@@ -80,13 +86,13 @@
 
 ```
 /
-├── server.ts              ← Fastify backend entry point (port 3000)
+├── server.ts              ← Express backend entry point (port 8080 local / 3000 docker)
 ├── routes/                ← API route handlers
 ├── lib/                   ← Shared utilities
 │   └── matching/          ← 🚫 DO NOT TOUCH
 ├── prisma/                ← Prisma schema + migrations
 ├── frontend/              ← Vite + React web app (port 5173)
-├── flutter_project/       ← Flutter app (, mobile:device)
+├── flutter_project/       ← Flutter app (web: 7357, mobile: device)
 ├── docs/                  ← All documentation & roadmaps
 ├── files/                 ← Static assets
 ├── plans/                 ← Legacy planning docs (read-only reference)
@@ -94,6 +100,7 @@
 ├── scripts/               ← Utility scripts
 ├── docker-compose.yml     ← Full stack docker config
 ├── .env.example           ← Copy to .env and fill in secrets
+├── PORTS.md               ← ✅ Complete port registry (READ THIS for ports)
 ├── AGENTS.md              ← THIS FILE
 └── CLAUDE.md              ← Claude-specific instructions
 ```
@@ -107,6 +114,8 @@ Copy `.env.example` → `.env` and set:
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/neighborly"
 JWT_SECRET="dev-secret-local"
 NODE_ENV="development"
+PORT=8080
+ADMIN_PORT=9090
 ```
 
 ---
@@ -116,21 +125,25 @@ NODE_ENV="development"
 ```bash
 # Terminal 1 — Backend
 npm install && npx tsx server.ts
+# → http://localhost:8080  (API)
+# → http://localhost:9090  (Admin API)
 
 # Terminal 2 — Web Frontend
 cd frontend && npm install && npm run dev -- --port 5173
+# → http://localhost:5173
 
 # Terminal 3 — Flutter Web
-cd flutter_project && flutter pub get && flutter run -d web-server --web-port 5174
+cd flutter_project && flutter pub get && flutter run -d web-server --web-port 7357
+# → http://localhost:7357
 
 # Terminal 4 — Flutter Mobile (if device available)
 cd flutter_project && flutter run -d <device-id>
 ```
 
 Verify:
-- http://localhost:3000/health → JSON response
+- http://localhost:8080/api/health → JSON response
 - http://localhost:5173 → 200 OK
-- http://localhost:5174 → 200 OK
+- http://localhost:7357 → 200 OK
 
 ---
 
@@ -139,8 +152,8 @@ Verify:
 All implementation prompts follow this structure:
 1. `SYSTEM/ROLE` — agent identity
 2. `PROJECT CONTEXT` — what we're building
-3. `EXECUTION RULES` — the 10 absolute rules above
+3. `EXECUTION RULES` — the absolute rules above
 4. `TASK` — numbered steps, execute in order
 5. `FINAL VERIFICATION` — tests to confirm success
 
-Agents must complete ALL steps and run ALL verification checks before reporting done.
+Agents must complete ALL steps, run ALL verification checks, and **push to git** before reporting done.

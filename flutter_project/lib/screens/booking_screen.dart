@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../core/app_theme.dart';
+import '../core/theme/app_theme.dart';
 import '../core/services/booking_service.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -77,7 +77,7 @@ class _BookingScreenState extends State<BookingScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: NeighborlyColors.accent,
+                  primary: AppColors.primary,
                 ),
           ),
           child: child!,
@@ -97,7 +97,7 @@ class _BookingScreenState extends State<BookingScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: NeighborlyColors.accent,
+                  primary: AppColors.primary,
                 ),
           ),
           child: child!,
@@ -151,7 +151,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 ? 'Booking confirmed!'
                 : 'Booking submitted',
           ),
-          backgroundColor: NeighborlyColors.success,
+          backgroundColor: AppColors.success,
         ),
       );
       Navigator.pop(context);
@@ -161,7 +161,7 @@ class _BookingScreenState extends State<BookingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
-          backgroundColor: NeighborlyColors.error,
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -175,19 +175,19 @@ class _BookingScreenState extends State<BookingScreen> {
         : 'Select time';
 
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: NeighborlyColors.bgPrimary,
+        backgroundColor: AppColors.background,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: NeighborlyColors.textPrimary),
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           'Book Service',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: NeighborlyColors.textPrimary,
+            color: AppColors.textPrimary,
           ),
         ),
         elevation: 0,
@@ -200,19 +200,19 @@ class _BookingScreenState extends State<BookingScreen> {
             // ── Service Info ──────────────────────────────────────
             Text(
               _serviceName,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.plusJakartaSans(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: NeighborlyColors.textPrimary,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               _formattedPrice,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.jetBrainsMono(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: NeighborlyColors.accent,
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(height: 8),
@@ -221,8 +221,8 @@ class _BookingScreenState extends State<BookingScreen> {
               width: 120,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: NeighborlyColors.accent.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppRadius.full),
               ),
               child: Text(
                 _bookingMode,
@@ -230,7 +230,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 style: GoogleFonts.inter(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: NeighborlyColors.accent,
+                  color: AppColors.primary,
                 ),
               ),
             ),
@@ -262,7 +262,7 @@ class _BookingScreenState extends State<BookingScreen> {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: NeighborlyColors.textPrimary,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
@@ -274,26 +274,26 @@ class _BookingScreenState extends State<BookingScreen> {
                 hintText: 'Add any special requests or notes...',
                 hintStyle: GoogleFonts.inter(
                   fontSize: 14,
-                  color: NeighborlyColors.textFaint,
+                  color: AppColors.textFaint,
                 ),
                 filled: true,
-                fillColor: NeighborlyColors.bgCard,
+                fillColor: AppColors.surface,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: NeighborlyColors.textFaint),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.border),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: NeighborlyColors.textFaint),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.border),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: NeighborlyColors.accent, width: 2),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.primary, width: 2),
                 ),
               ),
               style: GoogleFonts.inter(
                 fontSize: 14,
-                color: NeighborlyColors.textPrimary,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 32),
@@ -304,9 +304,9 @@ class _BookingScreenState extends State<BookingScreen> {
               child: FilledButton(
                 onPressed: _isSubmitting ? null : _confirmBooking,
                 style: FilledButton.styleFrom(
-                  backgroundColor: NeighborlyColors.accent,
+                  backgroundColor: AppColors.primary,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
                 ),
                 child: _isSubmitting
@@ -320,7 +320,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       )
                     : Text(
                         'CONFIRM BOOKING',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.plusJakartaSans(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
@@ -342,16 +342,17 @@ class _BookingScreenState extends State<BookingScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: NeighborlyColors.bgCard,
-          borderRadius: BorderRadius.circular(12),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          boxShadow: AppColors.cardShadow,
         ),
         child: Row(
           children: [
-            Icon(icon, color: NeighborlyColors.accent, size: 22),
+            Icon(icon, color: AppColors.primary, size: 22),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -362,7 +363,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: NeighborlyColors.textSecondary,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -372,15 +373,15 @@ class _BookingScreenState extends State<BookingScreen> {
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: value != null
-                          ? NeighborlyColors.textPrimary
-                          : NeighborlyColors.textFaint,
+                          ? AppColors.textPrimary
+                          : AppColors.textFaint,
                     ),
                   ),
                 ],
               ),
             ),
             const Icon(Icons.chevron_right,
-                color: NeighborlyColors.textSecondary, size: 20),
+                color: AppColors.textSecondary, size: 20),
           ],
         ),
       ),

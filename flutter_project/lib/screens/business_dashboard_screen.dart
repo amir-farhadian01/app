@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/app_theme.dart';
+import '../core/theme/app_theme.dart';
 import '../core/services/business_service.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -88,13 +88,13 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
 
   Widget _buildDesktopLayout() {
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Row(
           children: [
             // Side drawer
             NavigationRail(
-              backgroundColor: NeighborlyColors.bgCard,
+              backgroundColor: AppColors.surface,
               selectedIndex: _menuItems
                   .indexWhere((item) => item.label == _selectedMenu),
               onDestinationSelected: (index) {
@@ -102,20 +102,20 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               },
               labelType: NavigationRailLabelType.all,
               selectedIconTheme: const IconThemeData(
-                color: NeighborlyColors.accent,
+                color: AppColors.primary,
               ),
               unselectedIconTheme: const IconThemeData(
-                color: NeighborlyColors.textSecondary,
+                color: AppColors.textSecondary,
               ),
-              selectedLabelTextStyle: GoogleFonts.inter(
+              selectedLabelTextStyle: GoogleFonts.plusJakartaSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: NeighborlyColors.accent,
+                color: AppColors.primary,
               ),
-              unselectedLabelTextStyle: GoogleFonts.inter(
+              unselectedLabelTextStyle: GoogleFonts.plusJakartaSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: NeighborlyColors.textSecondary,
+                color: AppColors.textSecondary,
               ),
               minWidth: 56,
               destinations: _menuItems
@@ -126,7 +126,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                       ))
                   .toList(),
             ),
-            const VerticalDivider(width: 1),
+            const VerticalDivider(width: 1, color: AppColors.border),
             // Content
             Expanded(child: _buildDashboardContent()),
           ],
@@ -139,19 +139,19 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
 
   Widget _buildMobileLayout() {
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: NeighborlyColors.bgPrimary,
+        backgroundColor: AppColors.background,
         title: Text(
           _selectedMenu,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: NeighborlyColors.textPrimary,
+            color: AppColors.textPrimary,
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.menu, color: NeighborlyColors.textPrimary),
+          icon: const Icon(Icons.menu, color: AppColors.textPrimary),
           onPressed: () => _showMenuSheet(context),
         ),
         elevation: 0,
@@ -163,9 +163,9 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
   void _showMenuSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: NeighborlyColors.bgCard,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
       ),
       builder: (context) {
         return SafeArea(
@@ -177,7 +177,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: NeighborlyColors.textFaint,
+                  color: AppColors.textFaint,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -185,8 +185,8 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               ..._menuItems.map((item) => ListTile(
                     leading: Icon(item.icon,
                         color: _selectedMenu == item.label
-                            ? NeighborlyColors.accent
-                            : NeighborlyColors.textSecondary),
+                            ? AppColors.primary
+                            : AppColors.textSecondary),
                     title: Text(
                       item.label,
                       style: GoogleFonts.inter(
@@ -195,8 +195,8 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                             ? FontWeight.w600
                             : FontWeight.w400,
                         color: _selectedMenu == item.label
-                            ? NeighborlyColors.accent
-                            : NeighborlyColors.textPrimary,
+                            ? AppColors.primary
+                            : AppColors.textPrimary,
                       ),
                     ),
                     onTap: () {
@@ -241,16 +241,20 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: NeighborlyColors.accent.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(24),
+            gradient: const LinearGradient(
+              colors: [AppColors.primary, AppColors.primaryLight],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           child: Center(
             child: Text(
               'A',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.plusJakartaSans(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: NeighborlyColors.accent,
+                color: Colors.white,
               ),
             ),
           ),
@@ -262,10 +266,10 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
             children: [
               Text(
                 'AutoFix Vaughan',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.plusJakartaSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: NeighborlyColors.textPrimary,
+                  color: AppColors.textPrimary,
                 ),
               ),
               Text(
@@ -273,7 +277,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w400,
-                  color: NeighborlyColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -283,8 +287,8 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: NeighborlyColors.success.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.success.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(AppRadius.full),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -293,7 +297,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                 width: 8,
                 height: 8,
                 decoration: const BoxDecoration(
-                  color: NeighborlyColors.success,
+                  color: AppColors.success,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -303,7 +307,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                 style: GoogleFonts.inter(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: NeighborlyColors.success,
+                  color: AppColors.success,
                 ),
               ),
             ],
@@ -348,18 +352,19 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: NeighborlyColors.bgCard,
-            borderRadius: BorderRadius.circular(16),
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            boxShadow: AppColors.cardShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 kpis[index].$1,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.jetBrainsMono(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: NeighborlyColors.textPrimary,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
@@ -368,7 +373,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                 style: GoogleFonts.inter(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
-                  color: NeighborlyColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const Spacer(),
@@ -377,7 +382,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                 style: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.w400,
-                  color: NeighborlyColors.accentTeal,
+                  color: AppColors.success,
                 ),
               ),
             ],
@@ -393,6 +398,20 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
 
   // ── Today's Appointments ─────────────────────────────────────────
 
+  Color _statusColor(String status) {
+    switch (status.toUpperCase()) {
+      case 'CONFIRMED':
+        return AppColors.success;
+      case 'PENDING':
+        return AppColors.warning;
+      case 'DONE':
+      case 'COMPLETED':
+        return AppColors.textFaint;
+      default:
+        return AppColors.textSecondary;
+    }
+  }
+
   Widget _buildTodayAppointments() {
     final displayAppointments = _appointments.isEmpty
         ? [
@@ -407,10 +426,10 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
       children: [
         Text(
           "Today's Appointments",
-          style: GoogleFonts.inter(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: NeighborlyColors.textPrimary,
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 12),
@@ -421,8 +440,9 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: NeighborlyColors.bgCard,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              boxShadow: AppColors.cardShadow,
             ),
             child: Row(
               children: [
@@ -431,10 +451,10 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                   width: 60,
                   child: Text(
                     a['time'] as String? ?? '',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.jetBrainsMono(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: NeighborlyColors.textPrimary,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
@@ -449,15 +469,15 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color: NeighborlyColors.textPrimary,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       Text(
                         a['price'] as String? ?? '',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.jetBrainsMono(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: NeighborlyColors.accentTeal,
+                          color: AppColors.success,
                         ),
                       ),
                     ],
@@ -469,7 +489,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Text(
                     status,
@@ -486,20 +506,6 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
         }),
       ],
     );
-  }
-
-  Color _statusColor(String status) {
-    switch (status.toUpperCase()) {
-      case 'CONFIRMED':
-        return NeighborlyColors.success;
-      case 'PENDING':
-        return NeighborlyColors.warning;
-      case 'DONE':
-      case 'COMPLETED':
-        return NeighborlyColors.textFaint;
-      default:
-        return NeighborlyColors.textSecondary;
-    }
   }
 
   // ── Recent Offers & Orders ───────────────────────────────────────
@@ -524,10 +530,10 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
       children: [
         Text(
           'Recent Offers & Orders',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: NeighborlyColors.textPrimary,
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 12),
@@ -535,8 +541,9 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: NeighborlyColors.bgCard,
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                boxShadow: AppColors.cardShadow,
               ),
               child: Row(
                 children: [
@@ -546,10 +553,10 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                       children: [
                         Text(
                           o.$1,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.plusJakartaSans(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: NeighborlyColors.textPrimary,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -558,7 +565,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                           style: GoogleFonts.inter(
                             fontSize: 11,
                             fontWeight: FontWeight.w400,
-                            color: NeighborlyColors.textSecondary,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -567,10 +574,10 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                   const SizedBox(width: 8),
                   Text(
                     o.$3,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.jetBrainsMono(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: NeighborlyColors.accentTeal,
+                      color: AppColors.success,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -579,9 +586,9 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: o.$4 == 'New offer'
-                          ? NeighborlyColors.accent.withValues(alpha: 0.15)
-                          : NeighborlyColors.success.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
+                          ? AppColors.primary.withValues(alpha: 0.15)
+                          : AppColors.success.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Text(
                       o.$4,
@@ -589,8 +596,8 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                         color: o.$4 == 'New offer'
-                            ? NeighborlyColors.accent
-                            : NeighborlyColors.success,
+                            ? AppColors.primary
+                            : AppColors.success,
                       ),
                     ),
                   ),

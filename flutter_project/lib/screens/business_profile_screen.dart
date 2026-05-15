@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/app_theme.dart';
+import '../core/theme/app_theme.dart';
 import '../core/models/business_model.dart';
 import '../core/models/service_model.dart';
 import '../core/services/business_service.dart';
@@ -65,7 +65,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
@@ -75,14 +75,15 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
               delegate: _TabBarDelegate(
                 TabBar(
                   controller: _tabController,
-                  indicatorColor: NeighborlyColors.accent,
+                  indicatorColor: AppColors.primary,
                   indicatorWeight: 3,
-                  labelColor: NeighborlyColors.accent,
-                  unselectedLabelColor: NeighborlyColors.textSecondary,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.textSecondary,
                   labelStyle:
-                      GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+                      GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600),
                   unselectedLabelStyle:
-                      GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
+                      GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w500),
                   tabs: const [
                     Tab(text: 'Packages'),
                     Tab(text: 'Inventory'),
@@ -124,40 +125,58 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
       child: Column(
         children: [
-          // Avatar with teal border
+          // Avatar with primary gradient border
           Container(
-            width: 80,
-            height: 80,
+            width: 88,
+            height: 88,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: NeighborlyColors.accentTeal, width: 3),
+              gradient: const LinearGradient(
+                colors: [AppColors.primary, AppColors.primaryLight],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border.all(color: AppColors.primary, width: 3),
             ),
+            padding: const EdgeInsets.all(3),
             child: CircleAvatar(
-              backgroundColor: NeighborlyColors.accent.withValues(alpha: 0.2),
+              backgroundColor: AppColors.surface,
               child: Text(
                 initial,
-                style: GoogleFonts.inter(
-                  fontSize: 32,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 34,
                   fontWeight: FontWeight.w700,
-                  color: NeighborlyColors.accent,
+                  color: AppColors.primary,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           // Verified badge
           if (business.isVerified)
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.verified, color: NeighborlyColors.success, size: 18),
-                const SizedBox(width: 4),
-                Text(
-                  'Verified',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: NeighborlyColors.success,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.verified, color: AppColors.success, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Verified',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -166,10 +185,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
           // Business name
           Text(
             business.name,
-            style: GoogleFonts.inter(
-              fontSize: 22,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: NeighborlyColors.textPrimary,
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
@@ -178,7 +197,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
             style: GoogleFonts.inter(
               fontSize: 13,
               fontWeight: FontWeight.w400,
-              color: NeighborlyColors.textSecondary,
+              color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: 16),
@@ -204,9 +223,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: NeighborlyColors.bgCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: NeighborlyColors.textFaint.withValues(alpha: 0.3)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -218,7 +237,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
             style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: FontWeight.w500,
-              color: NeighborlyColors.textPrimary,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
@@ -239,10 +258,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: NeighborlyColors.bgCard,
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
               border: Border.all(
-                color: NeighborlyColors.textFaint.withValues(alpha: 0.5),
+                color: AppColors.border,
                 width: 1.5,
               ),
             ),
@@ -250,14 +269,14 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.add_circle_outline,
-                    color: NeighborlyColors.accent, size: 24),
+                    color: AppColors.primary, size: 24),
                 const SizedBox(width: 12),
                 Text(
                   'Build Custom Package',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.plusJakartaSans(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: NeighborlyColors.accent,
+                    color: AppColors.primary,
                   ),
                 ),
               ],
@@ -273,8 +292,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: NeighborlyColors.bgCard,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -284,15 +304,15 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
             width: 100,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: NeighborlyColors.accent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
+              color: AppColors.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Text(
               service.bookingMode,
               style: GoogleFonts.inter(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: NeighborlyColors.accent,
+                color: AppColors.primary,
               ),
             ),
           ),
@@ -303,19 +323,19 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
               Expanded(
                 child: Text(
                   service.name,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.plusJakartaSans(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: NeighborlyColors.textPrimary,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ),
               Text(
                 service.formattedPrice,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.jetBrainsMono(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: NeighborlyColors.accentTeal,
+                  color: AppColors.primary,
                 ),
               ),
             ],
@@ -326,7 +346,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w400,
-              color: NeighborlyColors.textSecondary,
+              color: AppColors.textSecondary,
               height: 1.4,
             ),
           ),
@@ -344,9 +364,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
                 });
               },
               style: FilledButton.styleFrom(
-                backgroundColor: NeighborlyColors.accent,
+                backgroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
               ),
               child: Text(
@@ -370,7 +390,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
         '$name tab coming soon',
         style: GoogleFonts.inter(
           fontSize: 14,
-          color: NeighborlyColors.textSecondary,
+          color: AppColors.textSecondary,
         ),
       ),
     );
@@ -393,7 +413,7 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: NeighborlyColors.bgPrimary,
+      color: AppColors.background,
       child: _tabBar,
     );
   }

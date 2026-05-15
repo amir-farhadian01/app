@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 
-import 'core/app_theme.dart';
+import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -38,8 +38,8 @@ class NeighborlyApp extends StatelessWidget {
       ],
       initialRoute: AppRoutes.splash,
       onGenerateRoute: onGenerateAppRoute,
-      theme: AppTheme.dark(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.dark,
+      darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
     );
   }

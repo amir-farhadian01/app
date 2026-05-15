@@ -24,16 +24,17 @@ class ExploreScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
+      backgroundColor: isDark ? AppColors.background : AppColors.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Column(
             children: [
-              const SizedBox(height: AppSpacing.s8),
+              const SizedBox(height: AppSpacing.sm),
 
               // Search input (auto-focused)
               TextField(
@@ -42,14 +43,14 @@ class ExploreScreen extends StatelessWidget {
                   hintText: 'Search services...',
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
-                  fillColor: isDark ? AppColors.darkSurface : AppColors.surface,
+                  fillColor: isDark ? AppColors.surface : AppColors.surface,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.button),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                     borderSide: BorderSide.none,
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.s24),
+              const SizedBox(height: AppSpacing.lg),
 
               // Category grid
               Expanded(
@@ -65,8 +66,8 @@ class ExploreScreen extends StatelessWidget {
                     final cat = _categories[index];
                     return Container(
                       decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkSurface : AppColors.surface,
-                        borderRadius: BorderRadius.circular(AppRadius.card),
+                        color: isDark ? AppColors.surface : AppColors.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -76,12 +77,12 @@ class ExploreScreen extends StatelessWidget {
                             size: 22,
                             color: AppColors.primary,
                           ),
-                          const SizedBox(width: AppSpacing.s8),
+                          const SizedBox(width: AppSpacing.sm),
                           Text(
                             cat.label,
-                            style: AppTextStyles.body.copyWith(
+                            style: theme.textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w500,
-                              color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                              color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
                             ),
                           ),
                         ],

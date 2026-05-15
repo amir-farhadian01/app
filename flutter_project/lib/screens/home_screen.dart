@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/app_theme.dart';
+import '../core/theme/app_theme.dart';
 import '../core/services/api_client.dart';
 import '../core/services/feed_service.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Home Screen — NeighborHub main dashboard
+/// Home Screen — Neighborly main dashboard
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -108,8 +108,8 @@ class _HomeScreenState extends State<HomeScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: NeighborlyColors.bgCard,
-            borderRadius: BorderRadius.circular(24),
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.full),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -121,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: NeighborlyColors.textPrimary,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -133,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             IconButton(
               onPressed: () {},
-              icon: const Icon(Icons.notifications_outlined, color: NeighborlyColors.textPrimary),
+              icon: const Icon(Icons.notifications_outlined, color: AppColors.textPrimary),
             ),
             Positioned(
               right: 8,
@@ -142,7 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 8,
                 height: 8,
                 decoration: const BoxDecoration(
-                  color: NeighborlyColors.error,
+                  color: AppColors.error,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -156,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: NeighborlyColors.accent.withValues(alpha: 0.2),
+              color: AppColors.primary.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Center(
@@ -165,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: NeighborlyColors.accent,
+                  color: AppColors.primary,
                 ),
               ),
             ),
@@ -181,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       height: 180,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         gradient: const LinearGradient(
           colors: [Color(0xFF1A1A3E), Color(0xFF0D2137)],
           begin: Alignment.topLeft,
@@ -198,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: NeighborlyColors.accent.withValues(alpha: 0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
             ),
@@ -210,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: NeighborlyColors.accentTeal.withValues(alpha: 0.08),
+                color: AppColors.accent.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
             ),
@@ -224,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Spacer(),
                 Text(
                   'Central Park Vaughan',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.plusJakartaSans(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -238,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.full),
                       ),
                       child: Text(
                         '13°C · Sunny',
@@ -254,15 +254,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: NeighborlyColors.error.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
+                        color: AppColors.error.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(AppRadius.full),
                       ),
                       child: Text(
                         '🚨 Police Alert',
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: NeighborlyColors.error,
+                          color: AppColors.error,
                         ),
                       ),
                     ),
@@ -281,10 +281,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildGreeting() {
     return Text(
       'Good morning, Amir 👋',
-      style: GoogleFonts.inter(
+      style: GoogleFonts.plusJakartaSans(
         fontSize: 28,
-        fontWeight: FontWeight.bold,
-        color: NeighborlyColors.textPrimary,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textPrimary,
       ),
     );
   }
@@ -295,19 +295,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: NeighborlyColors.bgCard,
-        borderRadius: BorderRadius.circular(24),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Row(
         children: [
-          const Icon(Icons.search, color: NeighborlyColors.textSecondary, size: 20),
+          const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
           const SizedBox(width: 12),
           Text(
             'Search services in your area...',
             style: GoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w400,
-              color: NeighborlyColors.textFaint,
+              color: AppColors.textFaint,
             ),
           ),
         ],
@@ -335,9 +336,9 @@ class _HomeScreenState extends State<HomeScreen> {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: NeighborlyColors.bgCard,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: NeighborlyColors.textFaint.withValues(alpha: 0.3)),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.full),
+              border: Border.all(color: AppColors.border),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -349,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: NeighborlyColors.textPrimary,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
@@ -376,10 +377,10 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Text(
           'Finance & Government',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: NeighborlyColors.textPrimary,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 12),
@@ -397,8 +398,9 @@ class _HomeScreenState extends State<HomeScreen> {
             return Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: NeighborlyColors.bgCard,
-                borderRadius: BorderRadius.circular(16),
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                boxShadow: AppColors.cardShadow,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -411,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
-                      color: NeighborlyColors.textPrimary,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -437,10 +439,10 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Text(
           'Local News',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: NeighborlyColors.textPrimary,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 12),
@@ -448,8 +450,9 @@ class _HomeScreenState extends State<HomeScreen> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: NeighborlyColors.bgCard,
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                boxShadow: AppColors.cardShadow,
               ),
               child: Row(
                 children: [
@@ -459,7 +462,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: NeighborlyColors.textPrimary,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ),
@@ -467,15 +470,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: NeighborlyColors.bgCardLight,
-                      borderRadius: BorderRadius.circular(8),
+                      color: AppColors.surface2,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Text(
                       item.$2,
                       style: GoogleFonts.inter(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
-                        color: NeighborlyColors.textSecondary,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ),
@@ -499,10 +502,10 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Text(
           'Local Events',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: NeighborlyColors.textPrimary,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 12),
@@ -517,8 +520,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 200,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: NeighborlyColors.bgCard,
-                  borderRadius: BorderRadius.circular(16),
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  boxShadow: AppColors.cardShadow,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -528,7 +532,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: NeighborlyColors.textPrimary,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -537,7 +541,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: NeighborlyColors.accentTeal,
+                        color: AppColors.accent,
                       ),
                     ),
                     const Spacer(),
@@ -546,7 +550,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
-                        color: NeighborlyColors.textSecondary,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -565,9 +569,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: NeighborlyColors.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NeighborlyColors.accent.withValues(alpha: 0.2)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Row(
         children: [
@@ -577,10 +582,10 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Text(
                   '2,840 pts',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.jetBrainsMono(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: NeighborlyColors.accent,
+                    color: AppColors.primary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -589,7 +594,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: NeighborlyColors.textSecondary,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -598,7 +603,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
-                    color: NeighborlyColors.textFaint,
+                    color: AppColors.textFaint,
                   ),
                 ),
               ],
@@ -608,11 +613,11 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: NeighborlyColors.accent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             child: const Center(
-              child: Icon(Icons.explore, color: NeighborlyColors.accent, size: 28),
+              child: Icon(Icons.explore, color: AppColors.primary, size: 28),
             ),
           ),
         ],

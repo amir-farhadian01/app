@@ -44,6 +44,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       body: Stack(
         children: [
@@ -55,22 +57,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             },
             children: const [
               _OnboardingPage(
-                gradientBegin: AppColors.primary,   // #1A1A2E
-                gradientEnd: AppColors.accent,       // #0F3460
+                gradientBegin: AppColors.primary,
+                gradientEnd: AppColors.accent,
                 icon: Icons.explore,
                 title: 'Discover Services Near You',
                 subtitle: 'Find skilled professionals in your neighborhood',
               ),
               _OnboardingPage(
-                gradientBegin: AppColors.accent,     // #0F3460
-                gradientEnd: AppColors.cta,           // #E94560
+                gradientBegin: AppColors.accent,
+                gradientEnd: AppColors.primary,
                 icon: Icons.calendar_today,
                 title: 'Book in Seconds',
                 subtitle: 'Schedule services with a few taps, no calls needed',
               ),
               _OnboardingPage(
-                gradientBegin: AppColors.cta,         // #E94560
-                gradientEnd: AppColors.primary,       // #1A1A2E
+                gradientBegin: AppColors.primary,
+                gradientEnd: AppColors.accent,
                 icon: Icons.trending_up,
                 title: 'Grow Your Business',
                 subtitle: 'Join thousands of providers earning on Neighborly',
@@ -86,7 +88,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               onPressed: _goToHome,
               child: Text(
                 'Skip',
-                style: AppTextStyles.body.copyWith(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: Colors.white70,
                 ),
               ),
@@ -119,7 +121,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     );
                   }),
                 ),
-                const SizedBox(height: AppSpacing.s32),
+                const SizedBox(height: AppSpacing.xl),
 
                 // Next / Get Started button
                 Padding(
@@ -131,12 +133,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       onPressed: _nextPage,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: AppColors.cta,
+                        foregroundColor: AppColors.primary,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.button),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                         elevation: 0,
-                        textStyle: AppTextStyles.body.copyWith(
+                        textStyle: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -172,6 +174,8 @@ class _OnboardingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -182,7 +186,7 @@ class _OnboardingPage extends StatelessWidget {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s32),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -191,18 +195,18 @@ class _OnboardingPage extends StatelessWidget {
                 size: 120,
                 color: Colors.white,
               ),
-              const SizedBox(height: AppSpacing.s32),
+              const SizedBox(height: AppSpacing.xl),
               Text(
                 title,
-                style: AppTextStyles.display.copyWith(
+                style: theme.textTheme.displayLarge?.copyWith(
                   color: Colors.white,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: AppSpacing.s16),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 subtitle,
-                style: AppTextStyles.body.copyWith(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: Colors.white70,
                 ),
                 textAlign: TextAlign.center,

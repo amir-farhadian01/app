@@ -13,6 +13,8 @@ class OrdersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
@@ -27,12 +29,12 @@ class OrdersScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Orders',
-              style: AppTextStyles.title,
+              style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
               'Coming soon',
-              style: AppTextStyles.caption,
+              style: theme.textTheme.bodySmall,
             ),
           ],
         ),

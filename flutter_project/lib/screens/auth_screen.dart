@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/app_theme.dart';
+import '../core/theme/app_theme.dart';
 import '../core/services/api_client.dart';
 import '../core/services/auth_service.dart';
 
@@ -161,7 +161,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -181,15 +181,15 @@ class _AuthScreenState extends State<AuthScreen> {
                         height: 32,
                         decoration: BoxDecoration(
                           color: isDone
-                              ? NeighborlyColors.success
+                              ? AppColors.success
                               : isActive
-                                  ? NeighborlyColors.accent
-                                  : NeighborlyColors.bgCard,
+                                  ? AppColors.primary
+                                  : AppColors.surface,
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: isActive || isDone
                                 ? Colors.transparent
-                                : NeighborlyColors.textFaint,
+                                : AppColors.border,
                           ),
                         ),
                         child: Center(
@@ -200,7 +200,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: isActive ? Colors.white : NeighborlyColors.textSecondary,
+                                    color: isActive ? Colors.white : AppColors.textSecondary,
                                   ),
                                 ),
                         ),
@@ -210,8 +210,8 @@ class _AuthScreenState extends State<AuthScreen> {
                           width: 40,
                           height: 2,
                           color: i < _currentStep
-                              ? NeighborlyColors.accent
-                              : NeighborlyColors.textFaint,
+                              ? AppColors.primary
+                              : AppColors.border,
                         ),
                     ],
                   );
@@ -245,50 +245,68 @@ class _AuthScreenState extends State<AuthScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 48),
-          // Logo
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: NeighborlyColors.accent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
+          // Logo — stylized "N" in purple gradient circle
+          Center(
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryLight],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                child: const Center(
-                  child: Text('🏘️', style: TextStyle(fontSize: 24)),
+                shape: BoxShape.circle,
+                boxShadow: AppColors.cardShadow,
+              ),
+              child: const Center(
+                child: Text(
+                  'N',
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Text(
-                'NeighborHub',
-                style: GoogleFonts.inter(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: NeighborlyColors.textPrimary,
-                ),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 16),
+          // "Neighborly" title — gradient text
+          ShaderMask(
+            shaderCallback: (bounds) => const LinearGradient(
+              colors: [AppColors.primary, AppColors.accent],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ).createShader(bounds),
+            child: Text(
+              'Neighborly',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: Colors.white, // used by ShaderMask
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Subtitle
           Text(
-            'Discover local businesses, events, and connect with your neighborhood community.',
+            'Your neighborhood, connected.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: FontWeight.w400,
-              color: NeighborlyColors.textSecondary,
-              height: 1.4,
+              color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: 48),
           // Country code + phone
           Container(
             decoration: BoxDecoration(
-              color: NeighborlyColors.bgCard,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: NeighborlyColors.textFaint),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.border),
             ),
             child: Row(
               children: [
@@ -296,7 +314,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   decoration: BoxDecoration(
                     border: const Border(
-                      right: BorderSide(color: NeighborlyColors.textFaint),
+                      right: BorderSide(color: AppColors.border),
                     ),
                   ),
                   child: Row(
@@ -309,11 +327,11 @@ class _AuthScreenState extends State<AuthScreen> {
                         style: GoogleFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: NeighborlyColors.textPrimary,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_arrow_down, color: NeighborlyColors.textSecondary, size: 20),
+                      const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 20),
                     ],
                   ),
                 ),
@@ -326,7 +344,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       hintStyle: GoogleFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w400,
-                        color: NeighborlyColors.textFaint,
+                        color: AppColors.textFaint,
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -334,7 +352,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     style: GoogleFonts.inter(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: NeighborlyColors.textPrimary,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
@@ -342,37 +360,48 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          // Primary CTA
+          // Primary CTA — gradient button
           SizedBox(
             height: 52,
-            child: FilledButton(
-              onPressed: _isLoading ? null : _handleSendOtp,
-              style: FilledButton.styleFrom(
-                backgroundColor: NeighborlyColors.accent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryLight],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
                 ),
+                borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-              child: Text(
-                'Send Verification Code',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
+              child: FilledButton(
+                onPressed: _isLoading ? null : _handleSendOtp,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+                child: Text(
+                  'Send Verification Code',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 16),
-          // Ghost button
+          // Ghost button — Accent color
           TextButton(
             onPressed: () {},
             child: Text(
               'Continue with Email',
               style: GoogleFonts.inter(
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: NeighborlyColors.accent,
+                color: AppColors.accent,
               ),
             ),
           ),
@@ -396,7 +425,7 @@ class _AuthScreenState extends State<AuthScreen> {
             style: GoogleFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.w600,
-              color: NeighborlyColors.textPrimary,
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 48),
@@ -409,12 +438,12 @@ class _AuthScreenState extends State<AuthScreen> {
                 height: 80,
                 margin: const EdgeInsets.symmetric(horizontal: 8),
                 decoration: BoxDecoration(
-                  color: NeighborlyColors.bgCard,
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   border: Border.all(
                     color: _otpControllers[i].text.isNotEmpty
-                        ? NeighborlyColors.accent
-                        : NeighborlyColors.textFaint,
+                        ? AppColors.primary
+                        : AppColors.border,
                     width: _otpControllers[i].text.isNotEmpty ? 2 : 1,
                   ),
                 ),
@@ -428,7 +457,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     style: GoogleFonts.inter(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: NeighborlyColors.textPrimary,
+                      color: AppColors.textPrimary,
                     ),
                     decoration: const InputDecoration(
                       counterText: '',
@@ -452,15 +481,15 @@ class _AuthScreenState extends State<AuthScreen> {
             child: FilledButton(
               onPressed: _isLoading ? null : _handleVerifyOtp,
               style: FilledButton.styleFrom(
-                backgroundColor: NeighborlyColors.accent,
+                backgroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
               ),
               child: Text(
                 'Verify & Continue',
                 style: GoogleFonts.inter(
-                  fontSize: 15,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
                 ),
@@ -478,8 +507,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: _resendSeconds > 0
-                      ? NeighborlyColors.textFaint
-                      : NeighborlyColors.accent,
+                      ? AppColors.textFaint
+                      : AppColors.accent,
                 ),
               ),
             ),
@@ -504,7 +533,7 @@ class _AuthScreenState extends State<AuthScreen> {
             style: GoogleFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.w600,
-              color: NeighborlyColors.textPrimary,
+              color: AppColors.textPrimary,
               letterSpacing: 1.2,
             ),
           ),
@@ -512,10 +541,10 @@ class _AuthScreenState extends State<AuthScreen> {
           // Username field
           Container(
             decoration: BoxDecoration(
-              color: NeighborlyColors.bgCard,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(
-                color: NeighborlyColors.success,
+                color: AppColors.success,
                 width: 2,
               ),
             ),
@@ -524,12 +553,12 @@ class _AuthScreenState extends State<AuthScreen> {
               style: GoogleFonts.inter(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: NeighborlyColors.textPrimary,
+                color: AppColors.textPrimary,
               ),
               decoration: const InputDecoration(
                 prefixIcon: Padding(
                   padding: EdgeInsets.only(left: 16),
-                  child: Icon(Icons.alternate_email, color: NeighborlyColors.textSecondary),
+                  child: Icon(Icons.alternate_email, color: AppColors.textSecondary),
                 ),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
@@ -541,14 +570,14 @@ class _AuthScreenState extends State<AuthScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.check_circle, color: NeighborlyColors.success, size: 18),
+              const Icon(Icons.check_circle, color: AppColors.success, size: 18),
               const SizedBox(width: 8),
               Text(
                 'Username is available!',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: NeighborlyColors.success,
+                  color: AppColors.success,
                 ),
               ),
             ],
@@ -560,15 +589,15 @@ class _AuthScreenState extends State<AuthScreen> {
             child: FilledButton(
               onPressed: _isLoading ? null : _handleSetUsername,
               style: FilledButton.styleFrom(
-                backgroundColor: NeighborlyColors.accent,
+                backgroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
               ),
               child: Text(
                 'Create My Account →',
                 style: GoogleFonts.inter(
-                  fontSize: 15,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
                 ),

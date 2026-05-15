@@ -24,17 +24,18 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
+      backgroundColor: isDark ? AppColors.background : AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: AppSpacing.s8),
+              const SizedBox(height: AppSpacing.sm),
 
               // ── SECTION A: Header ──────────────────────────────
               Row(
@@ -42,15 +43,15 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Hello, Neighbor 👋',
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.textMuted,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   Stack(
                     children: [
                       IconButton(
                         icon: const Icon(Icons.notifications_outlined),
-                        color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                        color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
                         onPressed: () {},
                       ),
                       Positioned(
@@ -60,7 +61,7 @@ class HomeScreen extends StatelessWidget {
                           width: 8,
                           height: 8,
                           decoration: const BoxDecoration(
-                            color: AppColors.cta,
+                            color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -69,7 +70,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.s16),
+              const SizedBox(height: AppSpacing.md),
 
               // ── SECTION B: Search bar ──────────────────────────
               TextField(
@@ -78,14 +79,14 @@ class HomeScreen extends StatelessWidget {
                   hintText: 'What service do you need?',
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
-                  fillColor: isDark ? AppColors.darkSurface : AppColors.surface,
+                  fillColor: isDark ? AppColors.surface : AppColors.surface,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.button),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                     borderSide: BorderSide.none,
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.s16),
+              const SizedBox(height: AppSpacing.md),
 
               // ── SECTION C: Category chips ──────────────────────
               SizedBox(
@@ -93,7 +94,7 @@ class HomeScreen extends StatelessWidget {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _categories.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.s8),
+                  separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
                   itemBuilder: (context, index) {
                     final isFirst = index == 0;
                     return Container(
@@ -102,7 +103,7 @@ class HomeScreen extends StatelessWidget {
                         color: isFirst
                             ? AppColors.primary
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(AppRadius.chip),
+                        borderRadius: BorderRadius.circular(AppRadius.full),
                         border: Border.all(
                           color: isFirst
                               ? AppColors.primary
@@ -112,7 +113,7 @@ class HomeScreen extends StatelessWidget {
                       alignment: Alignment.center,
                       child: Text(
                         _categories[index],
-                        style: AppTextStyles.body.copyWith(
+                        style: theme.textTheme.bodyMedium?.copyWith(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                           color: isFirst
@@ -124,41 +125,41 @@ class HomeScreen extends StatelessWidget {
                   },
                 ),
               ),
-              const SizedBox(height: AppSpacing.s24),
+              const SizedBox(height: AppSpacing.lg),
 
               // ── SECTION D: Featured Services ───────────────────
               Text(
                 'Featured Services',
-                style: AppTextStyles.title.copyWith(
-                  color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: AppSpacing.s8),
+              const SizedBox(height: AppSpacing.sm),
               SizedBox(
                 height: 220,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: 4,
-                  separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.s8),
+                  separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
                   itemBuilder: (context, index) {
                     return _ServiceCard(index: index);
                   },
                 ),
               ),
-              const SizedBox(height: AppSpacing.s24),
+              const SizedBox(height: AppSpacing.lg),
 
               // ── SECTION E: Recent Requests ─────────────────────
               Text(
                 'Recent Requests',
-                style: AppTextStyles.title.copyWith(
-                  color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: AppSpacing.s8),
+              const SizedBox(height: AppSpacing.sm),
               ...List.generate(3, (index) {
                 return _RequestItem(index: index);
               }),
-              const SizedBox(height: AppSpacing.s48),
+              const SizedBox(height: AppSpacing.xxl),
             ],
           ),
         ),
@@ -189,14 +190,15 @@ class _ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       width: 180,
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: AppShadows.card,
+        color: isDark ? AppColors.surface : AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppColors.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -222,22 +224,22 @@ class _ServiceCard extends StatelessWidget {
           ),
           // Content
           Padding(
-            padding: const EdgeInsets.all(AppSpacing.s16),
+            padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   _titles[index],
-                  style: AppTextStyles.title.copyWith(
+                  style: theme.textTheme.titleMedium?.copyWith(
                     fontSize: 15,
-                    color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                    color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   _providers[index],
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textMuted,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -247,8 +249,8 @@ class _ServiceCard extends StatelessWidget {
                     const SizedBox(width: 2),
                     Text(
                       '4.8',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.textMuted,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -256,7 +258,7 @@ class _ServiceCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'From \$25',
-                  style: AppTextStyles.body.copyWith(
+                  style: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.primary,
@@ -298,21 +300,22 @@ class _RequestItem extends StatelessWidget {
   Color _statusColor(int i) {
     if (i == 0) return AppColors.accent; // pending
     if (i == 1) return AppColors.primary; // active
-    return AppColors.cta; // done
+    return AppColors.primary; // done
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.s8),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.s16),
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          boxShadow: AppShadows.card,
+          color: isDark ? AppColors.surface : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          boxShadow: AppColors.cardShadow,
         ),
         child: Row(
           children: [
@@ -324,23 +327,23 @@ class _RequestItem extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
             ),
-            const SizedBox(width: AppSpacing.s16),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     _titles[index],
-                    style: AppTextStyles.body.copyWith(
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                      color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     _subtitles[index],
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textMuted,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -348,8 +351,8 @@ class _RequestItem extends StatelessWidget {
             ),
             Text(
               _dates[index],
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.textMuted,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
               ),
             ),
           ],

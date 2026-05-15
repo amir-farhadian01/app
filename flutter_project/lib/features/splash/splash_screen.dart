@@ -62,6 +62,8 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(
@@ -84,29 +86,29 @@ class _SplashScreenState extends State<SplashScreen>
                 height: 80,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                 ),
                 child: Center(
                   child: Text(
                     'N',
-                    style: AppTextStyles.display.copyWith(
+                    style: theme.textTheme.displayLarge?.copyWith(
                       color: AppColors.primary,
                       fontSize: 40,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.s16),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 'Neighborly',
-                style: AppTextStyles.display.copyWith(
+                style: theme.textTheme.displayLarge?.copyWith(
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(height: AppSpacing.s8),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 'Connect. Help. Thrive.',
-                style: AppTextStyles.body.copyWith(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: Colors.white70,
                 ),
               ),

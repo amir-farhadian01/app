@@ -13,17 +13,18 @@ class JobsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
+        backgroundColor: isDark ? AppColors.background : AppColors.background,
         appBar: AppBar(
           title: Text(
             'My Jobs',
-            style: AppTextStyles.title.copyWith(
-              color: isDark ? AppColors.darkText : AppColors.textPrimary,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
             ),
           ),
           bottom: const TabBar(
@@ -32,7 +33,7 @@ class JobsScreen extends StatelessWidget {
               Tab(text: 'Received'),
             ],
             labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textMuted,
+            unselectedLabelColor: AppColors.textSecondary,
             indicatorColor: AppColors.primary,
           ),
         ),
@@ -54,40 +55,42 @@ class _EmptyJobsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.s32),
+        padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(
               Icons.work_outline,
               size: 64,
-              color: AppColors.textMuted,
+              color: AppColors.textSecondary,
             ),
-            const SizedBox(height: AppSpacing.s16),
+            const SizedBox(height: AppSpacing.md),
             Text(
               'No jobs yet',
-              style: AppTextStyles.title.copyWith(
-                color: isDark ? AppColors.darkText : AppColors.textPrimary,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
               ),
             ),
-            const SizedBox(height: AppSpacing.s8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               'Post your first job to get started',
-              style: AppTextStyles.body.copyWith(
-                color: AppColors.textMuted,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppSpacing.s24),
+            const SizedBox(height: AppSpacing.lg),
             FilledButton(
               onPressed: () {},
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.cta,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                 ),
               ),
               child: const Text('Post your first job'),

@@ -34,6 +34,8 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -41,21 +43,21 @@ class _MainShellState extends State<MainShell> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          boxShadow: AppShadows.bottomNav,
+          boxShadow: AppColors.cardShadow,
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
           onTap: (index) => setState(() => _currentIndex = index),
           type: BottomNavigationBarType.fixed,
           backgroundColor: AppColors.surface,
-          selectedItemColor: AppColors.cta,
-          unselectedItemColor: AppColors.textMuted,
+          selectedItemColor: AppColors.primary,
+          unselectedItemColor: AppColors.textSecondary,
           elevation: 0,
-          selectedLabelStyle: AppTextStyles.caption.copyWith(
+          selectedLabelStyle: theme.textTheme.bodySmall?.copyWith(
             fontWeight: FontWeight.w600,
-            color: AppColors.cta,
+            color: AppColors.primary,
           ),
-          unselectedLabelStyle: AppTextStyles.caption,
+          unselectedLabelStyle: theme.textTheme.bodySmall,
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.home_outlined),
@@ -68,8 +70,8 @@ class _MainShellState extends State<MainShell> {
               label: 'Explore',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.add_circle, size: 48, color: AppColors.cta),
-              activeIcon: Icon(Icons.add_circle, size: 48, color: AppColors.cta),
+              icon: Icon(Icons.add_circle, size: 48, color: AppColors.primary),
+              activeIcon: Icon(Icons.add_circle, size: 48, color: AppColors.primary),
               label: 'Book',
             ),
             BottomNavigationBarItem(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/app_theme.dart';
+import '../core/theme/app_theme.dart';
 import '../core/models/post_model.dart';
 import '../core/services/feed_service.dart';
 import '../widgets/business_avatar_chip.dart';
@@ -112,24 +112,25 @@ class _SocialScreenState extends State<SocialScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
             // Tab bar
             Container(
-              color: NeighborlyColors.bgPrimary,
+              color: AppColors.background,
               child: TabBar(
                 controller: _tabController,
-                indicatorColor: NeighborlyColors.accent,
+                indicatorColor: AppColors.primary,
                 indicatorWeight: 3,
-                labelColor: NeighborlyColors.accent,
-                unselectedLabelColor: NeighborlyColors.textSecondary,
-                labelStyle: GoogleFonts.inter(
+                indicatorSize: TabBarIndicatorSize.tab,
+                labelColor: AppColors.primary,
+                unselectedLabelColor: AppColors.textSecondary,
+                labelStyle: GoogleFonts.plusJakartaSans(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
-                unselectedLabelStyle: GoogleFonts.inter(
+                unselectedLabelStyle: GoogleFonts.plusJakartaSans(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
@@ -160,12 +161,12 @@ class _SocialScreenState extends State<SocialScreen>
   Widget _buildExplorerTab() {
     return RefreshIndicator(
       onRefresh: _onRefresh,
-      color: NeighborlyColors.accent,
+      color: AppColors.primary,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
           _buildBusinessAvatarsRow(),
-          const SizedBox(height: NeighborlySpacing.s20),
+          const SizedBox(height: AppSpacing.lg),
           _buildFeedSection(),
         ],
       ),
@@ -177,19 +178,19 @@ class _SocialScreenState extends State<SocialScreen>
   Widget _buildBusinessHubTab() {
     return RefreshIndicator(
       onRefresh: _onRefresh,
-      color: NeighborlyColors.accent,
+      color: AppColors.primary,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
           // Section header
           Padding(
-            padding: const EdgeInsets.only(bottom: NeighborlySpacing.s16),
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: Text(
               'Business Hub',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.plusJakartaSans(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: NeighborlyColors.textPrimary,
+                color: AppColors.textPrimary,
               ),
             ),
           ),
@@ -264,14 +265,14 @@ class _SocialScreenState extends State<SocialScreen>
               const Icon(
                 Icons.error_outline,
                 size: 48,
-                color: NeighborlyColors.error,
+                color: AppColors.error,
               ),
               const SizedBox(height: 12),
               Text(
                 'Failed to load posts',
                 style: GoogleFonts.inter(
                   fontSize: 14,
-                  color: NeighborlyColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -295,7 +296,7 @@ class _SocialScreenState extends State<SocialScreen>
               const Icon(
                 Icons.feed_outlined,
                 size: 64,
-                color: NeighborlyColors.textFaint,
+                color: AppColors.textFaint,
               ),
               const SizedBox(height: 16),
               Text(
@@ -303,7 +304,7 @@ class _SocialScreenState extends State<SocialScreen>
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: NeighborlyColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 4),
@@ -311,7 +312,7 @@ class _SocialScreenState extends State<SocialScreen>
                 'Check back later for updates',
                 style: GoogleFonts.inter(
                   fontSize: 13,
-                  color: NeighborlyColors.textFaint,
+                  color: AppColors.textFaint,
                 ),
               ),
             ],

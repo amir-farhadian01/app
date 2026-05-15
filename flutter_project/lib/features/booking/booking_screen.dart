@@ -13,6 +13,8 @@ class BookingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
@@ -27,12 +29,12 @@ class BookingScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Book a Service',
-              style: AppTextStyles.title,
+              style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
               'Coming soon',
-              style: AppTextStyles.caption,
+              style: theme.textTheme.bodySmall,
             ),
           ],
         ),

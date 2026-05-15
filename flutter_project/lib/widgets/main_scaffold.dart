@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/app_theme.dart';
+import '../core/theme/app_theme.dart';
 import '../screens/home_screen.dart';
 import '../screens/social_screen.dart';
 import '../screens/business_dashboard_screen.dart';
@@ -55,32 +55,32 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   Widget _buildDesktopLayout() {
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Row(
           children: [
             NavigationRail(
-              backgroundColor: NeighborlyColors.bgCard,
+              backgroundColor: AppColors.surface,
               selectedIndex: _currentIndex,
               onDestinationSelected: (index) {
                 setState(() => _currentIndex = index);
               },
               labelType: NavigationRailLabelType.all,
               selectedIconTheme: const IconThemeData(
-                color: NeighborlyColors.accent,
+                color: AppColors.primary,
               ),
               unselectedIconTheme: const IconThemeData(
-                color: NeighborlyColors.textSecondary,
+                color: AppColors.textSecondary,
               ),
-              selectedLabelTextStyle: GoogleFonts.inter(
+              selectedLabelTextStyle: GoogleFonts.plusJakartaSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: NeighborlyColors.accent,
+                color: AppColors.primary,
               ),
-              unselectedLabelTextStyle: GoogleFonts.inter(
+              unselectedLabelTextStyle: GoogleFonts.plusJakartaSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: NeighborlyColors.textSecondary,
+                color: AppColors.textSecondary,
               ),
               minWidth: 72,
               leading: Padding(
@@ -91,8 +91,12 @@ class _MainScaffoldState extends State<MainScaffold> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: NeighborlyColors.accent.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
+                        gradient: const LinearGradient(
+                          colors: [AppColors.primary, AppColors.primaryLight],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                       child: const Center(
                         child: Text('🏘️', style: TextStyle(fontSize: 20)),
@@ -101,10 +105,10 @@ class _MainScaffoldState extends State<MainScaffold> {
                     const SizedBox(height: 4),
                     Text(
                       'Hub',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.plusJakartaSans(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: NeighborlyColors.accent,
+                        color: AppColors.primary,
                       ),
                     ),
                   ],
@@ -118,7 +122,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                       ))
                   .toList(),
             ),
-            const VerticalDivider(width: 1, color: NeighborlyColors.textFaint),
+            const VerticalDivider(width: 1, color: AppColors.border),
             // Content
             Expanded(
               child: IndexedStack(
@@ -136,7 +140,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   Widget _buildMobileLayout() {
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
@@ -145,7 +149,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         decoration: BoxDecoration(
           border: Border(
             top: BorderSide(
-              color: NeighborlyColors.textFaint.withValues(alpha: 0.3),
+              color: AppColors.border,
               width: 0.5,
             ),
           ),
@@ -154,19 +158,19 @@ class _MainScaffoldState extends State<MainScaffold> {
           currentIndex: _currentIndex,
           onTap: (index) => setState(() => _currentIndex = index),
           type: BottomNavigationBarType.fixed,
-          backgroundColor: NeighborlyColors.bgCard,
-          selectedItemColor: NeighborlyColors.accent,
-          unselectedItemColor: NeighborlyColors.textSecondary,
+          backgroundColor: AppColors.surface,
+          selectedItemColor: AppColors.primary,
+          unselectedItemColor: AppColors.textSecondary,
           elevation: 0,
-          selectedLabelStyle: GoogleFonts.inter(
+          selectedLabelStyle: GoogleFonts.plusJakartaSans(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: NeighborlyColors.accent,
+            color: AppColors.primary,
           ),
-          unselectedLabelStyle: GoogleFonts.inter(
+          unselectedLabelStyle: GoogleFonts.plusJakartaSans(
             fontSize: 10,
             fontWeight: FontWeight.w500,
-            color: NeighborlyColors.textSecondary,
+            color: AppColors.textSecondary,
           ),
           items: _navItems
               .map((item) => BottomNavigationBarItem(
@@ -198,7 +202,7 @@ class _AccountPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Center(
           child: Column(
@@ -208,20 +212,24 @@ class _AccountPlaceholder extends StatelessWidget {
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: NeighborlyColors.accent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(40),
+                  gradient: const LinearGradient(
+                    colors: [AppColors.primary, AppColors.primaryLight],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
                 ),
                 child: const Center(
-                  child: Icon(Icons.person, size: 40, color: NeighborlyColors.accent),
+                  child: Icon(Icons.person, size: 40, color: Colors.white),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
                 'Account',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.plusJakartaSans(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
-                  color: NeighborlyColors.textPrimary,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -230,7 +238,7 @@ class _AccountPlaceholder extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w400,
-                  color: NeighborlyColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],

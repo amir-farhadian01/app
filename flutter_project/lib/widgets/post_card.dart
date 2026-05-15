@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/app_theme.dart';
+import '../core/theme/app_theme.dart';
 import '../core/models/post_model.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -29,10 +29,11 @@ class _PostCardState extends State<PostCard> {
     final post = widget.post;
 
     return Container(
-      padding: const EdgeInsets.all(NeighborlySpacing.s16),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: NeighborlyColors.bgCard,
-        borderRadius: BorderRadius.circular(NeighborlyRadius.md),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -41,18 +42,18 @@ class _PostCardState extends State<PostCard> {
           _buildHeader(post),
           // ── Business Name Pill ──────────────────────────────────────
           if (post.businessName != null) ...[
-            const SizedBox(height: NeighborlySpacing.s8),
+            const SizedBox(height: AppSpacing.sm),
             _buildBusinessPill(post.businessName!),
           ],
-          const SizedBox(height: NeighborlySpacing.s12),
+          const SizedBox(height: AppSpacing.sm + 4),
           // ── Content Text ────────────────────────────────────────────
           _buildContent(post),
           // ── Image ───────────────────────────────────────────────────
           if (post.imageUrl != null) ...[
-            const SizedBox(height: NeighborlySpacing.s12),
+            const SizedBox(height: AppSpacing.sm + 4),
             _buildImage(post.imageUrl!),
           ],
-          const SizedBox(height: NeighborlySpacing.s12),
+          const SizedBox(height: AppSpacing.sm + 4),
           // ── Action Row ──────────────────────────────────────────────
           _buildActionRow(post),
         ],
@@ -66,7 +67,7 @@ class _PostCardState extends State<PostCard> {
         // Avatar
         CircleAvatar(
           radius: 20,
-          backgroundColor: NeighborlyColors.accent.withValues(alpha: 0.2),
+          backgroundColor: AppColors.primary.withValues(alpha: 0.2),
           backgroundImage: post.authorAvatarUrl != null
               ? NetworkImage(post.authorAvatarUrl!)
               : null,
@@ -75,15 +76,15 @@ class _PostCardState extends State<PostCard> {
                   post.authorName.isNotEmpty
                       ? post.authorName[0].toUpperCase()
                       : '?',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.plusJakartaSans(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: NeighborlyColors.accent,
+                    color: AppColors.primary,
                   ),
                 )
               : null,
         ),
-        const SizedBox(width: NeighborlySpacing.s12),
+        const SizedBox(width: AppSpacing.sm + 4),
         // Name + time
         Expanded(
           child: Column(
@@ -91,10 +92,10 @@ class _PostCardState extends State<PostCard> {
             children: [
               Text(
                 post.authorName,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: NeighborlyColors.textPrimary,
+                  color: AppColors.textPrimary,
                 ),
               ),
               Text(
@@ -102,7 +103,7 @@ class _PostCardState extends State<PostCard> {
                 style: GoogleFonts.inter(
                   fontSize: 11,
                   fontWeight: FontWeight.w400,
-                  color: NeighborlyColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -111,7 +112,7 @@ class _PostCardState extends State<PostCard> {
         // More button
         const Icon(
           Icons.more_horiz,
-          color: NeighborlyColors.textSecondary,
+          color: AppColors.textSecondary,
           size: 20,
         ),
       ],
@@ -122,8 +123,12 @@ class _PostCardState extends State<PostCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: NeighborlyColors.accent,
-        borderRadius: BorderRadius.circular(NeighborlyRadius.lg),
+        gradient: const LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryLight],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(AppRadius.full),
       ),
       child: Text(
         name,
@@ -145,7 +150,7 @@ class _PostCardState extends State<PostCard> {
           style: GoogleFonts.inter(
             fontSize: 13,
             fontWeight: FontWeight.w400,
-            color: NeighborlyColors.textPrimary,
+            color: AppColors.textPrimary,
             height: 1.4,
           ),
           maxLines: _expanded ? null : 3,
@@ -161,7 +166,7 @@ class _PostCardState extends State<PostCard> {
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: NeighborlyColors.accent,
+                  color: AppColors.primary,
                 ),
               ),
             ),
@@ -172,25 +177,25 @@ class _PostCardState extends State<PostCard> {
 
   Widget _buildImage(String imageUrl) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(NeighborlyRadius.sm),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: Image.network(
           imageUrl,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Container(
-            color: NeighborlyColors.bgCardLight,
+            color: AppColors.surface2,
             child: const Center(
               child: Icon(
                 Icons.broken_image_outlined,
-                color: NeighborlyColors.textFaint,
+                color: AppColors.textFaint,
               ),
             ),
           ),
           loadingBuilder: (_, child, progress) {
             if (progress == null) return child;
             return Container(
-              color: NeighborlyColors.bgCardLight,
+              color: AppColors.surface2,
               child: const Center(
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
@@ -214,24 +219,24 @@ class _PostCardState extends State<PostCard> {
                 post.isLiked ? Icons.favorite : Icons.favorite_outline,
                 size: 16,
                 color: post.isLiked
-                    ? NeighborlyColors.accent
-                    : NeighborlyColors.textSecondary,
+                    ? AppColors.accent
+                    : AppColors.textSecondary,
               ),
               const SizedBox(width: 4),
               Text(
                 '${post.likes}',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.jetBrainsMono(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: post.isLiked
-                      ? NeighborlyColors.accent
-                      : NeighborlyColors.textSecondary,
+                      ? AppColors.accent
+                      : AppColors.textSecondary,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: NeighborlySpacing.s16),
+        const SizedBox(width: AppSpacing.md),
         // Comment button
         GestureDetector(
           onTap: () {},
@@ -241,21 +246,21 @@ class _PostCardState extends State<PostCard> {
               const Icon(
                 Icons.chat_bubble_outline,
                 size: 16,
-                color: NeighborlyColors.textSecondary,
+                color: AppColors.textSecondary,
               ),
               const SizedBox(width: 4),
               Text(
                 '${post.comments}',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.jetBrainsMono(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: NeighborlyColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: NeighborlySpacing.s16),
+        const SizedBox(width: AppSpacing.md),
         // Share button
         GestureDetector(
           onTap: () {
@@ -272,7 +277,7 @@ class _PostCardState extends State<PostCard> {
               const Icon(
                 Icons.share_outlined,
                 size: 16,
-                color: NeighborlyColors.textSecondary,
+                color: AppColors.textSecondary,
               ),
               const SizedBox(width: 4),
               Text(
@@ -280,7 +285,7 @@ class _PostCardState extends State<PostCard> {
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: NeighborlyColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],

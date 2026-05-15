@@ -13,16 +13,17 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
+      backgroundColor: isDark ? AppColors.background : AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Column(
             children: [
-              const SizedBox(height: AppSpacing.s32),
+              const SizedBox(height: AppSpacing.xl),
 
               // Avatar
               CircleAvatar(
@@ -33,29 +34,29 @@ class ProfileScreen extends StatelessWidget {
                   size: 40,
                 ),
               ),
-              const SizedBox(height: AppSpacing.s16),
+              const SizedBox(height: AppSpacing.md),
 
               // Name
               Text(
                 'Ali Neighbor',
-                style: AppTextStyles.title.copyWith(
-                  color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: AppSpacing.s8),
+              const SizedBox(height: AppSpacing.sm),
 
               // Email
               Text(
                 'ali@neighborly.app',
-                style: AppTextStyles.body.copyWith(
-                  color: AppColors.textMuted,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
                 ),
               ),
-              const SizedBox(height: AppSpacing.s24),
+              const SizedBox(height: AppSpacing.lg),
 
               // Divider
-              Divider(color: isDark ? AppColors.divider.withValues(alpha: 0.2) : AppColors.divider),
-              const SizedBox(height: AppSpacing.s8),
+              Divider(color: isDark ? AppColors.border.withValues(alpha: 0.2) : AppColors.border),
+              const SizedBox(height: AppSpacing.sm),
 
               // Settings tiles
               _SettingsTile(
@@ -82,9 +83,9 @@ class ProfileScreen extends StatelessWidget {
                 isDark: isDark,
                 onTap: () {},
               ),
-              const SizedBox(height: AppSpacing.s8),
-              Divider(color: isDark ? AppColors.divider.withValues(alpha: 0.2) : AppColors.divider),
-              const SizedBox(height: AppSpacing.s8),
+              const SizedBox(height: AppSpacing.sm),
+              Divider(color: isDark ? AppColors.border.withValues(alpha: 0.2) : AppColors.border),
+              const SizedBox(height: AppSpacing.sm),
 
               // Sign Out
               _SettingsTile(
@@ -94,7 +95,7 @@ class ProfileScreen extends StatelessWidget {
                 isDestructive: true,
                 onTap: () {},
               ),
-              const SizedBox(height: AppSpacing.s48),
+              const SizedBox(height: AppSpacing.xxl),
             ],
           ),
         ),
@@ -120,26 +121,28 @@ class _SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return ListTile(
       leading: Icon(
         icon,
-        color: isDestructive ? AppColors.cta : AppColors.primary,
+        color: isDestructive ? AppColors.primary : AppColors.primary,
       ),
       title: Text(
         title,
-        style: AppTextStyles.body.copyWith(
+        style: theme.textTheme.bodyMedium?.copyWith(
           color: isDestructive
-              ? AppColors.cta
-              : (isDark ? AppColors.darkText : AppColors.textPrimary),
+              ? AppColors.primary
+              : (isDark ? AppColors.textPrimary : AppColors.textPrimary),
         ),
       ),
       trailing: const Icon(
         Icons.chevron_right,
-        color: AppColors.textMuted,
+        color: AppColors.textSecondary,
       ),
       onTap: onTap,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.chip),
+        borderRadius: BorderRadius.circular(AppRadius.full),
       ),
     );
   }

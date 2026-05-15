@@ -13,6 +13,15 @@ import '../services/neighborly_theme_notifier.dart';
 import '../theme/account_hub_style.dart';
 import '../theme/account_hub_typography.dart';
 
+/// Color constants matching port 8077 reference UI.
+const _kPrimaryBlue = Color(0xFF2B6EFF);
+const _kBusinessOrange = Color(0xFFFF7A2B);
+const _kBgDark = Color(0xFF0D0F1A);
+const _kCardBg = Color(0xFF1E2235);
+const _kBorderColor = Color(0xFF2A2F4A);
+const _kTextPrimary = Color(0xFFF0F2FF);
+const _kTextSecondary = Color(0xFF8B8FA3);
+
 /// Sticky header + main + footer + mobile bottom bar — mirrors web [Layout.tsx].
 class NeighborlyShell extends StatefulWidget {
   const NeighborlyShell({super.key, this.child});
@@ -39,30 +48,30 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
     return false;
   }
 
+  /// Nav items matching port 8077 reference: Home, Explore, Orders, Business (orange).
   List<_NavItem> _navItems(NeighborlyApiService api) {
     final role = api.user?.role;
     if (_isAdminRole(role)) {
       return const [
         _NavItem('Admin', '/dashboard', LucideIcons.layoutDashboard),
-        _NavItem('AI', '/ai', LucideIcons.sparkles),
         _NavItem('Explorer', '/home', LucideIcons.compass),
-        _NavItem('Profile', '/profile', LucideIcons.user),
+        _NavItem('Account', '/profile', LucideIcons.user),
       ];
     }
     if (role == 'provider') {
       return const [
-        _NavItem('Home', '/dashboard', LucideIcons.home),
-        _NavItem('Orders', '/orders', LucideIcons.clipboardList),
-        _NavItem('AI', '/ai', LucideIcons.sparkles),
+        _NavItem('Home', '/', LucideIcons.home),
         _NavItem('Explorer', '/home', LucideIcons.compass),
-        _NavItem('Account', '/provider/account', LucideIcons.user),
+        _NavItem('Services', '/my-orders', LucideIcons.shoppingBag),
+        _NavItem('My Business', '/provider/dashboard', LucideIcons.building2),
       ];
     }
+    // Customer nav matching Layout.tsx: Home, Explore, Orders, Business
     return const [
       _NavItem('Home', '/', LucideIcons.home),
-      _NavItem('AI', '/ai', LucideIcons.sparkles),
-      _NavItem('Explorer', '/home', LucideIcons.compass),
-      _NavItem('Account', '/profile', LucideIcons.user),
+      _NavItem('Explore', '/home', LucideIcons.search),
+      _NavItem('Orders', '/my-orders', LucideIcons.clock),
+      _NavItem('Business', '/dashboard', LucideIcons.briefcase, isBusiness: true),
     ];
   }
 
@@ -109,91 +118,13 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
       key: _scaffoldKey,
       extendBody: showBottom,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      // Drawer (left) for unauthenticated users on mobile
       drawer: (!wide && user == null)
-          ? Drawer(
-              backgroundColor: cs.surface,
-              child: SafeArea(
-                child: ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    Text('MENU', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, fontSize: 22)),
-                    const SizedBox(height: 20),
-                    ...nav.map((e) => ListTile(
-                          leading: Icon(e.icon, color: cs.onSurface),
-                          title: Text(e.label, style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _navTap(e.path);
-                          },
-                        )),
-                  ],
-                ),
-              ),
-            )
+          ? _buildGuestDrawer(context, nav)
           : null,
+      // End drawer (right) for authenticated users — matches Layout.tsx slide-in menu
       endDrawer: user != null
-          ? Drawer(
-              width: 320,
-              backgroundColor: cs.surface,
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('MENU', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, fontSize: 22)),
-                          IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(context)),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        children: [
-                          Text('NAVIGATION', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: cs.secondary)),
-                          ...nav.map((e) => _sideTile(context, e)),
-                          const Divider(height: 32),
-                          Text('EVENTS HUB', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: cs.secondary)),
-                          ListTile(
-                            leading: const Icon(LucideIcons.bell),
-                            title: const Text('Messages & Alerts'),
-                            onTap: () {
-                              Navigator.pop(context);
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-                              );
-                            },
-                          ),
-                          ListTile(
-                            leading: const Icon(LucideIcons.headphones),
-                            title: const Text('Support'),
-                            onTap: () {
-                              Navigator.pop(context);
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-                              );
-                            },
-                          ),
-                          const Divider(height: 32),
-                          ListTile(
-                            leading: const Icon(LucideIcons.logOut, color: Colors.red),
-                            title: Text('Sign out', style: GoogleFonts.inter(color: Colors.red, fontWeight: FontWeight.w800)),
-                            onTap: () async {
-                              Navigator.pop(context);
-                              await api.logout();
-                              if (context.mounted) _go('/');
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
+          ? _buildAuthDrawer(context, api, nav, user)
           : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -252,6 +183,223 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
     );
   }
 
+  /// Guest drawer (left side) — simple menu for unauthenticated users.
+  Widget _buildGuestDrawer(BuildContext context, List<_NavItem> nav) {
+    return Drawer(
+      backgroundColor: _kBgDark,
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text('MENU', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, fontSize: 22, color: _kTextPrimary)),
+            const SizedBox(height: 20),
+            ...nav.map((e) => ListTile(
+                  leading: Icon(e.icon, color: _kTextSecondary),
+                  title: Text(e.label, style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: _kTextPrimary)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _navTap(e.path);
+                  },
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Auth drawer (right side) — matches Layout.tsx slide-in menu with Navigation, Events Hub, Profile & Business sections.
+  Widget _buildAuthDrawer(BuildContext context, NeighborlyApiService api, List<_NavItem> nav, UserModel user) {
+    final eventItems = <_DrawerLink>[
+      _DrawerLink('Alerts', LucideIcons.bell, '/notifications'),
+      _DrawerLink('Tickets', LucideIcons.headphones, '/tickets'),
+    ];
+
+    final profileItems = <_DrawerLink>[
+      _DrawerLink('Account', LucideIcons.user, '/account'),
+      _DrawerLink('My Profile', LucideIcons.user, '/profile'),
+      _DrawerLink('My Requests', LucideIcons.clipboardList, '/dashboard?tab=requests'),
+      _DrawerLink('Spending', LucideIcons.dollarSign, '/dashboard?tab=finance'),
+    ];
+
+    return Drawer(
+      width: 320,
+      backgroundColor: _kBgDark,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header: "Menu" title + close button
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Menu', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, fontSize: 22, color: _kTextPrimary)),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _kCardBg,
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(color: _kBorderColor),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => Navigator.pop(context),
+                        borderRadius: BorderRadius.circular(100),
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(LucideIcons.x, color: _kTextPrimary, size: 24),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Navigation section
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  // Navigation section
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 12),
+                    child: Text('NAVIGATION', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: _kTextSecondary)),
+                  ),
+                  ...nav.map((e) => _drawerNavTile(context, e)),
+                  const SizedBox(height: 24),
+                  // Events Hub section
+                  Container(height: 1, color: _kBorderColor),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 12),
+                    child: Text('EVENTS HUB', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: _kTextSecondary)),
+                  ),
+                  ...eventItems.map((e) => _drawerLinkTile(context, e)),
+                  const SizedBox(height: 24),
+                  // Profile & Business section
+                  Container(height: 1, color: _kBorderColor),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 12),
+                    child: Text('PROFILE & BUSINESS', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: _kTextSecondary)),
+                  ),
+                  ...profileItems.map((e) => _drawerLinkTile(context, e)),
+                ],
+              ),
+            ),
+            // Sign Out button
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await api.logout();
+                    if (context.mounted) _go('/');
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(LucideIcons.logOut, color: Colors.redAccent, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Sign Out', style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                          color: Colors.redAccent,
+                        )),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerNavTile(BuildContext context, _NavItem e) {
+    final active = _shellNavActive(neighborlyRoutePathNotifier.value, e);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Navigator.pop(context);
+            _navTap(e.path);
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: active ? _kPrimaryBlue.withValues(alpha: 0.15) : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: active ? _kPrimaryBlue.withValues(alpha: 0.3) : Colors.transparent,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(e.icon, size: 20, color: active ? _kPrimaryBlue : _kTextSecondary),
+                const SizedBox(width: 12),
+                Text(e.label, style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: active ? _kPrimaryBlue : _kTextPrimary,
+                )),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerLinkTile(BuildContext context, _DrawerLink e) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Navigator.pop(context);
+            _navTap(e.path);
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Icon(e.icon, size: 20, color: _kTextSecondary),
+                const SizedBox(width: 12),
+                Text(e.label, style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: _kTextPrimary,
+                )),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _sideTile(BuildContext context, _NavItem e) {
     return ListTile(
       leading: Icon(e.icon),
@@ -292,11 +440,9 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
     }
   }
 
-  /// Home (`/`) and Explorer (`/home`) stay public; AI + account/profile require a session.
+  /// Home (`/`) and Explorer (`/home`) stay public; account/profile require a session.
   static bool _pathRequiresSignIn(String path) {
     const gated = {
-      '/ai',
-      '/ai-consultant',
       '/profile',
       '/account',
       '/dashboard',
@@ -309,65 +455,41 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
     return gated.contains(path);
   }
 
+  /// Mobile bottom nav for customers — matches Layout.tsx full-width bar with orange for Business, blue for active, dot indicator.
   Widget _customerMobileBottomNav(
     BuildContext context,
     NeighborlyApiService api,
     String path,
   ) {
     final nav = _navItems(api);
-    final viewportWidth = MediaQuery.sizeOf(context).width;
-    final barWidth = (viewportWidth - 32).clamp(280.0, 560.0);
-    final fill = AccountHubStyle.bottomBarFill(context);
-    final shadow = AccountHubStyle.bottomBarShadow(context);
-    final outline = AccountHubStyle.secondaryText(context).withValues(alpha: 0.14);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: _kBorderColor)),
+        color: _kBgDark,
+      ),
       child: SafeArea(
         top: false,
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: SizedBox(
-            width: barWidth,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: fill,
-                borderRadius: BorderRadius.circular(36),
-                border: Border.all(color: outline, width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: shadow,
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                  child: Row(
-                    children: [
-                      for (final item in nav)
-                        Expanded(
-                          child: _CustomerPillNavCell(
-                            item: item,
-                            active: _shellNavActive(path, item),
-                            hasNotificationDot: item.path == '/profile' && api.unreadNotificationsCount > 0,
-                            onTap: () => _navTap(item.path),
-                          ),
-                        ),
-                    ],
+        child: Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 4),
+          child: Row(
+            children: [
+              for (final item in nav)
+                Expanded(
+                  child: _MobileBottomNavCell(
+                    item: item,
+                    active: _shellNavActive(path, item),
+                    onTap: () => _navTap(item.path),
                   ),
                 ),
-              ),
-            ),
+            ],
           ),
         ),
       ),
     );
   }
 
+  /// Generic mobile bottom nav for non-customer roles.
   Widget _mobileBottomNav(
     BuildContext context,
     NeighborlyApiService api,
@@ -499,7 +621,7 @@ bool _shellNavActive(String rawPath, _NavItem item) {
   if (p.contains('?')) p = p.split('?').first;
   if (p.isEmpty) p = '/';
   if (p == '/auth' || p == '/login') {
-    return item.path == '/profile';
+    return item.path == '/profile' || item.path == '/provider/account';
   }
   if (item.path == '/profile') {
     return p == '/profile' || p == '/account';
@@ -509,13 +631,87 @@ bool _shellNavActive(String rawPath, _NavItem item) {
         p == '/provider/notifications' ||
         p == '/provider/settings';
   }
+  if (item.path == '/provider/dashboard') {
+    return p == '/provider/dashboard' ||
+        p == '/workspace/packages' ||
+        p == '/workspace/inventory' ||
+        p == '/workspace/company';
+  }
+  if (item.path == '/dashboard') {
+    return p == '/dashboard' || p.startsWith('/admin');
+  }
   if (item.path == '/orders') {
     return p == '/orders' ||
         p.startsWith('/orders/') ||
         p == '/provider/orders';
   }
-  if (item.path == '/') return p == '/';
+  if (item.path == '/') return p == '/' || p == '/customer-home';
+  if (item.path == '/home') return p == '/home' || p.startsWith('/service/');
+  if (item.path == '/my-orders') return p == '/my-orders' || p.startsWith('/my-orders/');
   return p == item.path;
+}
+
+/// Mobile bottom nav cell — matches Layout.tsx full-width bar style.
+class _MobileBottomNavCell extends StatelessWidget {
+  const _MobileBottomNavCell({
+    required this.item,
+    required this.active,
+    required this.onTap,
+  });
+
+  final _NavItem item;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isBusiness = item.isBusiness;
+    final activeColor = isBusiness ? _kBusinessOrange : _kPrimaryBlue;
+    final inactiveColor = const Color(0xFF4A4F70);
+    final textColor = isBusiness
+        ? _kBusinessOrange
+        : (active ? _kPrimaryBlue : inactiveColor);
+
+    return Semantics(
+      label: '${item.label} tab',
+      button: true,
+      selected: active,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              item.icon,
+              size: 22,
+              color: isBusiness ? _kBusinessOrange : (active ? _kPrimaryBlue : inactiveColor),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.label,
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: textColor,
+              ),
+            ),
+            if (active && !isBusiness)
+              Container(
+                margin: const EdgeInsets.only(top: 3),
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: _kPrimaryBlue,
+                  shape: BoxShape.circle,
+                ),
+              )
+            else
+              const SizedBox(height: 7),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _CustomerPillNavCell extends StatelessWidget {
@@ -688,10 +884,19 @@ class _GlassNavCell extends StatelessWidget {
 }
 
 class _NavItem {
-  const _NavItem(this.label, this.path, this.icon);
+  const _NavItem(this.label, this.path, this.icon, {this.isBusiness = false});
   final String label;
   final String path;
   final IconData icon;
+  final bool isBusiness;
+}
+
+/// Helper data class for drawer link items.
+class _DrawerLink {
+  const _DrawerLink(this.label, this.icon, this.path);
+  final String label;
+  final IconData icon;
+  final String path;
 }
 
 /// Header sits in [NeighborlyShell] *above* the [Navigator] subtree, so there is
@@ -730,6 +935,61 @@ class _HeaderTapIcon extends StatelessWidget {
   }
 }
 
+/// Desktop nav link — matches Layout.tsx style: uppercase, letter-spacing, orange for Business, blue for active.
+class _DesktopNavLink extends StatelessWidget {
+  const _DesktopNavLink({
+    required this.label,
+    required this.isActive,
+    required this.isBusiness,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isActive;
+  final bool isBusiness;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    Color textColor;
+    if (isBusiness) {
+      textColor = isActive ? const Color(0xFFFF9A5F) : const Color(0xFFFF7A2B);
+    } else if (isActive) {
+      textColor = _kPrimaryBlue;
+    } else {
+      textColor = const Color(0xFF8B90B0);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            child: Text(
+              label.toUpperCase(),
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+                color: textColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Header bar matching Layout.tsx exactly:
+/// - NeighborHub logo (Home icon in blue box + "NeighborHub" + "Canada local app")
+/// - Desktop nav items with uppercase, letter-spacing, orange for Business, blue for active
+/// - Notification bell with red dot
+/// - Avatar/sign-in button
 class _HeaderBar extends StatelessWidget {
   const _HeaderBar({
     required this.wide,
@@ -767,174 +1027,169 @@ class _HeaderBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: cs.surface.withValues(alpha: 0.88),
-      elevation: 0,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: cs.outline)),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1120),
-              child: SizedBox(
-                height: 56,
-                child: Row(
-                  children: [
-                    if (!wide && !hideCompactEntryControls)
-                      _HeaderTapIcon(
-                        onPressed: onMenu,
-                        semanticLabel: 'Open menu',
-                        icon: const Icon(LucideIcons.menu),
-                      ),
-                    InkWell(
-                      onTap: onLogo,
-                      borderRadius: BorderRadius.circular(12),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF0D0F1A),
+            border: Border(bottom: BorderSide(color: _kBorderColor)),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: SizedBox(
+              height: 64,
+              child: Row(
+                children: [
+                  // Mobile: hamburger menu
+                  if (!wide && !hideCompactEntryControls)
+                    _HeaderTapIcon(
+                      onPressed: onMenu,
+                      semanticLabel: 'Open menu',
+                      icon: const Icon(LucideIcons.menu, color: _kTextSecondary),
+                    ),
+                  // Logo: Home icon in blue box + "NeighborHub" + "Canada local app"
+                  InkWell(
+                    onTap: onLogo,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          _LogoMark(),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Neighborly',
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w800,
-                              fontStyle: FontStyle.italic,
-                              fontSize: 18,
-                              letterSpacing: -0.5,
-                              color: cs.onSurface,
+                          // Home icon in blue box — matches Layout.tsx
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: _kPrimaryBlue.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: _kPrimaryBlue.withValues(alpha: 0.3)),
                             ),
+                            child: const Icon(LucideIcons.home, size: 20, color: _kPrimaryBlue),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'NeighborHub',
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w900,
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 14,
+                                  color: _kTextPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Canada local app',
+                                style: GoogleFonts.inter(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w500,
+                                  color: _kTextSecondary,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                    const Spacer(),
-                    if (wide)
-                      Row(
+                  ),
+                  // Desktop nav items (wide only)
+                  if (wide) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (final e in nav) ...[
-                            TextButton(
-                              onPressed: () => onNavTap(e.path),
-                              child: Text(
-                                e.label.toUpperCase(),
-                                style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 2,
-                                  color: _shellNavActive(path, e) ? cs.onSurface : cs.secondary,
-                                ),
-                              ),
+                          for (final item in nav)
+                            _DesktopNavLink(
+                              label: item.label,
+                              isActive: _shellNavActive(path, item),
+                              isBusiness: item.isBusiness,
+                              onTap: () => onNavTap(item.path),
                             ),
-                            const SizedBox(width: 4),
-                          ],
                         ],
                       ),
-                    if (wide)
-                      _HeaderTapIcon(
-                        onPressed: onTheme,
-                        semanticLabel: isDark ? 'Switch to light mode' : 'Switch to dark mode',
-                        icon: Icon(
-                          isDark ? Icons.light_mode : Icons.dark_mode,
-                          color: cs.secondary,
+                    ),
+                  ],
+                  const Spacer(),
+                  // Right side: notification bell + avatar/sign-in
+                  if (user != null) ...[
+                    // Notification bell with red dot
+                    Stack(
+                      children: [
+                        _HeaderTapIcon(
+                          onPressed: onNotifications,
+                          semanticLabel: 'Notifications',
+                          icon: const Icon(LucideIcons.bell, color: _kTextSecondary),
                         ),
-                      ),
-                    if (user != null && wide) ...[
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          _HeaderTapIcon(
-                            onPressed: onAccountMenu,
-                            semanticLabel: 'Account menu',
-                            icon: const Icon(LucideIcons.menu),
-                          ),
+                        if (unreadNotificationsCount > 0)
                           Positioned(
                             right: 8,
                             top: 8,
                             child: Container(
                               width: 8,
                               height: 8,
-                              decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
-                            ),
-                          ),
-                        ],
-                      ),
-                      _HeaderTapIcon(
-                        onPressed: onLogout,
-                        semanticLabel: 'Sign out',
-                        icon: Icon(LucideIcons.logOut, color: cs.secondary),
-                      ),
-                    ] else if (user != null && !wide)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _HeaderTapIcon(
-                            onPressed: onTheme,
-                            semanticLabel: isDark ? 'Switch to light mode' : 'Switch to dark mode',
-                            icon: Icon(
-                              isDark ? Icons.light_mode : Icons.dark_mode,
-                              color: cs.secondary,
-                            ),
-                          ),
-                          Semantics(
-                            label: unreadNotificationsCount > 0
-                                ? 'Notifications, $unreadNotificationsCount unread'
-                                : 'Notifications',
-                            button: true,
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: onNotifications,
-                                borderRadius: BorderRadius.circular(26),
-                                child: SizedBox(
-                                  width: 52,
-                                  height: 52,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      Icon(LucideIcons.bell, color: cs.onSurface, size: 22),
-                                      if (unreadNotificationsCount > 0)
-                                        Positioned(
-                                          right: 6,
-                                          top: 6,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: cs.primary,
-                                              borderRadius: BorderRadius.circular(100),
-                                            ),
-                                            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                                            child: Text(
-                                              unreadNotificationsCount > 99 ? '99+' : '$unreadNotificationsCount',
-                                              textAlign: TextAlign.center,
-                                              style: GoogleFonts.inter(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w800,
-                                                color: cs.onPrimary,
-                                                height: 1.1,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
+                              decoration: const BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
                               ),
                             ),
                           ),
-                        ],
-                      )
-                    else if (!hideCompactEntryControls)
-                      FilledButton(
-                        onPressed: onAuth,
-                        child: Text('Get Started', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-                      )
-                    else
-                      const SizedBox.shrink(),
+                      ],
+                    ),
+                    // Avatar — wrapped in GestureDetector (not _HeaderTapIcon, which expects Icon)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: onAccountMenu,
+                        child: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: _kPrimaryBlue.withValues(alpha: 0.2),
+                          child: Text(
+                            _avatarInitials(user),
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: _kPrimaryBlue,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    // Sign In button — matches Layout.tsx
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: onAuth,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _kPrimaryBlue.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: _kPrimaryBlue.withValues(alpha: 0.3)),
+                            ),
+                            child: Text(
+                              'SIGN IN',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2,
+                                color: _kPrimaryBlue,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
           ),
@@ -943,32 +1198,32 @@ class _HeaderBar extends StatelessWidget {
     );
   }
 
+  /// Returns the first character of the user's display name or email for the avatar.
+  String _avatarInitials(UserModel? user) {
+    if (user == null) return '?';
+    final name = user.displayName;
+    if (name != null && name.isNotEmpty) return name.substring(0, 1).toUpperCase();
+    final email = user.email;
+    if (email != null && email.isNotEmpty) return email.substring(0, 1).toUpperCase();
+    return '?';
+  }
 }
 
+/// Logo mark used in footer — matches Layout.tsx style.
 class _LogoMark extends StatelessWidget {
+  const _LogoMark();
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Container(
-      width: 32,
-      height: 32,
+      width: 36,
+      height: 36,
       decoration: BoxDecoration(
-        color: cs.brightness == Brightness.dark ? Colors.white : const Color(0xFF171717),
-        borderRadius: BorderRadius.circular(8),
+        color: _kPrimaryBlue.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _kPrimaryBlue.withValues(alpha: 0.3)),
       ),
-      child: Center(
-        child: Transform.rotate(
-          angle: 0.785398,
-          child: Container(
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              color: cs.brightness == Brightness.dark ? const Color(0xFF171717) : Colors.white,
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-        ),
-      ),
+      child: const Icon(LucideIcons.home, size: 20, color: _kPrimaryBlue),
     );
   }
 }

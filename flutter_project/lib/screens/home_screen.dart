@@ -5,55 +5,20 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-import '../models/order_models.dart';
-import '../models/service_model.dart';
+import '../models/user_model.dart';
 import '../routing/app_navigator.dart';
 import '../services/neighborly_api_service.dart';
 
-void _navigateToNewOrderHomeCategory(String categorySlug) {
-  neighborlyNavigatorKey.currentState?.pushNamed(
-    '/orders/new?entryPoint=direct&homeCategory=${Uri.encodeComponent(categorySlug)}',
-  );
-}
+/// Color constants matching port 8077 reference UI.
+const _kPrimaryBlue = Color(0xFF2B6EFF);
+const _kBgDark = Color(0xFF0D0F1A);
+const _kCardBg = Color(0xFF1E2235);
+const _kBorderColor = Color(0xFF2A2F4A);
+const _kTextPrimary = Color(0xFFF0F2FF);
+const _kTextSecondary = Color(0xFF8B8FA3);
 
-/// Marketing slug for `homeCategory` (root name from search breadcrumb when present).
-String? _homeCategorySlugFromSearchHit(CategorySearchHit hit) {
-  if (hit.breadcrumb.isNotEmpty) {
-    return _HomeScreenState._slugifyCategory(hit.breadcrumb.first);
-  }
-  if (hit.name.trim().isNotEmpty) return _HomeScreenState._slugifyCategory(hit.name);
-  return null;
-}
-
-/// Home search submit: resolve category via public search, then open wizard (ADR-0054).
-Future<void> _navigateToOrderFromSearch(BuildContext context, String query) async {
-  final q = query.trim();
-  if (q.isEmpty) {
-    neighborlyNavigatorKey.currentState?.pushNamed('/orders/new?entryPoint=direct');
-    return;
-  }
-  try {
-    final api = context.read<NeighborlyApiService>();
-    final list = await api.searchCategories(q.length > 120 ? q.substring(0, 120) : q, limit: 12);
-    if (!context.mounted) return;
-    if (list.isEmpty) {
-      neighborlyNavigatorKey.currentState?.pushNamed('/orders/new?entryPoint=direct');
-      return;
-    }
-    final slug = _homeCategorySlugFromSearchHit(list.first);
-    if (slug == null || slug.isEmpty || slug == 'services') {
-      neighborlyNavigatorKey.currentState?.pushNamed('/orders/new?entryPoint=direct');
-      return;
-    }
-    _navigateToNewOrderHomeCategory(slug);
-  } catch (_) {
-    if (!context.mounted) return;
-    neighborlyNavigatorKey.currentState?.pushNamed('/orders/new?entryPoint=direct');
-  }
-}
-
-/// Customer home: hero banner, category shortcuts, popular services, top providers.
-/// Explorer feed lives on [ExplorerScreen] at `/home`.
+/// Customer dashboard matching [src/pages/CustomerDashboard.tsx] on port 8077.
+/// Tab-based layout: Overview (Home), My Requests, Spending, Support.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -61,755 +26,1821 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeCategory {
-  const _HomeCategory({required this.icon, required this.name, required this.slug});
-
-  final IconData icon;
-  final String name;
-  final String slug;
-}
-
-const _kCategories = <_HomeCategory>[
-  _HomeCategory(icon: LucideIcons.droplets, name: 'Plumbing', slug: 'plumbing'),
-  _HomeCategory(icon: LucideIcons.zap, name: 'Electrical', slug: 'electrical'),
-  _HomeCategory(icon: LucideIcons.sparkles, name: 'Cleaning', slug: 'cleaning'),
-  _HomeCategory(icon: LucideIcons.thermometer, name: 'HVAC', slug: 'hvac'),
-  _HomeCategory(icon: LucideIcons.flower2, name: 'Landscaping', slug: 'landscaping'),
-  _HomeCategory(icon: LucideIcons.hammer, name: 'Handyman', slug: 'handyman'),
-  _HomeCategory(icon: LucideIcons.paintbrush, name: 'Painting', slug: 'painting'),
-  _HomeCategory(icon: LucideIcons.truck, name: 'Moving', slug: 'moving'),
-];
-
-class _BannerSlide {
-  const _BannerSlide({
-    required this.title,
-    required this.subtitle,
-    required this.ctaLabel,
-    required this.gradient,
-    required this.onCta,
-  });
-
-  final String title;
-  final String subtitle;
-  final String ctaLabel;
-  final List<Color> gradient;
-  final VoidCallback onCta;
-}
-
 class _HomeScreenState extends State<HomeScreen> {
-  List<ServiceModel> _services = [];
+  String _activeTab = 'home';
+  List<Map<String, dynamic>> _requests = [];
+  List<Map<String, dynamic>> _transactions = [];
+  List<Map<String, dynamic>> _tickets = [];
+  Map<String, dynamic>? _kycData;
   bool _loading = true;
-  late final PageController _bannerController;
-  int _bannerIndex = 0;
+  bool _showBecomeProvider = false;
 
-  final TextEditingController _homeSearchController = TextEditingController();
-  Timer? _homeSearchDebounce;
-  List<CategorySearchHit> _homeSearchHits = const [];
-  bool _homeSearchLoading = false;
+  // Request filters
+  String _filterCategory = 'All';
+  String _filterStatus = 'All';
+  String _filterSearch = '';
+
+  // Notification toast
+  Map<String, dynamic>? _notification;
+  Timer? _notificationTimer;
+
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
-    _bannerController = PageController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _loadServices();
+      if (mounted) _loadDashboard();
     });
   }
 
   @override
   void dispose() {
-    _homeSearchDebounce?.cancel();
-    _homeSearchController.dispose();
-    _bannerController.dispose();
+    _pollTimer?.cancel();
+    _notificationTimer?.cancel();
     super.dispose();
   }
 
-  void _onHomeSearchChanged(String text) {
-    _homeSearchDebounce?.cancel();
-    final t = text.trim();
-    if (t.length < 2) {
-      setState(() {
-        _homeSearchHits = const [];
-        _homeSearchLoading = false;
-      });
-      return;
-    }
-    _homeSearchDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      Future<void> run() async {
-        setState(() => _homeSearchLoading = true);
-        try {
-          final api = context.read<NeighborlyApiService>();
-          final list = await api.searchCategories(t.length > 120 ? t.substring(0, 120) : t, limit: 12);
-          if (!mounted) return;
-          setState(() {
-            _homeSearchHits = list.take(6).toList();
-            _homeSearchLoading = false;
-          });
-        } catch (_) {
-          if (!mounted) return;
-          setState(() {
-            _homeSearchHits = const [];
-            _homeSearchLoading = false;
-          });
-        }
+  void _showNotification(String message, {bool isError = false}) {
+    _notificationTimer?.cancel();
+    setState(() {
+      _notification = {'message': message, 'isError': isError};
+    });
+    _notificationTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _notification = null);
       }
-
-      unawaited(run());
     });
   }
 
-  Future<void> _loadServices() async {
-    if (!mounted) return;
-    setState(() => _loading = true);
+  Future<void> _loadDashboard() async {
+    final api = context.read<NeighborlyApiService>();
+    if (api.user?.uid == null) {
+      setState(() => _loading = false);
+      return;
+    }
+
     try {
-      final list = await context.read<NeighborlyApiService>().fetchServices();
+      final results = await Future.wait([
+        api.fetchJsonList('/api/requests'),
+        api.fetchJsonList('/api/transactions'),
+        api.fetchJsonList('/api/tickets'),
+        api.fetchKycMe(),
+      ]);
+
+      if (!mounted) return;
+
+      setState(() {
+        _requests = results[0] as List<Map<String, dynamic>>;
+        _transactions = results[1] as List<Map<String, dynamic>>;
+        _tickets = results[2] as List<Map<String, dynamic>>;
+        _kycData = results[3] as Map<String, dynamic>?;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+
+    // Poll every 6 seconds like the reference
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted) return;
+      _pollDashboard();
+    });
+  }
+
+  Future<void> _pollDashboard() async {
+    final api = context.read<NeighborlyApiService>();
+    if (api.user?.uid == null) return;
+
+    try {
+      final results = await Future.wait([
+        api.fetchJsonList('/api/requests'),
+        api.fetchJsonList('/api/transactions'),
+        api.fetchJsonList('/api/tickets'),
+      ]);
+
+      if (!mounted) return;
+
+      setState(() {
+        _requests = results[0];
+        _transactions = results[1];
+        _tickets = results[2];
+      });
+    } catch (_) {
+      // silent
+    }
+  }
+
+  double get _totalSpent {
+    return _transactions
+        .where((t) => t['type'] == 'outcome')
+        .fold<double>(0, (sum, t) => sum + ((t['amount'] ?? 0) as num).toDouble());
+  }
+
+  Future<void> _handleBecomeProvider() async {
+    final api = context.read<NeighborlyApiService>();
+    final user = api.user;
+    if (user?.uid == null) return;
+
+    final personalKyc = (_kycData != null && _kycData!['type'] == 'personal') ? _kycData : null;
+
+    if (personalKyc == null || personalKyc['status'] != 'verified') {
+      _showNotification(
+        'You must complete Personal Identity Verification (KYC Level 1) before becoming a provider.',
+        isError: true,
+      );
+      Future.delayed(const Duration(seconds: 2), () {
+        neighborlyNavigatorKey.currentState?.pushNamed('/account?section=identity');
+      });
+      return;
+    }
+
+    try {
+      await api.becomeProvider();
+      _showNotification('Application successful! You are now a Provider.');
+      setState(() => _showBecomeProvider = false);
+      Future.delayed(const Duration(seconds: 1), () {
+        neighborlyNavigatorKey.currentState?.pushNamed('/account?section=identity');
+      });
+    } catch (e) {
+      _showNotification('Failed to become provider: $e', isError: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final api = context.watch<NeighborlyApiService>();
+    final user = api.user;
+
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: _kPrimaryBlue),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: _kBgDark,
+      body: Stack(
+        children: [
+          // Main content
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Tab bar — sticky below header
+                _buildTabBar(),
+                const SizedBox(height: 24),
+                // Tab content
+                _buildTabContent(user),
+              ],
+            ),
+          ),
+
+          // Become Provider Modal
+          if (_showBecomeProvider) _buildBecomeProviderModal(),
+
+          // Notification Toast
+          if (_notification != null) _buildNotificationToast(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabBar() {
+    final tabs = [
+      ('home', 'Overview', LucideIcons.layoutDashboard),
+      ('requests', 'My Requests', LucideIcons.clipboardList),
+      ('finance', 'Spending', LucideIcons.dollarSign),
+      ('tickets', 'Support', LucideIcons.messageSquare),
+    ];
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: _kCardBg,
+        border: Border(bottom: BorderSide(color: _kBorderColor)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: tabs.map((tab) {
+            final isActive = _activeTab == tab.$1;
+            return GestureDetector(
+              onTap: () => setState(() => _activeTab = tab.$1),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isActive ? _kTextPrimary : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      tab.$3,
+                      size: 16,
+                      color: isActive ? _kTextPrimary : _kTextSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      tab.$2,
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                        color: isActive ? _kTextPrimary : _kTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabContent(UserModel? user) {
+    switch (_activeTab) {
+      case 'requests':
+        return _buildRequestsTab();
+      case 'finance':
+        return _buildFinanceTab();
+      case 'tickets':
+        return _buildSupportTab();
+      default:
+        return _buildHomeTab(user);
+    }
+  }
+
+  // ── HOME TAB ──────────────────────────────────────────────────────────────
+
+  Widget _buildHomeTab(UserModel? user) {
+    final firstName = user?.firstName ?? user?.displayName.split(' ').firstOrNull ?? 'there';
+    final initials = [
+      user?.firstName?.isNotEmpty == true ? user!.firstName![0] : '',
+      user?.lastName?.isNotEmpty == true ? user!.lastName![0] : '',
+    ].join('').toUpperCase();
+    final displayInitials = initials.isNotEmpty
+        ? initials
+        : (user?.displayName.isNotEmpty == true
+            ? user!.displayName[0].toUpperCase()
+            : '?');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Greeting header
+        _buildGreetingHeader(user, firstName, displayInitials),
+
+        const SizedBox(height: 24),
+
+        // Quick Action cards
+        _buildQuickActions(),
+
+        const SizedBox(height: 24),
+
+        // Active Orders strip
+        _buildActiveOrdersSection(),
+      ],
+    );
+  }
+
+  Widget _buildGreetingHeader(UserModel? user, String firstName, String initials) {
+    return Row(
+      children: [
+        // Avatar
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: _kPrimaryBlue.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: user?.photoURL != null && user!.photoURL!.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: Image.network(user.photoURL!, fit: BoxFit.cover),
+                )
+              : Center(
+                  child: Text(
+                    initials,
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: _kPrimaryBlue,
+                    ),
+                  ),
+                ),
+        ),
+        const SizedBox(width: 16),
+
+        // Greeting text
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Welcome back',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+                color: const Color(0xFF4A4F70),
+              ),
+            ),
+            Text(
+              'Hello, $firstName',
+              style: GoogleFonts.inter(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: _kTextPrimary,
+              ),
+            ),
+          ],
+        ),
+
+        const Spacer(),
+
+        // Become a Provider button
+        GestureDetector(
+          onTap: () => setState(() => _showBecomeProvider = true),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: _kBorderColor),
+              borderRadius: BorderRadius.circular(12),
+              color: _kCardBg,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(LucideIcons.briefcase, size: 16, color: _kTextSecondary),
+                const SizedBox(width: 8),
+                Text(
+                  'Become a Provider',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                    color: _kTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Quick Actions',
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+            color: const Color(0xFF4A4F70),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 100,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              _QuickActionCard(
+                label: 'Book a Service',
+                icon: LucideIcons.plus,
+                onTap: () => neighborlyNavigatorKey.currentState?.pushNamed('/orders/new'),
+              ),
+              const SizedBox(width: 12),
+              _QuickActionCard(
+                label: 'My Active Orders',
+                icon: LucideIcons.clipboardList,
+                onTap: () => neighborlyNavigatorKey.currentState?.pushNamed('/orders?tab=active'),
+              ),
+              const SizedBox(width: 12),
+              _QuickActionCard(
+                label: 'Messages',
+                icon: LucideIcons.messageSquare,
+                badge: 0,
+                onTap: () => neighborlyNavigatorKey.currentState?.pushNamed('/orders'),
+              ),
+              const SizedBox(width: 12),
+              _QuickActionCard(
+                label: 'Schedule',
+                icon: LucideIcons.calendarClock,
+                onTap: () => neighborlyNavigatorKey.currentState?.pushNamed('/dashboard?tab=schedule'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActiveOrdersSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Active Orders',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+                color: const Color(0xFF4A4F70),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _ActiveOrdersList(),
+      ],
+    );
+  }
+
+  // ── REQUESTS TAB ──────────────────────────────────────────────────────────
+
+  Widget _buildRequestsTab() {
+    final filteredRequests = _requests.where((r) {
+      final matchesCategory = _filterCategory == 'All' || r['category'] == _filterCategory;
+      final matchesStatus = _filterStatus == 'All' || r['status'] == _filterStatus;
+      final matchesSearch = _filterSearch.isEmpty ||
+          (r['id']?.toString().toLowerCase().contains(_filterSearch.toLowerCase()) ?? false) ||
+          (r['providerName']?.toString().toLowerCase().contains(_filterSearch.toLowerCase()) ?? false);
+      return matchesCategory && matchesStatus && matchesSearch;
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'My Requests',
+              style: GoogleFonts.inter(
+                fontSize: 40,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -1.5,
+                fontStyle: FontStyle.italic,
+                color: _kTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Track your active jobs and service history.',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF737373),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 24),
+
+        // Filters
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: _kCardBg,
+            borderRadius: BorderRadius.circular(40),
+            border: Border.all(color: _kBorderColor),
+          ),
+          child: Column(
+            children: [
+              // Category filter
+              _buildFilterDropdown(
+                label: 'Category',
+                value: _filterCategory,
+                items: const ['All', 'Cleaning', 'Plumbing', 'Gardening', 'Repairs'],
+                onChanged: (v) => setState(() => _filterCategory = v!),
+              ),
+              const SizedBox(height: 16),
+              // Status filter
+              _buildFilterDropdown(
+                label: 'Status',
+                value: _filterStatus,
+                items: const ['All', 'pending', 'accepted', 'started', 'completed'],
+                onChanged: (v) => setState(() => _filterStatus = v!),
+              ),
+              const SizedBox(height: 16),
+              // Search
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Search Provider / ID',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      color: const Color(0xFFA3A3A3),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    onChanged: (v) => setState(() => _filterSearch = v),
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: _kTextPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search...',
+                      hintStyle: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _kTextSecondary,
+                      ),
+                      filled: true,
+                      fillColor: _kBgDark,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: _kBorderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: _kBorderColor),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // Request cards
+        if (filteredRequests.isEmpty)
+          _buildEmptyState(
+            icon: LucideIcons.alertCircle,
+            title: 'No matching requests',
+            subtitle: 'Try adjusting your filters or find a new service.',
+            buttonLabel: 'Explore Services',
+            onButtonTap: () => neighborlyNavigatorKey.currentState?.pushNamed('/services'),
+          )
+        else
+          ...filteredRequests.map((req) => _buildRequestCard(req)),
+      ],
+    );
+  }
+
+  Widget _buildFilterDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+            color: const Color(0xFFA3A3A3),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: _kBgDark,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _kBorderColor),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              dropdownColor: _kCardBg,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _kTextPrimary,
+              ),
+              items: items.map((item) {
+                return DropdownMenuItem(
+                  value: item,
+                  child: Text(item == 'All' ? 'All ${label}s' : item),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRequestCard(Map<String, dynamic> req) {
+    final status = req['status']?.toString() ?? 'pending';
+    final statusColor = switch (status) {
+      'pending' => const Color(0xFFF59E0B),
+      'accepted' => _kPrimaryBlue,
+      'started' => const Color(0xFF6366F1),
+      _ => const Color(0xFF10B981),
+    };
+    final statusBgColor = switch (status) {
+      'pending' => const Color(0x33F59E0B),
+      'accepted' => const Color(0x332B6EFF),
+      'started' => const Color(0x336366F1),
+      _ => const Color(0x3310B981),
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: _kBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              // Status letter badge
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: statusBgColor,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Text(
+                    status[0].toUpperCase(),
+                    style: GoogleFonts.inter(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      fontStyle: FontStyle.italic,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Job #${(req['id']?.toString() ?? '').substring(0, (req['id']?.toString().length ?? 8).clamp(0, 8)).toUpperCase()}',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                            color: _kTextPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: statusBgColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            status,
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Provider: ${req['providerName']?.toString() ?? 'Neighbor'}',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: _kTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Requested ${_formatDate(req['createdAt']?.toString())}',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
+                        color: const Color(0xFFA3A3A3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton(
+                onPressed: () => neighborlyNavigatorKey.currentState?.pushNamed(
+                  '/service/${req['serviceId']}',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kTextPrimary,
+                  side: const BorderSide(color: Color(0xFFE5E5E5)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: Text(
+                  'View Service',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFF1A1A1A),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  elevation: 4,
+                  shadowColor: const Color(0x1A1A1A1A),
+                ),
+                child: Text(
+                  'Track Status',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── FINANCE TAB ───────────────────────────────────────────────────────────
+
+  Widget _buildFinanceTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Spending',
+              style: GoogleFonts.inter(
+                fontSize: 40,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -1.5,
+                fontStyle: FontStyle.italic,
+                color: _kTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Manage your payments and transaction history.',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF737373),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 24),
+
+        // Stats cards
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                label: 'Total Spent',
+                value: '\$${_totalSpent.toStringAsFixed(0)}',
+                isHighlight: true,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildStatCard(
+                label: 'Active Subscriptions',
+                value: '0',
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildStatCard(
+                label: 'Reward Points',
+                value: '450',
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 24),
+
+        // Transaction history
+        Container(
+          decoration: BoxDecoration(
+            color: _kCardBg,
+            borderRadius: BorderRadius.circular(48),
+            border: Border.all(color: _kBorderColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header row
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Row(
+                  children: [
+                    Text(
+                      'Transaction History',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic,
+                        letterSpacing: -0.5,
+                        color: _kTextPrimary,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Download PDF',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                        color: _kTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Table
+              if (_transactions.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(80),
+                  child: Center(
+                    child: Text(
+                      'No transactions found.',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
+                        color: _kTextSecondary,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                ..._transactions.map((t) => _buildTransactionRow(t)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard({
+    required String label,
+    required String value,
+    bool isHighlight = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: isHighlight ? const Color(0xFF1A1A1A) : _kCardBg,
+        borderRadius: BorderRadius.circular(48),
+        border: isHighlight ? null : Border.all(color: _kBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
+              color: isHighlight ? Colors.white.withValues(alpha: 0.4) : _kTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 36,
+              fontWeight: FontWeight.w900,
+              color: isHighlight ? Colors.white : _kTextPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionRow(Map<String, dynamic> t) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: _kBorderColor)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              _formatDate(t['timestamp']?.toString()),
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: _kTextPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              t['description']?.toString() ?? '',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _kTextPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0x3310B981),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'Completed',
+                style: GoogleFonts.inter(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                  color: const Color(0xFF10B981),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '\$${(t['amount'] ?? 0).toString()}',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: _kTextPrimary,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── SUPPORT TAB ───────────────────────────────────────────────────────────
+
+  Widget _buildSupportTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Support',
+                    style: GoogleFonts.inter(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1.5,
+                      fontStyle: FontStyle.italic,
+                      color: _kTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Manage your tickets and disputes.',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF737373),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            ElevatedButton(
+              onPressed: () => neighborlyNavigatorKey.currentState?.pushNamed('/tickets'),
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: const Color(0xFF1A1A1A),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: Text(
+                'New Ticket',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 24),
+
+        // Ticket list
+        if (_tickets.isEmpty)
+          _buildEmptyState(
+            icon: LucideIcons.messageSquare,
+            title: 'No active tickets.',
+            subtitle: null,
+            buttonLabel: null,
+          )
+        else
+          ..._tickets.map((ticket) => _buildTicketCard(ticket)),
+      ],
+    );
+  }
+
+  Widget _buildTicketCard(Map<String, dynamic> ticket) {
+    final status = ticket['status']?.toString() ?? 'open';
+    final isOpen = status == 'open';
+    final statusColor = isOpen ? _kPrimaryBlue : _kTextSecondary;
+    final statusBgColor = isOpen ? const Color(0x332B6EFF) : const Color(0x33A3A3A3);
+
+    return GestureDetector(
+      onTap: () => neighborlyNavigatorKey.currentState?.pushNamed(
+        '/tickets?id=${ticket['id']}',
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: _kCardBg,
+          borderRadius: BorderRadius.circular(40),
+          border: Border.all(color: _kBorderColor),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: statusBgColor,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                LucideIcons.messageSquare,
+                size: 24,
+                color: statusColor,
+              ),
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ticket['subject']?.toString() ?? '',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                      color: _kTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Last message ${_formatDate(ticket['createdAt']?.toString())}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _kTextSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusBgColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                status,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                  color: statusColor,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Icon(
+              LucideIcons.chevronRight,
+              size: 20,
+              color: _kTextSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── BECOME PROVIDER MODAL ─────────────────────────────────────────────────
+
+  Widget _buildBecomeProviderModal() {
+    return Positioned.fill(
+      child: Material(
+        color: Colors.transparent,
+        child: Stack(
+          children: [
+            // Backdrop
+            GestureDetector(
+              onTap: () => setState(() => _showBecomeProvider = false),
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.6),
+              ),
+            ),
+            // Modal content
+            Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 500),
+                margin: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(48),
+                decoration: BoxDecoration(
+                  color: _kCardBg,
+                  borderRadius: BorderRadius.circular(48),
+                  border: Border.all(color: _kBorderColor),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 40,
+                      offset: Offset(0, 20),
+                    ),
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Icon
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(32),
+                        ),
+                        child: const Icon(
+                          LucideIcons.briefcase,
+                          size: 40,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Title
+                      Text(
+                        'Start Earning',
+                        style: GoogleFonts.inter(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w900,
+                          fontStyle: FontStyle.italic,
+                          letterSpacing: -0.5,
+                          color: _kTextPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Transform your skills into a business. Join our network of professional neighbors.',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: _kTextSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      // Benefits
+                      _buildBenefitRow(
+                        icon: LucideIcons.checkCircle2,
+                        iconColor: const Color(0xFF10B981),
+                        title: 'Set Your Own Rates',
+                        subtitle: 'You control how much you earn per hour or project.',
+                      ),
+                      const SizedBox(height: 16),
+                      _buildBenefitRow(
+                        icon: LucideIcons.checkCircle2,
+                        iconColor: const Color(0xFF10B981),
+                        title: 'Flexible Schedule',
+                        subtitle: 'Work whenever you want, as much as you want.',
+                      ),
+                      const SizedBox(height: 32),
+                      // Buttons
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _handleBecomeProvider,
+                          style: ElevatedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: const Color(0xFF1A1A1A),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: Text(
+                            'Apply Now',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed: () => setState(() => _showBecomeProvider = false),
+                          style: TextButton.styleFrom(
+                            foregroundColor: _kTextSecondary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: Text(
+                            'Maybe Later',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBenefitRow({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7F7),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 24, color: iconColor),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A1A1A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: _kTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── NOTIFICATION TOAST ────────────────────────────────────────────────────
+
+  Widget _buildNotificationToast() {
+    final isError = _notification!['isError'] == true;
+    return Positioned(
+      bottom: 32,
+      right: 32,
+      child: Material(
+        elevation: 24,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: BoxDecoration(
+            color: isError ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isError ? const Color(0xFFF87171) : const Color(0xFF34D399),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isError ? LucideIcons.alertCircle : LucideIcons.checkCircle2,
+                size: 20,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                _notification!['message'] as String,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── HELPERS ───────────────────────────────────────────────────────────────
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    String? title,
+    String? subtitle,
+    String? buttonLabel,
+    VoidCallback? onButtonTap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(80),
+      decoration: BoxDecoration(
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(48),
+        border: Border.all(color: _kBorderColor),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(40),
+            ),
+            child: Icon(icon, size: 40, color: _kTextSecondary),
+          ),
+          const SizedBox(height: 24),
+          if (title != null) ...[
+            Text(
+              title,
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: _kTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (subtitle != null) ...[
+            Text(
+              subtitle,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: _kTextSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (buttonLabel != null && onButtonTap != null) ...[
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: onButtonTap,
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: const Color(0xFF1A1A1A),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              ),
+              child: Text(
+                buttonLabel,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(String? raw) {
+    if (raw == null || raw.isEmpty) return 'N/A';
+    final dt = DateTime.tryParse(raw);
+    if (dt == null) return raw;
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  }
+}
+
+// ── QUICK ACTION CARD ──────────────────────────────────────────────────────
+
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({
+    required this.label,
+    required this.icon,
+    this.badge,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final int? badge;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 100,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: _kCardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kBorderColor),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _kPrimaryBlue.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, size: 20, color: _kPrimaryBlue),
+                ),
+                if (badge != null && badge! > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF4D4D),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          badge! > 99 ? '99+' : '$badge',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+                color: _kTextSecondary,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── ACTIVE ORDERS LIST ─────────────────────────────────────────────────────
+
+class _ActiveOrdersList extends StatefulWidget {
+  @override
+  State<_ActiveOrdersList> createState() => _ActiveOrdersListState();
+}
+
+class _ActiveOrdersListState extends State<_ActiveOrdersList> {
+  List<Map<String, dynamic>> _items = [];
+  bool _loading = true;
+
+  static const _activeStatuses = [
+    'submitted', 'matching', 'matched', 'contracted', 'paid', 'in_progress',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final api = context.read<NeighborlyApiService>();
+    try {
+      final resp = await api.fetchMyOrders(
+        pageSize: 3,
+        statuses: _activeStatuses,
+      );
       if (!mounted) return;
       setState(() {
-        _services = list;
+        _items = resp.items
+            .map((o) => {
+                  'id': o.id,
+                  'name': o.serviceName,
+                  'status': o.status,
+                })
+            .toList();
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _services = [];
+        _items = [];
         _loading = false;
       });
     }
   }
 
-  static String _slugifyCategory(String raw) {
-    final t = raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-');
-    final s = t.replaceAll(RegExp(r'[^a-z0-9-]'), '');
-    return s.isEmpty ? 'services' : s;
-  }
-
-  void _goOrderFromService(ServiceModel s) {
-    final q = <String, String>{'entryPoint': 'direct'};
-    final sc = s.serviceCatalogId ?? '';
-    if (sc.isNotEmpty) q['serviceCatalogId'] = sc;
-    q['homeCategory'] = _slugifyCategory(s.category);
-    if (s.providerId.isNotEmpty) q['prefillProviderId'] = s.providerId;
-    neighborlyNavigatorKey.currentState?.pushNamed('/orders/new?${Uri(queryParameters: q).query}');
-  }
-
-  Widget _homeHeaderRow(ColorScheme cs) {
-    return Consumer<NeighborlyApiService>(
-      builder: (context, api, _) {
-        final u = api.user;
-        final avatar = u?.photoURL;
-        final initials = () {
-          final n = (u?.displayName ?? '').trim();
-          if (n.isEmpty) return '';
-          final parts = n.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
-          if (parts.length >= 2) {
-            return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-          }
-          return n.length >= 2 ? n.substring(0, 2).toUpperCase() : n[0].toUpperCase();
-        }();
-        return Row(
-          children: [
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => neighborlyNavigatorKey.currentState?.pushNamed(u != null ? '/profile' : '/auth'),
-                borderRadius: BorderRadius.circular(22),
-                child: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: CircleAvatar(
-                    radius: 22,
-                    backgroundColor: cs.surfaceContainerHighest,
-                    backgroundImage: (avatar != null && avatar.isNotEmpty) ? NetworkImage(avatar) : null,
-                    child: (avatar != null && avatar.isNotEmpty)
-                        ? null
-                        : u != null
-                            ? Text(
-                                initials.isNotEmpty ? initials : '?',
-                                style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 14, color: cs.onSurface),
-                              )
-                            : Icon(
-                                Icons.person_outline,
-                                size: 26,
-                                color: cs.onSurface.withValues(alpha: 0.5),
-                              ),
-                  ),
-                ),
-              ),
-            ),
-            const Spacer(),
-            Tooltip(
-              message: 'New offer',
-              child: Material(
-                color: cs.surface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
-                  side: BorderSide(color: cs.outline.withValues(alpha: 0.28)),
-                ),
-                child: InkWell(
-                  onTap: neighborlyPushNewOfferWizard,
-                  borderRadius: BorderRadius.circular(22),
-                  child: const SizedBox(
-                    width: 44,
-                    height: 44,
-                    child: Icon(LucideIcons.plus, size: 28),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  List<_ProviderHighlight> _topProviders() {
-    final byPid = <String, List<ServiceModel>>{};
-    for (final s in _services) {
-      if (s.providerId.isEmpty) continue;
-      byPid.putIfAbsent(s.providerId, () => []).add(s);
-    }
-    final out = <_ProviderHighlight>[];
-    for (final e in byPid.entries) {
-      final list = e.value;
-      if (list.isEmpty) continue;
-      final best = list.reduce((a, b) => a.rating >= b.rating ? a : b);
-      final p = best.provider;
-      final name = p?.displayName ?? 'Provider';
-      final avatar = p?.avatarUrl;
-      out.add(_ProviderHighlight(
-        providerId: e.key,
-        displayName: name,
-        avatarUrl: avatar,
-        serviceCount: list.length,
-        topRating: best.rating,
-        sampleServiceId: best.id,
-      ));
-    }
-    out.sort((a, b) => b.score.compareTo(a.score));
-    return out.take(12).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final topProviders = _topProviders();
-    ServiceModel? featuredForBanner;
-    if (topProviders.isNotEmpty && _services.isNotEmpty) {
-      try {
-        featuredForBanner = _services.firstWhere((x) => x.providerId == topProviders.first.providerId);
-      } catch (_) {
-        featuredForBanner = null;
-      }
-    }
-
-    void bannerOrderWithFeaturedOrDefault() {
-      final feat = featuredForBanner;
-      if (feat != null) {
-        _goOrderFromService(feat);
-        return;
-      }
-      neighborlyNavigatorKey.currentState?.pushNamed(
-        '/orders/new?entryPoint=direct&homeCategory=${Uri.encodeComponent('handyman')}',
+    if (_loading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: _kPrimaryBlue,
+            ),
+          ),
+        ),
       );
     }
 
-    final slides = <_BannerSlide>[
-      _BannerSlide(
-        title: 'Trusted help nearby',
-        subtitle: 'Book vetted local pros for repairs, cleaning, and more.',
-        ctaLabel: 'Start a booking',
-        gradient: isDark
-            ? [const Color(0xFF1E3A5F), const Color(0xFF0D2137)]
-            : [const Color(0xFF2563EB), const Color(0xFF1D4ED8)],
-        onCta: bannerOrderWithFeaturedOrDefault,
-      ),
-      _BannerSlide(
-        title: 'Featured provider context',
-        subtitle: 'Open create order with category + provider hints from our top listing when available.',
-        ctaLabel: 'Start with banner context',
-        gradient: isDark
-            ? [const Color(0xFF3D2A5C), const Color(0xFF1A1028)]
-            : [const Color(0xFF7C3AED), const Color(0xFF5B21B6)],
-        onCta: bannerOrderWithFeaturedOrDefault,
-      ),
-      _BannerSlide(
-        title: 'Not sure where to start?',
-        subtitle: 'Ask the assistant for service ideas and booking tips.',
-        ctaLabel: 'Open AI',
-        gradient: isDark
-            ? [const Color(0xFF134E4A), const Color(0xFF042F2E)]
-            : [const Color(0xFF0D9488), const Color(0xFF0F766E)],
-        onCta: () => neighborlyNavigatorKey.currentState?.pushNamed('/ai'),
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cs = Theme.of(context).colorScheme;
-        final maxW = constraints.maxWidth > 720 ? 640.0 : constraints.maxWidth;
-        return RefreshIndicator(
-          onRefresh: _loadServices,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxW),
-                      child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _homeHeaderRow(cs),
-                          const SizedBox(height: 12),
-                          _searchRow(context, cs),
-                          const SizedBox(height: 16),
-                          _bannerCarousel(context, cs, slides),
-                          const SizedBox(height: 20),
-                          Text(
-                            'Browse by category',
-                            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: cs.onSurface),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            height: 96,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: _kCategories.length,
-                              separatorBuilder: (_, __) => const SizedBox(width: 12),
-                              itemBuilder: (_, i) {
-                                final c = _kCategories[i];
-                                return _CategoryChip(
-                                  key: ValueKey<String>(c.slug),
-                                  icon: c.icon,
-                                  label: c.name,
-                                  categorySlug: c.slug,
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'Popular services',
-                            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: cs.onSurface),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            height: 168,
-                            child: _loading
-                                ? const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
-                                : _services.isEmpty
-                                    ? Text(
-                                        'No public listings yet. Check back soon.',
-                                        style: GoogleFonts.inter(color: cs.secondary, fontWeight: FontWeight.w600),
-                                      )
-                                    : ListView.separated(
-                                        scrollDirection: Axis.horizontal,
-                                        itemCount: _services.length.clamp(0, 20),
-                                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                                        itemBuilder: (_, i) {
-                                          final s = _services[i];
-                                          return _ServiceThumbCard(service: s, onTap: () => _goOrderFromService(s));
-                                        },
-                                      ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'Top providers',
-                            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: cs.onSurface),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            height: 132,
-                            child: _loading
-                                ? const SizedBox.shrink()
-                                : topProviders.isEmpty
-                                    ? Text(
-                                        'Provider highlights will appear when services are listed.',
-                                        style: GoogleFonts.inter(color: cs.secondary, fontWeight: FontWeight.w600),
-                                      )
-                                    : ListView.separated(
-                                        scrollDirection: Axis.horizontal,
-                                        itemCount: topProviders.length,
-                                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                                        itemBuilder: (_, i) {
-                                          final p = topProviders[i];
-                                          return _ProviderCard(
-                                            highlight: p,
-                                            onTap: () {
-                                              try {
-                                                final s = _services.firstWhere((x) => x.id == p.sampleServiceId);
-                                                _goOrderFromService(s);
-                                              } catch (_) {}
-                                            },
-                                          );
-                                        },
-                                      ),
-                          ),
-                          const SizedBox(height: 88),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _searchRow(BuildContext context, ColorScheme cs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outline.withValues(alpha: 0.25)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDarkMode(context) ? 0.2 : 0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Icon(LucideIcons.search, color: cs.primary, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _homeSearchController,
-                  textInputAction: TextInputAction.search,
-                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    hintText: 'Try "deck repair" or "deep clean"',
-                    hintStyle: GoogleFonts.inter(fontSize: 14, color: cs.secondary, fontWeight: FontWeight.w500),
-                  ),
-                  onChanged: _onHomeSearchChanged,
-                  onSubmitted: (value) {
-                    _homeSearchDebounce?.cancel();
-                    unawaited(_navigateToOrderFromSearch(context, value));
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (_homeSearchLoading)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
-              ),
-            ),
-          )
-        else if (_homeSearchHits.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _homeSearchHits
-                  .map(
-                    (h) => FilterChip(
-                      label: Text(h.name, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
-                      onSelected: (_) {
-                        final slug = _homeCategorySlugFromSearchHit(h);
-                        if (slug != null && slug.isNotEmpty && slug != 'services') {
-                          _navigateToNewOrderHomeCategory(slug);
-                        } else {
-                          neighborlyNavigatorKey.currentState?.pushNamed('/orders/new?entryPoint=direct');
-                        }
-                      },
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-      ],
-    );
-  }
-
-  bool isDarkMode(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
-
-  Widget _bannerCarousel(BuildContext context, ColorScheme cs, List<_BannerSlide> slides) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ClipRRect(
+    if (_items.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+        decoration: BoxDecoration(
+          color: _kCardBg,
           borderRadius: BorderRadius.circular(16),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: PageView.builder(
-              controller: _bannerController,
-              itemCount: slides.length,
-              onPageChanged: (i) => setState(() => _bannerIndex = i),
-              itemBuilder: (_, i) {
-                final s = slides[i];
-                return DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: s.gradient,
-                    ),
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Positioned(
-                        left: 20,
-                        right: 20,
-                        bottom: 28,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              s.title,
-                              style: GoogleFonts.inter(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                height: 1.15,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              s.subtitle,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: 0.92),
-                                height: 1.35,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: s.gradient.last,
-                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                              ),
-                              onPressed: s.onCta,
-                              child: Text(s.ctaLabel, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 13)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
+          border: Border.all(color: _kBorderColor, style: BorderStyle.solid),
         ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(slides.length, (i) {
-            final active = i == _bannerIndex;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: active ? 18 : 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: active ? cs.primary : cs.outline.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(100),
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProviderHighlight {
-  _ProviderHighlight({
-    required this.providerId,
-    required this.displayName,
-    this.avatarUrl,
-    required this.serviceCount,
-    required this.topRating,
-    required this.sampleServiceId,
-  }) : score = topRating + serviceCount * 0.01;
-
-  final String providerId;
-  final String displayName;
-  final String? avatarUrl;
-  final int serviceCount;
-  final double topRating;
-  final String sampleServiceId;
-  final double score;
-}
-
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.categorySlug,
-  });
-
-  final IconData icon;
-  final String label;
-  /// Slug for `/orders/new?homeCategory=` — stored on the widget so each list cell
-  /// keeps the correct value (avoids stale closures if the list item is recycled).
-  final String categorySlug;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () => _navigateToNewOrderHomeCategory(categorySlug),
-      borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        width: 76,
         child: Column(
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
-                color: cs.primaryContainer.withValues(alpha: 0.55),
                 shape: BoxShape.circle,
+                border: Border.all(color: _kBorderColor),
+                color: _kBgDark,
               ),
-              child: Icon(icon, color: cs.onPrimaryContainer, size: 26),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: cs.onSurface),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ServiceThumbCard extends StatelessWidget {
-  const _ServiceThumbCard({required this.service, required this.onTap});
-
-  final ServiceModel service;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: SizedBox(
-        width: 140,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.network(
-                  'https://picsum.photos/seed/${service.id}/280/200',
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => ColoredBox(
-                    color: cs.surfaceContainerHighest,
-                    child: Icon(LucideIcons.image, color: cs.onSurface.withValues(alpha: 0.35)),
-                  ),
-                ),
+              child: const Icon(
+                LucideIcons.clipboardList,
+                size: 32,
+                color: Color(0xFF4A4F70),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 16),
             Text(
-              service.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, height: 1.2),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProviderCard extends StatelessWidget {
-  const _ProviderCard({required this.highlight, required this.onTap});
-
-  final _ProviderHighlight highlight;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final initial = highlight.displayName.isNotEmpty ? highlight.displayName[0].toUpperCase() : '?';
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: 148,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: cs.outline.withValues(alpha: 0.22)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: cs.surfaceContainerHighest,
-              backgroundImage: (highlight.avatarUrl != null && highlight.avatarUrl!.isNotEmpty)
-                  ? NetworkImage(highlight.avatarUrl!)
-                  : null,
-              child: (highlight.avatarUrl == null || highlight.avatarUrl!.isEmpty)
-                  ? Text(initial, style: GoogleFonts.inter(fontWeight: FontWeight.w800))
-                  : null,
+              'No active orders yet',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: _kTextPrimary,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
-              highlight.displayName,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w800, height: 1.2),
+              'Your in-progress services will appear here.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: _kTextSecondary,
+              ),
             ),
-            const Spacer(),
-            Row(
-              children: [
-                Icon(LucideIcons.star, size: 14, color: Colors.amber.shade700),
-                const SizedBox(width: 4),
-                Text(
-                  highlight.topRating.toStringAsFixed(1),
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => neighborlyNavigatorKey.currentState?.pushNamed('/orders/new'),
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: _kPrimaryBlue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const Spacer(),
-                Text(
-                  '${highlight.serviceCount} svc',
-                  style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: cs.secondary),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                minimumSize: const Size(0, 44),
+              ),
+              child: Text(
+                'Book your first service',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
+              ),
             ),
           ],
         ),
+      );
+    }
+
+    return Column(
+      children: [
+        ..._items.map((o) => _buildOrderRow(o)),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            onTap: () => neighborlyNavigatorKey.currentState?.pushNamed('/orders'),
+            child: Text(
+              'See all →',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+                color: _kPrimaryBlue,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrderRow(Map<String, dynamic> o) {
+    final status = (o['status'] as String?) ?? '';
+    Color statusBg;
+    Color statusFg;
+    switch (status) {
+      case 'matched':
+      case 'contracted':
+        statusBg = const Color(0x3310B981);
+        statusFg = const Color(0xFF6EE7B7);
+        break;
+      case 'matching':
+        statusBg = const Color(0x33F59E0B);
+        statusFg = const Color(0xFFFCD34D);
+        break;
+      case 'paid':
+      case 'in_progress':
+        statusBg = const Color(0x330EA5E9);
+        statusFg = const Color(0xFF7DD3FC);
+        break;
+      default:
+        statusBg = const Color(0x332A2F4A);
+        statusFg = _kTextSecondary;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kBorderColor),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  o['name']?.toString() ?? '',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: _kTextPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                // provider name not available from OrderSummary model
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusBg,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              status.replaceAll('_', ' '),
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+                color: statusFg,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

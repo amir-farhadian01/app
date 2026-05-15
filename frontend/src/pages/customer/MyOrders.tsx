@@ -29,22 +29,22 @@ function tabCount(tab: PhaseTab, facets: PhaseFacetCounts | undefined): number {
 
 const EMPTY: Record<PhaseTab, { icon: React.ReactNode; title: string; body: string }> = {
   offers: {
-    icon: <FileText className="h-12 w-12 text-gray-300" />,
+    icon: <FileText className="h-12 w-12 text-[#4a4f70]" />,
     title: 'No pending offers',
     body: 'Submit a service request and providers will respond here.',
   },
   orders: {
-    icon: <ClipboardList className="h-12 w-12 text-gray-300" />,
+    icon: <ClipboardList className="h-12 w-12 text-[#4a4f70]" />,
     title: 'No active orders',
     body: 'Once matched with a provider your orders will appear here.',
   },
   jobs: {
-    icon: <Briefcase className="h-12 w-12 text-gray-300" />,
+    icon: <Briefcase className="h-12 w-12 text-[#4a4f70]" />,
     title: 'No completed jobs yet',
     body: 'Finished jobs will show up here so you can review them.',
   },
   cancelled: {
-    icon: <XCircle className="h-12 w-12 text-gray-300" />,
+    icon: <XCircle className="h-12 w-12 text-[#4a4f70]" />,
     title: 'No cancelled orders',
     body: 'Orders you cancel will appear in this list.',
   },
@@ -54,11 +54,11 @@ function EmptyState({ tab }: { tab: PhaseTab }) {
   const { icon, title, body } = EMPTY[tab]
   return (
     <div className="flex flex-col items-center gap-4 py-16 text-center">
-      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-50 border border-gray-200">
+      <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[#2a2f4a] bg-[#1a1d2e]">
         {icon}
       </div>
-      <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-      <p className="max-w-xs text-sm text-gray-500">{body}</p>
+      <h3 className="text-lg font-semibold text-[#f0f2ff]">{title}</h3>
+      <p className="max-w-xs text-sm text-[#6a6e88]">{body}</p>
     </div>
   )
 }
@@ -88,27 +88,27 @@ function CancelModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md space-y-4 rounded-2xl border border-[#2a2f4a] bg-[#1e2235] p-6 shadow-xl">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Cancel this order?</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
+          <h2 className="text-lg font-bold text-[#f0f2ff]">Cancel this order?</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-[#6a6e88] hover:text-[#f0f2ff]">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <p className="text-sm text-gray-500">Please provide a reason (at least 5 characters).</p>
+        <p className="text-sm text-[#6a6e88]">Please provide a reason (at least 5 characters).</p>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={3}
           placeholder="Reason…"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-lg border border-[#2a2f4a] bg-[#1a1d2e] px-3 py-2 text-sm text-[#f0f2ff] placeholder-[#4a4f70] focus:outline-none focus:ring-2 focus:ring-[#2b6eff]"
         />
         <div className="flex gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            className="flex-1 rounded-lg border border-[#2a2f4a] py-2 text-sm font-semibold text-[#f0f2ff] hover:bg-[#1a1d2e]"
           >
             Keep order
           </button>
@@ -116,7 +116,7 @@ function CancelModal({
             type="button"
             disabled={reason.trim().length < 5 || busy}
             onClick={handleConfirm}
-            className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+            className="flex-1 rounded-lg bg-[#ff4d4d] py-2 text-sm font-semibold text-white hover:bg-[#ff4d4d]/80 disabled:opacity-50"
           >
             {busy ? 'Cancelling…' : 'Confirm cancel'}
           </button>
@@ -181,11 +181,11 @@ export default function MyOrders() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 space-y-5">
-      <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
+    <div className="mx-auto max-w-2xl space-y-5 px-4 py-6">
+      <h1 className="text-2xl font-bold text-[#f0f2ff]">My Orders</h1>
 
       {/* Phase tabs */}
-      <div role="tablist" className="flex gap-1 border-b border-gray-200">
+      <div role="tablist" className="flex gap-1 border-b border-[#2a2f4a]">
         {TABS.map((t) => {
           const count = tabCount(t.id, facets)
           const active = activeTab === t.id
@@ -196,15 +196,15 @@ export default function MyOrders() {
               role="tab"
               aria-selected={active}
               onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-[#2b6eff] text-[#2b6eff]'
+                  : 'border-transparent text-[#6a6e88] hover:text-[#f0f2ff]'
               }`}
             >
               {t.icon}
               {t.label}
-              <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+              <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${active ? 'bg-[#2b6eff]/20 text-[#2b6eff]' : 'bg-[#1a1d2e] text-[#6a6e88]'}`}>
                 {count}
               </span>
             </button>
@@ -218,13 +218,13 @@ export default function MyOrders() {
         placeholder="Filter by service name…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full rounded-lg border border-[#2a2f4a] bg-[#1a1d2e] px-3 py-2 text-sm text-[#f0f2ff] placeholder-[#4a4f70] focus:outline-none focus:ring-2 focus:ring-[#2b6eff]"
       />
 
       {/* List */}
       {loading && page === 1 ? (
         <div className="flex justify-center py-16">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-blue-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#2a2f4a] border-t-[#2b6eff]" />
         </div>
       ) : displayed.length === 0 ? (
         <EmptyState tab={activeTab} />
@@ -244,7 +244,7 @@ export default function MyOrders() {
           <button
             type="button"
             onClick={() => setPage((p) => p + 1)}
-            className="rounded-lg border border-gray-300 px-6 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-[#2a2f4a] px-6 py-2 text-sm font-semibold text-[#f0f2ff] hover:bg-[#1a1d2e]"
           >
             Load more
           </button>
@@ -252,7 +252,7 @@ export default function MyOrders() {
       )}
       {loading && page > 1 && (
         <div className="flex justify-center py-4">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-blue-600" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#2a2f4a] border-t-[#2b6eff]" />
         </div>
       )}
 

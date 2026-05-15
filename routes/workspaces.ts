@@ -1962,4 +1962,325 @@ router.delete('/:id/service-packages/:pkgId/bom/:lineId', async (req: AuthReques
   }
 });
 
+// ─── Business CRM: Clients ────────────────────────────────────────────────
+
+// GET /:id/crm/clients — list customers who have ordered from this workspace
+router.get('/:id/crm/clients', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertWorkspaceMember(req.user!.userId, req.params.id);
+    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? '20'), 10) || 20));
+    const search = req.query.search as string | undefined;
+
+    const customerWhere: Record<string, unknown> = {};
+    if (search) {
+      customerWhere.OR = [
+        { displayName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Get distinct customers who have orders in this workspace
+    const orders = await prisma.order.findMany({
+      where: {
+        matchedWorkspaceId: req.params.id,
+        customerId: { not: null },
+      },
+      select: { customerId: true },
+      distinct: ['customerId'],
+    });
+
+    const customerIds = orders.map((o) => o.customerId).filter(Boolean) as string[];
+
+    // Paginate customers
+    const total = customerIds.length;
+    const paginatedIds = customerIds.slice((page - 1) * pageSize, page * pageSize);
+
+    const customers = await prisma.user.findMany({
+      where: {
+        id: { in: paginatedIds },
+        ...customerWhere,
+      },
+      select: {
+        id: true,
+        displayName: true,
+        email: true,
+        avatarUrl: true,
+        createdAt: true,
+      },
+      orderBy: { displayName: 'asc' },
+    });
+
+    // Enrich with order count & total spent
+    const enriched = await Promise.all(
+      customers.map(async (c) => {
+        const [orderCount, spentAgg] = await Promise.all([
+          prisma.order.count({
+            where: { matchedWorkspaceId: req.params.id, customerId: c.id },
+          }),
+          prisma.invoice.aggregate({
+            where: { workspaceId: req.params.id, customerId: c.id, status: 'PAID', archivedAt: null },
+            _sum: { total: true },
+          }),
+        ]);
+        return {
+          ...c,
+          orderCount,
+          totalSpent: spentAgg._sum.total ?? 0,
+        };
+      }),
+    );
+
+    res.json({ data: enriched, total, page, pageSize });
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch CRM clients' });
+  }
+});
+
+// GET /:id/crm/clients/:customerId — single client detail with order history
+router.get('/:id/crm/clients/:customerId', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertWorkspaceMember(req.user!.userId, req.params.id);
+
+    const customer = await prisma.user.findUnique({
+      where: { id: req.params.customerId },
+      select: { id: true, displayName: true, email: true, avatarUrl: true, phone: true, createdAt: true },
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const orders = await prisma.order.findMany({
+      where: { matchedWorkspaceId: req.params.id, customerId: req.params.customerId },
+      include: {
+        serviceCatalog: { select: { id: true, name: true } },
+        invoice: { select: { id: true, status: true, total: true, createdAt: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Use invoice totals for spent calculation since Order has no totalAmount
+    const totalSpent = orders.reduce((sum, o) => sum + (o.invoice?.total ?? 0), 0);
+
+    res.json({ data: { ...customer, orders, totalSpent } });
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch client detail' });
+  }
+});
+
+// ─── Business CRM: Invoices ───────────────────────────────────────────────
+
+// GET /:id/crm/invoices — list invoices for this workspace
+router.get('/:id/crm/invoices', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertWorkspaceMember(req.user!.userId, req.params.id);
+    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? '20'), 10) || 20));
+    const status = req.query.status as string | undefined;
+
+    const where: Record<string, unknown> = { workspaceId: req.params.id, archivedAt: null };
+    if (status) where.status = status;
+
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where,
+        include: {
+          customer: { select: { id: true, displayName: true, email: true } },
+          order: { select: { id: true, status: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.invoice.count({ where }),
+    ]);
+
+    res.json({ data: invoices, total, page, pageSize });
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch invoices' });
+  }
+});
+
+// POST /:id/crm/invoices — create a manual invoice
+router.post('/:id/crm/invoices', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertWorkspaceMember(req.user!.userId, req.params.id);
+    const { customerId, orderId, lineItems, subtotal, tax, total, dueDate, notes } = req.body as {
+      customerId?: string;
+      orderId?: string;
+      lineItems?: unknown;
+      subtotal?: number;
+      tax?: number;
+      total?: number;
+      dueDate?: string;
+      notes?: string;
+    };
+
+    if (!customerId || !lineItems || subtotal === undefined || total === undefined) {
+      return res.status(400).json({ error: 'customerId, lineItems, subtotal, and total are required' });
+    }
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        workspaceId: req.params.id,
+        customerId,
+        orderId: orderId ?? null,
+        lineItems: lineItems as any,
+        subtotal,
+        tax: tax ?? 0,
+        total,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        notes: notes ?? null,
+        status: 'DRAFT',
+      },
+    });
+
+    res.status(201).json(invoice);
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create invoice' });
+  }
+});
+
+// PUT /:id/crm/invoices/:invoiceId — update invoice (only if DRAFT)
+router.put('/:id/crm/invoices/:invoiceId', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertWorkspaceMember(req.user!.userId, req.params.id);
+
+    const existing = await prisma.invoice.findUnique({ where: { id: req.params.invoiceId } });
+    if (!existing || existing.workspaceId !== req.params.id) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    if (existing.status !== 'DRAFT') {
+      return res.status(400).json({ error: 'Only DRAFT invoices can be edited' });
+    }
+
+    const { lineItems, subtotal, tax, total, dueDate, notes } = req.body as {
+      lineItems?: unknown;
+      subtotal?: number;
+      tax?: number;
+      total?: number;
+      dueDate?: string;
+      notes?: string;
+    };
+
+    const invoice = await prisma.invoice.update({
+      where: { id: req.params.invoiceId },
+      data: {
+        ...(lineItems !== undefined && { lineItems: lineItems as any }),
+        ...(subtotal !== undefined && { subtotal }),
+        ...(tax !== undefined && { tax }),
+        ...(total !== undefined && { total }),
+        ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+        ...(notes !== undefined && { notes }),
+      },
+    });
+
+    res.json(invoice);
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update invoice' });
+  }
+});
+
+// POST /:id/crm/invoices/:invoiceId/send — mark invoice as sent
+router.post('/:id/crm/invoices/:invoiceId/send', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertWorkspaceMember(req.user!.userId, req.params.id);
+
+    const existing = await prisma.invoice.findUnique({ where: { id: req.params.invoiceId } });
+    if (!existing || existing.workspaceId !== req.params.id) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    if (existing.status !== 'DRAFT') {
+      return res.status(400).json({ error: 'Invoice has already been sent' });
+    }
+
+    const invoice = await prisma.invoice.update({
+      where: { id: req.params.invoiceId },
+      data: { status: 'SENT', sentAt: new Date() },
+    });
+
+    res.json(invoice);
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send invoice' });
+  }
+});
+
+// POST /:id/crm/invoices/:invoiceId/pay — mark invoice as paid
+router.post('/:id/crm/invoices/:invoiceId/pay', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertWorkspaceMember(req.user!.userId, req.params.id);
+
+    const existing = await prisma.invoice.findUnique({ where: { id: req.params.invoiceId } });
+    if (!existing || existing.workspaceId !== req.params.id) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    if (existing.status === 'PAID') {
+      return res.status(400).json({ error: 'Invoice is already paid' });
+    }
+
+    const invoice = await prisma.invoice.update({
+      where: { id: req.params.invoiceId },
+      data: { status: 'PAID', paidAt: new Date() },
+    });
+
+    res.json(invoice);
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to mark invoice as paid' });
+  }
+});
+
+// POST /:id/crm/invoices/:invoiceId/archive — soft-delete invoice
+router.post('/:id/crm/invoices/:invoiceId/archive', async (req: AuthRequest, res: Response) => {
+  try {
+    await assertWorkspaceMember(req.user!.userId, req.params.id);
+
+    const existing = await prisma.invoice.findUnique({ where: { id: req.params.invoiceId } });
+    if (!existing || existing.workspaceId !== req.params.id) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    await prisma.invoice.update({
+      where: { id: req.params.invoiceId },
+      data: { archivedAt: new Date() },
+    });
+
+    res.json({ success: true });
+  } catch (err: unknown) {
+    if (isWorkspaceAccessError(err)) {
+      return res.status(err.statusCode).json(err.body ?? { error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to archive invoice' });
+  }
+});
+
 export default router;

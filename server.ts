@@ -49,6 +49,10 @@ import orderContractsRoutes from "./routes/orderContracts.js";
 import adminContractsRoutes from "./routes/adminContracts.js";
 import orderPaymentsRoutes from "./routes/orderPayments.js";
 import adminPaymentsRoutes from "./routes/adminPayments.js";
+import feedRoutes from "./routes/feed.js";
+import utilityLinksRoutes from "./routes/utilityLinks.js";
+import adminMediaRoutes from "./routes/adminMedia.js";
+import adminUtilityLinksRoutes from "./routes/adminUtilityLinks.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -91,6 +95,10 @@ function mountApiRoutes(app: Express) {
   app.use("/api/kyc", kycRoutes);
   app.use("/api/upload", uploadRoutes);
   app.use("/api/media", mediaRoutes);
+  app.use("/api/feed", feedRoutes);
+  app.use("/api/utility-links", utilityLinksRoutes);
+  app.use("/api/admin/media", adminMediaRoutes);
+  app.use("/api/admin/utility-links", adminUtilityLinksRoutes);
 }
 
 function createWebApp(): Express {
@@ -124,6 +132,40 @@ function createWebApp(): Express {
     (req as any).rpID = host.split(":")[0];
     (req as any).origin = `${protocol}://${host}`;
     next();
+  });
+
+  // Root route — shows API status page in browser
+  app.get("/", (_req, res) => {
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neighborly API</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0d0f1a; color: #f0f2ff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: #1a1d2e; border: 1px solid #2a2f4a; border-radius: 12px; padding: 2rem; max-width: 480px; width: 90%; }
+    h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
+    .status { color: #4ade80; font-weight: 600; }
+    .links { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    a { color: #60a5fa; text-decoration: none; padding: 0.5rem 1rem; border: 1px solid #2a2f4a; border-radius: 8px; text-align: center; }
+    a:hover { background: #2a2f4a; }
+    .badge { display: inline-block; background: #4ade80; color: #000; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Neighborly API</h1>
+    <p><span class="badge">● RUNNING</span></p>
+    <p style="color:#8b90b0;font-size:0.875rem;">Version 2.0</p>
+    <div class="links">
+      <a href="/api/system/config">⚙️ System Config</a>
+      <a href="http://localhost:5173">🚀 Frontend (port 5173)</a>
+      <a href="http://localhost:7357">📱 Flutter (port 7357)</a>
+    </div>
+  </div>
+</body>
+</html>`);
   });
 
   mountApiRoutes(app);
@@ -173,13 +215,9 @@ async function startServer() {
   }
 
   if (!isProd) {
-    /** One Vite dev server: same `App` + `AdminDashboard` on PORT and ADMIN_PORT. */
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    mainApp.use(vite.middlewares);
-    adminApp.use(vite.middlewares);
+    // Dev mode: API-only — new frontend runs separately on port 5173 (Vite dev server in frontend/)
+    // Old SPA middleware removed since src/ was deleted (Phase 3 cleanup).
+    console.log("  Dev mode: frontend served separately at http://localhost:5173");
   } else {
     const distPath = path.join(__dirname, "dist");
     const indexPath = path.join(distPath, "index.html");

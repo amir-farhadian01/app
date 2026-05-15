@@ -139,6 +139,7 @@ enum ContractActionType {
 model User {
   id                  String      @id @default(cuid())
   email               String      @unique
+  normalizedEmail     String?     @unique
   password            String?     // nullable for OAuth users
   phone               String?
   firstName           String?
@@ -184,7 +185,8 @@ model User {
   ticketsCreated      Ticket[]    @relation("TicketCreator")
   ticketsReceived     Ticket[]    @relation("TicketRecipient")
   posts               Post[]
-  comments            Comment[]
+  postReactions       PostReaction[]
+  postComments        PostComment[]
   notifications       Notification[]
   chatMessages        ChatMessage[]
   requestsAsCustomer  Request[]   @relation("CustomerRequests")
@@ -200,6 +202,9 @@ model User {
   providerPackages       ProviderServicePackage[]
   attemptsAsProvider     OfferMatchAttempt[]     @relation("ProviderAttempts")
   ordersAsMatchedProvider Order[]                @relation("OrderMatchedProvider")
+  addresses              UserAddress[]
+  mediaAssets            MediaAsset[]
+  invoicesAsCustomer     Invoice[]               @relation("InvoiceCustomer")
 }
 
 model WebAuthnCredential {
@@ -242,6 +247,7 @@ model Company {
   products                Product[]                @relation("WorkspaceProducts")
   workspaceAttempts        OfferMatchAttempt[]     @relation("WorkspaceAttempts")
   ordersAsMatchedWorkspace Order[]                @relation("OrderMatchedWorkspace")
+  invoices            Invoice[]
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 }
@@ -428,6 +434,7 @@ model Order {
   customerReview        OrderReview?
   dispute               Dispute?
   jobRecord             JobRecord?      @relation("OrderJob")
+  invoice               Invoice?
 
   @@index([customerId])
   @@index([status])
@@ -669,24 +676,51 @@ model B2BConnection {
   status       String   @default("pending")
 }
 
-model Post {
-  id         String    @id @default(cuid())
-  providerId String
-  provider   User      @relation(fields: [providerId], references: [id])
-  imageUrl   String
-  caption    String?
-  likes      String[]
-  comments   Comment[]
-  createdAt  DateTime  @default(now())
+enum PostType {
+  VIDEO
+  PHOTO
+  TEXT
 }
 
-model Comment {
+model Post {
+  id           String    @id @default(cuid())
+  authorId     String
+  author       User      @relation(fields: [authorId], references: [id])
+  type         PostType
+  mediaUrl     String?
+  thumbnailUrl String?
+  caption      String?
+  serviceId    String?
+  businessId   String?
+  location     Json?
+  interests    String[]
+  views        Int       @default(0)
+  createdAt    DateTime  @default(now())
+  archivedAt   DateTime?
+  reactions    PostReaction[]
+  comments     PostComment[]
+  mediaAsset   MediaAsset? @relation(fields: [mediaAssetId], references: [id])
+  mediaAssetId String? @unique
+}
+
+model PostReaction {
   id        String   @id @default(cuid())
   postId    String
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  userName  String?
+  type      String   // like | love | laugh | etc.
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
   text      String
   createdAt DateTime @default(now())
 }
@@ -874,7 +908,143 @@ model LegalPolicy {
   title     String
   content   String
   version   String?
-  updatedAt DateTime @default(now())
+  updatedAt          DateTime @default(now())
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REMOVED
+  WARNED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model UserAddress {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  label        String    // home | work | favourite | custom string
+  street       String
+  city         String
+  province     String
+  postalCode   String
+  country      String    @default("CA")
+  latitude     Float
+  longitude    Float
+  categoryTags String[]  // interest/category tags tied to this location
+  isDefault    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  archivedAt   DateTime?
+}
+
+model BusinessVerification {
+  id                    String    @id @default(cuid())
+  workspaceId           String    @unique
+  requiresLicense       Boolean   @default(false)
+  licenseNumber         String?
+  licenseDocUrl         String?
+  licenseVerifiedAt     DateTime?
+  hasLiabilityInsurance Boolean   @default(false)
+  insuranceDocUrl       String?
+  insuranceVerifiedAt   DateTime?
+  verifiedByAdminId     String?
+  notes                 String?
+  updatedAt             DateTime  @updatedAt
+}
+
+model BusinessTrustScore {
+  id                String   @id @default(cuid())
+  workspaceId       String   @unique
+  kycVerified       Boolean  @default(false)
+  licenseVerified   Boolean  @default(false)
+  insuranceVerified Boolean  @default(false)
+  avgRating         Float    @default(0)
+  totalScore        Float    @default(0)
+  updatedAt         DateTime @updatedAt
+}
+
+model MediaAsset {
+  id               String           @id @default(cuid())
+  uploaderId       String
+  uploader         User             @relation(fields: [uploaderId], references: [id])
+  url              String
+  thumbnailUrl     String?
+  mimeType         String
+  sizeBytes        Int
+  duration         Int?
+  moderationStatus ModerationStatus @default(PENDING)
+  moderationNote   String?
+  moderatedById    String?
+  moderatedAt      DateTime?
+  views            Int              @default(0)
+  flagCount        Int              @default(0)
+  createdAt        DateTime         @default(now())
+  archivedAt       DateTime?
+  post             Post?
+}
+
+model UtilityLink {
+  id             String             @id @default(cuid())
+  title          String
+  url            String
+  description    String?
+  category       String             // BANK | INSURANCE | FUEL | GOVERNMENT | OTHER
+  logoUrl        String?
+  commissionRate Float?
+  clickCount     Int                @default(0)
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  archivedAt     DateTime?
+  clicks         UtilityLinkClick[]
+}
+
+model UtilityLinkClick {
+  id        String      @id @default(cuid())
+  linkId    String
+  link      UtilityLink @relation(fields: [linkId], references: [id])
+  userId    String?
+  clickedAt DateTime    @default(now())
+  userAgent String?
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  workspaceId String
+  workspace   Company       @relation(fields: [workspaceId], references: [id])
+  customerId  String?
+  customer    User?         @relation("InvoiceCustomer", fields: [customerId], references: [id])
+  orderId     String?       @unique
+  order       Order?        @relation(fields: [orderId], references: [id])
+  status      InvoiceStatus @default(DRAFT)
+  lineItems   Json
+  subtotal    Int
+  tax         Int           @default(0)
+  total       Int
+  dueDate     DateTime?
+  sentAt      DateTime?
+  paidAt      DateTime?
+  pdfUrl      String?
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  archivedAt  DateTime?
+}
+
+model WorkspaceSocialRole {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  grantedById String
+  createdAt   DateTime @default(now())
+  archivedAt  DateTime?
 }
 
 model Page {

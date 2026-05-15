@@ -7,7 +7,6 @@ import 'routing/app_navigator.dart' show NeighborlyRouteObserver, neighborlyNavi
 import 'routing/app_paths.dart';
 import 'models/order_models.dart';
 import 'screens/admin_dashboard_screen.dart';
-import 'screens/ai_consultant_screen.dart';
 import 'routing/auth_route_args.dart';
 import 'screens/auth_screen.dart';
 import 'screens/contract_screen.dart';
@@ -83,9 +82,9 @@ class _NeighborlyBootstrapState extends State<_NeighborlyBootstrap> {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        theme: NeighborlyTheme.light(),
+        theme: NeighborlyTheme.dark(),
         home: Scaffold(
-          backgroundColor: NeighborlyTheme.light().scaffoldBackgroundColor,
+          backgroundColor: NeighborlyTheme.dark().scaffoldBackgroundColor,
           body: Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -99,7 +98,7 @@ class _NeighborlyBootstrapState extends State<_NeighborlyBootstrap> {
       );
     }
     if (!_ready) {
-      final bg = NeighborlyTheme.light().scaffoldBackgroundColor;
+      final bg = NeighborlyTheme.dark().scaffoldBackgroundColor;
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         locale: const Locale('en', 'CA'),
@@ -109,11 +108,11 @@ class _NeighborlyBootstrapState extends State<_NeighborlyBootstrap> {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        theme: NeighborlyTheme.light(),
+        theme: NeighborlyTheme.dark(),
         home: Scaffold(
           backgroundColor: bg,
           body: Center(
-            child: CircularProgressIndicator(color: NeighborlyTheme.light().colorScheme.primary),
+            child: CircularProgressIndicator(color: NeighborlyTheme.dark().colorScheme.primary),
           ),
         ),
       );
@@ -224,10 +223,6 @@ class NeighborlyApp extends StatelessWidget {
         break;
       case '/':
         page = const HomeScreen();
-        break;
-      case '/ai':
-      case '/ai-consultant':
-        page = const AiConsultantScreen();
         break;
       case '/profile':
       case '/account':

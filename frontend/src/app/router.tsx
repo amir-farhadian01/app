@@ -7,7 +7,7 @@ import { CustomerLayout } from '../components/layout/CustomerLayout'
 import { BusinessLayout } from '../components/layout/BusinessLayout'
 import { AdminLayout } from '../components/layout/AdminLayout'
 
-import Feed from '../pages/public/Feed'
+import HomeScreen from '../pages/public/HomeScreen'
 import Explore from '../pages/public/Explore'
 import ServiceDetail from '../pages/public/ServiceDetail'
 import Login from '../pages/auth/Login'
@@ -40,7 +40,7 @@ export const router = createBrowserRouter([
   {
     element: <PublicLayout />,
     children: [
-      { path: '/', element: <Feed /> },
+      { path: '/', element: <HomeScreen /> },
       { path: '/explore', element: <Explore /> },
       { path: '/services/:id', element: <ServiceDetail /> },
       { path: '/auth/login', element: <Login /> },

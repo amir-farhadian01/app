@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../core/app_theme.dart';
+import '../../core/theme/app_theme.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /// Onboarding Screen
@@ -26,8 +27,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
-  void _goToHome() {
-    Navigator.pushReplacementNamed(context, '/home');
+  void _goToLogin() {
+    context.go('/login');
   }
 
   void _nextPage() {
@@ -37,7 +38,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      _goToHome();
+      _goToLogin();
     }
   }
 
@@ -56,22 +57,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             },
             children: const [
               _OnboardingPage(
-                gradientBegin: NeighborlyColors.accent,
-                gradientEnd: NeighborlyColors.accentTeal,
+                gradientBegin: AppColors.accent,
+                gradientEnd: AppColors.primary,
                 icon: Icons.explore,
                 title: 'Discover Services Near You',
                 subtitle: 'Find skilled professionals in your neighborhood',
               ),
               _OnboardingPage(
-                gradientBegin: NeighborlyColors.accentTeal,
-                gradientEnd: NeighborlyColors.accent,
+                gradientBegin: AppColors.primary,
+                gradientEnd: AppColors.accent,
                 icon: Icons.calendar_today,
                 title: 'Book in Seconds',
                 subtitle: 'Schedule services with a few taps, no calls needed',
               ),
               _OnboardingPage(
-                gradientBegin: NeighborlyColors.accent,
-                gradientEnd: NeighborlyColors.accentTeal,
+                gradientBegin: AppColors.accent,
+                gradientEnd: AppColors.primary,
                 icon: Icons.trending_up,
                 title: 'Grow Your Business',
                 subtitle: 'Join thousands of providers earning on Neighborly',
@@ -84,7 +85,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             top: MediaQuery.of(context).padding.top + 8,
             right: 16,
             child: TextButton(
-              onPressed: _goToHome,
+              onPressed: _goToLogin,
               child: Text(
                 'Skip',
                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -120,7 +121,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     );
                   }),
                 ),
-                const SizedBox(height: NeighborlySpacing.s32),
+                const SizedBox(height: AppSpacing.xxxl),
 
                 // Next / Get Started button
                 Padding(
@@ -132,9 +133,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       onPressed: _nextPage,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: NeighborlyColors.accent,
+                        foregroundColor: AppColors.accent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(NeighborlyRadius.md),
+                          borderRadius: BorderRadius.circular(AppRadius.button),
                         ),
                         elevation: 0,
                         textStyle: theme.textTheme.bodyMedium?.copyWith(
@@ -185,7 +186,7 @@ class _OnboardingPage extends StatelessWidget {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: NeighborlySpacing.s32),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -194,7 +195,7 @@ class _OnboardingPage extends StatelessWidget {
                 size: 120,
                 color: Colors.white,
               ),
-              const SizedBox(height: NeighborlySpacing.s32),
+              const SizedBox(height: AppSpacing.xxxl),
               Text(
                 title,
                 style: theme.textTheme.displayLarge?.copyWith(
@@ -202,7 +203,7 @@ class _OnboardingPage extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: NeighborlySpacing.s16),
+              const SizedBox(height: AppSpacing.lg),
               Text(
                 subtitle,
                 style: theme.textTheme.bodyMedium?.copyWith(

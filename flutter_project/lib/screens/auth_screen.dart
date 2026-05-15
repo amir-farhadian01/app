@@ -1,368 +1,581 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-import 'package:provider/provider.dart';
 
-import '../services/neighborly_api_service.dart';
+import '../core/app_theme.dart';
+import '../core/services/api_client.dart';
+import '../core/services/auth_service.dart';
 
+/// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/// Auth / Onboarding Screen — 3 steps (Phone → OTP → Username)
+/// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({
-    super.key,
-    this.resumeAfterAuth = false,
-    this.returnToPath,
-    this.returnToPostId,
-  });
-
-  /// When true, after a successful session the navigator pops with `true`
-  /// so the caller (e.g. Explorer) can retry the gated action.
-  final bool resumeAfterAuth;
-  final String? returnToPath;
-  final String? returnToPostId;
+  const AuthScreen({super.key});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  bool isLogin = true;
-  String role = 'customer';
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _nameController = TextEditingController();
-  bool _busy = false;
-  String? _error;
-  bool _obscurePassword = true;
+  final PageController _pageController = PageController();
+  int _currentStep = 0;
+  bool _isLoading = false;
+
+  // Step 1 controllers
+  final TextEditingController _phoneController = TextEditingController();
+
+  // Step 2 controllers
+  final List<TextEditingController> _otpControllers = List.generate(3, (_) => TextEditingController());
+  final List<FocusNode> _otpFocusNodes = List.generate(3, (_) => FocusNode());
+  int _resendSeconds = 165; // 2:45
+  Timer? _resendTimer;
+
+  // Step 3 controllers
+  final TextEditingController _usernameController = TextEditingController(text: 'amir_farhadian');
+
+  final AuthService _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _startResendTimer();
+  }
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    _nameController.dispose();
+    _pageController.dispose();
+    _phoneController.dispose();
+    for (final c in _otpControllers) { c.dispose(); }
+    for (final f in _otpFocusNodes) { f.dispose(); }
+    _usernameController.dispose();
+    _resendTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    setState(() {
-      _error = null;
-      _busy = true;
+  void _startResendTimer() {
+    _resendTimer?.cancel();
+    setState(() => _resendSeconds = 165);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_resendSeconds <= 0) {
+        timer.cancel();
+        return;
+      }
+      setState(() => _resendSeconds--);
     });
-    final api = context.read<NeighborlyApiService>();
-    try {
-      if (isLogin) {
-        await api.login(_emailController.text.trim(), _passwordController.text);
-      } else {
-        await api.register(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-          displayName: _nameController.text.trim(),
-          role: role,
-        );
-      }
-      if (!mounted) return;
-      if (widget.resumeAfterAuth && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop(true);
-      } else if ((widget.returnToPath ?? '').isNotEmpty) {
-        final qp = <String, String>{};
-        if ((widget.returnToPostId ?? '').isNotEmpty) {
-          qp['post'] = widget.returnToPostId!;
-        }
-        final base = widget.returnToPath!.trim();
-        final hasQuery = base.contains('?');
-        final target = qp.isEmpty
-            ? base
-            : hasQuery
-                ? '$base&${Uri(queryParameters: qp).query}'
-                : '$base?${Uri(queryParameters: qp).query}';
-        Navigator.of(context).pushNamedAndRemoveUntil(target, (r) => false);
-      } else {
-        Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (r) => false);
-      }
-    } catch (e) {
-      setState(() => _error = _prettyAuthError(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
-  String _prettyAuthError(Object error) {
-    if (error is NeighborlyApiException) {
-      if (error.code == 'EMAIL_NOT_FOUND') return 'This email does not exist.';
-      if (error.code == 'INVALID_PASSWORD') return 'Password is incorrect.';
-      return error.message;
-    }
-    return error.toString();
-  }
-
-  Future<void> _showResetPasswordDialog() async {
-    final emailCtrl = TextEditingController(text: _emailController.text.trim());
-    final passCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
-    bool obscure = true;
-    String? localError;
-    bool localBusy = false;
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        return StatefulBuilder(
-          builder: (ctx, setLocalState) => AlertDialog(
-            title: Text('Reset password', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: 'Email Address',
-                      prefixIcon: const Icon(LucideIcons.mail),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: passCtrl,
-                    obscureText: obscure,
-                    decoration: InputDecoration(
-                      labelText: 'New Password',
-                      prefixIcon: const Icon(LucideIcons.lock),
-                      suffixIcon: IconButton(
-                        onPressed: () => setLocalState(() => obscure = !obscure),
-                        icon: Icon(obscure ? LucideIcons.eye : LucideIcons.eyeOff),
-                      ),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: confirmCtrl,
-                    obscureText: obscure,
-                    decoration: InputDecoration(
-                      labelText: 'Confirm New Password',
-                      prefixIcon: const Icon(LucideIcons.lock),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                  if (localError != null) ...[
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(localError!, style: GoogleFonts.inter(color: Colors.red, fontSize: 13)),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: localBusy ? null : () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: localBusy
-                    ? null
-                    : () async {
-                        setLocalState(() => localError = null);
-                        final email = emailCtrl.text.trim();
-                        final password = passCtrl.text;
-                        final confirm = confirmCtrl.text;
-                        if (email.isEmpty) {
-                          setLocalState(() => localError = 'Please enter your email address.');
-                          return;
-                        }
-                        if (password.length < 8) {
-                          setLocalState(() => localError = 'New password must be at least 8 characters.');
-                          return;
-                        }
-                        if (password != confirm) {
-                          setLocalState(() => localError = 'Password confirmation does not match.');
-                          return;
-                        }
-                        setLocalState(() => localBusy = true);
-                        try {
-                          final api = context.read<NeighborlyApiService>();
-                          await api.forgotPassword(email);
-                          await api.resetPassword(email: email, newPassword: password);
-                          if (!mounted || !context.mounted) return;
-                          _emailController.text = email;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Password reset successfully. Please sign in.')),
-                          );
-                          Navigator.of(ctx).pop();
-                        } catch (e) {
-                          setLocalState(() => localError = _prettyAuthError(e));
-                        } finally {
-                          setLocalState(() => localBusy = false);
-                        }
-                      },
-                style: FilledButton.styleFrom(backgroundColor: cs.primary),
-                child: localBusy
-                    ? const SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Reset'),
-              ),
-            ],
-          ),
-        );
-      },
+  void _goToStep(int step) {
+    _pageController.animateToPage(
+      step,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
     );
-    emailCtrl.dispose();
-    passCtrl.dispose();
-    confirmCtrl.dispose();
+    setState(() => _currentStep = step);
+  }
+
+  /// Handle "Send Verification Code" button tap (Step 1).
+  Future<void> _handleSendOtp() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      _showSnackBar('Please enter your phone number');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await _authService.sendOtp(phone);
+      _goToStep(1);
+    } on ApiException catch (e) {
+      _showSnackBar(e.message);
+    } catch (e) {
+      _showSnackBar('An unexpected error occurred. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Handle "Verify & Continue" button tap (Step 2).
+  Future<void> _handleVerifyOtp() async {
+    final otp = _otpControllers.map((c) => c.text).join();
+    if (otp.length < 3) {
+      _showSnackBar('Please enter the full verification code');
+      return;
+    }
+
+    final phone = _phoneController.text.trim();
+
+    setState(() => _isLoading = true);
+    try {
+      await _authService.verifyOtp(phone, otp);
+      _goToStep(2);
+    } on ApiException catch (e) {
+      _showSnackBar(e.message);
+    } catch (e) {
+      _showSnackBar('Verification failed. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Handle "Create My Account" button tap (Step 3).
+  Future<void> _handleSetUsername() async {
+    final username = _usernameController.text.trim();
+    if (username.isEmpty) {
+      _showSnackBar('Please enter a username');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await _authService.setUsername(username);
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+    } on ApiException catch (e) {
+      _showSnackBar(e.message);
+    } catch (e) {
+      _showSnackBar('Failed to set username. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Show a SnackBar with the given message.
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String get _resendFormatted {
+    final minutes = (_resendSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (_resendSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: NeighborlyColors.bgPrimary,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Card(
-                elevation: 0,
-                color: cs.surface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(40),
-                  side: BorderSide(color: cs.outline),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Column(
+          children: [
+            // Step indicator
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(3, (i) {
+                  final isActive = i == _currentStep;
+                  final isDone = i < _currentStep;
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: IconButton(
-                          icon: const Icon(LucideIcons.arrowLeft),
-                          onPressed: () {
-                            if (Navigator.of(context).canPop()) {
-                              Navigator.of(context).pop();
-                            } else {
-                              Navigator.of(context).pushReplacementNamed('/');
-                            }
-                          },
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: isDone
+                              ? NeighborlyColors.success
+                              : isActive
+                                  ? NeighborlyColors.accent
+                                  : NeighborlyColors.bgCard,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isActive || isDone
+                                ? Colors.transparent
+                                : NeighborlyColors.textFaint,
+                          ),
+                        ),
+                        child: Center(
+                          child: isDone
+                              ? const Icon(Icons.check, size: 18, color: Colors.white)
+                              : Text(
+                                  '${i + 1}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isActive ? Colors.white : NeighborlyColors.textSecondary,
+                                  ),
+                                ),
                         ),
                       ),
+                      if (i < 2)
+                        Container(
+                          width: 40,
+                          height: 2,
+                          color: i < _currentStep
+                              ? NeighborlyColors.accent
+                              : NeighborlyColors.textFaint,
+                        ),
+                    ],
+                  );
+                }),
+              ),
+            ),
+            // Pages
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  _buildPhoneStep(),
+                  _buildOtpStep(),
+                  _buildUsernameStep(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Step 1: Phone Entry ──────────────────────────────────────────
+
+  Widget _buildPhoneStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 48),
+          // Logo
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: NeighborlyColors.accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Text('🏘️', style: TextStyle(fontSize: 24)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'NeighborHub',
+                style: GoogleFonts.inter(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: NeighborlyColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Discover local businesses, events, and connect with your neighborhood community.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
+              color: NeighborlyColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 48),
+          // Country code + phone
+          Container(
+            decoration: BoxDecoration(
+              color: NeighborlyColors.bgCard,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: NeighborlyColors.textFaint),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    border: const Border(
+                      right: BorderSide(color: NeighborlyColors.textFaint),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('🇨🇦', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
                       Text(
-                        isLogin ? 'WELCOME BACK' : 'CREATE ACCOUNT',
+                        '+1',
                         style: GoogleFonts.inter(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          fontStyle: FontStyle.italic,
-                          letterSpacing: -0.5,
-                          color: cs.onSurface,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: NeighborlyColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        isLogin ? 'Enter your details to access your account' : 'Join our community of neighbors today',
-                        style: GoogleFonts.inter(color: cs.secondary, fontSize: 14),
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 16),
-                        Text(_error!, style: GoogleFonts.inter(color: Colors.red, fontSize: 13)),
-                      ],
-                      const SizedBox(height: 28),
-                      if (!isLogin) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ChoiceChip(
-                                label: const Text('Customer'),
-                                selected: role == 'customer',
-                                onSelected: (s) => setState(() => role = 'customer'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ChoiceChip(
-                                label: const Text('Provider'),
-                                selected: role == 'provider',
-                                onSelected: (s) => setState(() => role = 'provider'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        TextField(
-                          controller: _nameController,
-                          decoration: InputDecoration(
-                            labelText: 'Full Name',
-                            prefixIcon: const Icon(LucideIcons.user),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: 'Email Address',
-                          prefixIcon: const Icon(LucideIcons.mail),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(LucideIcons.lock),
-                          suffixIcon: IconButton(
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            icon: Icon(_obscurePassword ? LucideIcons.eye : LucideIcons.eyeOff),
-                          ),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                      ),
-                      if (isLogin)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _busy ? null : _showResetPasswordDialog,
-                            child: const Text('Forgot password?'),
-                          ),
-                        ),
-                      const SizedBox(height: 28),
-                      FilledButton(
-                        onPressed: _busy ? null : _submit,
-                        child: _busy
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : Text(isLogin ? 'Sign In' : 'Create Account', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
-                      ),
-                      const SizedBox(height: 16),
-                      Center(
-                        child: TextButton(
-                          onPressed: _busy ? null : () => setState(() => isLogin = !isLogin),
-                          child: Text(
-                            isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In",
-                            style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: cs.secondary),
-                          ),
-                        ),
-                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.keyboard_arrow_down, color: NeighborlyColors.textSecondary, size: 20),
                     ],
                   ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      hintText: '647 ··· ····',
+                      hintStyle: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        color: NeighborlyColors.textFaint,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: NeighborlyColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Primary CTA
+          SizedBox(
+            height: 52,
+            child: FilledButton(
+              onPressed: _isLoading ? null : _handleSendOtp,
+              style: FilledButton.styleFrom(
+                backgroundColor: NeighborlyColors.accent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Send Verification Code',
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
                 ),
               ),
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+          // Ghost button
+          TextButton(
+            onPressed: () {},
+            child: Text(
+              'Continue with Email',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: NeighborlyColors.accent,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Step 2: OTP Verification ─────────────────────────────────────
+
+  Widget _buildOtpStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 48),
+          Text(
+            'Code sent to +1 647 ··· ··78',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: NeighborlyColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 48),
+          // OTP fields
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(3, (i) {
+              return Container(
+                width: 72,
+                height: 80,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: NeighborlyColors.bgCard,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _otpControllers[i].text.isNotEmpty
+                        ? NeighborlyColors.accent
+                        : NeighborlyColors.textFaint,
+                    width: _otpControllers[i].text.isNotEmpty ? 2 : 1,
+                  ),
+                ),
+                child: Center(
+                  child: TextField(
+                    controller: _otpControllers[i],
+                    focusNode: _otpFocusNodes[i],
+                    textAlign: TextAlign.center,
+                    keyboardType: TextInputType.number,
+                    maxLength: 1,
+                    style: GoogleFonts.inter(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: NeighborlyColors.textPrimary,
+                    ),
+                    decoration: const InputDecoration(
+                      counterText: '',
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (v) {
+                      setState(() {});
+                      if (v.isNotEmpty && i < 2) {
+                        _otpFocusNodes[i + 1].requestFocus();
+                      }
+                    },
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 32),
+          // Verify button
+          SizedBox(
+            height: 52,
+            child: FilledButton(
+              onPressed: _isLoading ? null : _handleVerifyOtp,
+              style: FilledButton.styleFrom(
+                backgroundColor: NeighborlyColors.accent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Verify & Continue',
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Resend timer
+          Center(
+            child: GestureDetector(
+              onTap: _resendSeconds <= 0 ? _startResendTimer : null,
+              child: Text(
+                _resendSeconds > 0 ? 'Resend code in $_resendFormatted' : 'Resend code',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: _resendSeconds > 0
+                      ? NeighborlyColors.textFaint
+                      : NeighborlyColors.accent,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Step 3: Username ─────────────────────────────────────────────
+
+  Widget _buildUsernameStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 48),
+          Text(
+            'CHOOSE YOUR USERNAME',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: NeighborlyColors.textPrimary,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 48),
+          // Username field
+          Container(
+            decoration: BoxDecoration(
+              color: NeighborlyColors.bgCard,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: NeighborlyColors.success,
+                width: 2,
+              ),
+            ),
+            child: TextField(
+              controller: _usernameController,
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: NeighborlyColors.textPrimary,
+              ),
+              decoration: const InputDecoration(
+                prefixIcon: Padding(
+                  padding: EdgeInsets.only(left: 16),
+                  child: Icon(Icons.alternate_email, color: NeighborlyColors.textSecondary),
+                ),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Available indicator
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.check_circle, color: NeighborlyColors.success, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Username is available!',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: NeighborlyColors.success,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          // Create account button
+          SizedBox(
+            height: 52,
+            child: FilledButton(
+              onPressed: _isLoading ? null : _handleSetUsername,
+              style: FilledButton.styleFrom(
+                backgroundColor: NeighborlyColors.accent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Create My Account →',
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

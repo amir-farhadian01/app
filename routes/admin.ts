@@ -492,4 +492,41 @@ router.get('/dependency-catalog/export.txt', async (req: AuthRequest, res: Respo
   }
 });
 
+// GET /api/admin/users/emails?role=<UserRole>
+// Returns a list of user emails filtered by role.
+// Restricted to owner and platform_admin only.
+const VALID_ROLES = [
+  'owner', 'platform_admin', 'developer', 'support',
+  'finance', 'customer', 'provider', 'staff',
+] as const;
+
+router.get(
+  '/users/emails',
+  requireRole('owner', 'platform_admin'),
+  async (req: AuthRequest, res: Response) => {
+    const { role } = req.query as { role?: string };
+
+    if (!role) {
+      return res.status(400).json({ error: 'role query param is required' });
+    }
+
+    if (!VALID_ROLES.includes(role as any)) {
+      return res.status(400).json({
+        error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`,
+      });
+    }
+
+    try {
+      const users = await prisma.user.findMany({
+        where: { role: role as string },
+        select: { email: true },
+      });
+      const emails = users.map((u) => u.email);
+      res.json({ role, count: emails.length, emails });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
 export default router;

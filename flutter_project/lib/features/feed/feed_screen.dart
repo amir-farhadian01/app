@@ -21,6 +21,7 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
   bool _isLoading = false;
+  bool _hasError = false;
   List<Map<String, dynamic>> _providers = [];
   List<Map<String, dynamic>> _categories = [];
 
@@ -32,9 +33,16 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Future<void> _loadData() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
     try {
-      final providers = await ApiService.getNearbyProviders(43.8, -79.5);
+      // TODO: replace fallback Vaughan coordinates with device location
+      //       (lat: 43.8361, lng: -79.4983) when geolocation is available.
+      //       Do NOT add geolocator package — use Flutter's built-in location
+      //       services or a future dedicated location service.
+      final providers = await ApiService.getNearbyProviders(43.8361, -79.4983);
       final categories = await ApiService.getCategories();
       if (!mounted) return;
       setState(() {
@@ -44,11 +52,30 @@ class _FeedScreenState extends State<FeedScreen> {
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Connection error')),
-      );
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
     }
+  }
+
+  /// Derives initials from a display name (e.g. "John Doe" → "JD").
+  String _initialsFromName(String? displayName) {
+    if (displayName == null || displayName.trim().isEmpty) return '?';
+    final parts = displayName.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+    }
+    return parts.first[0].toUpperCase();
+  }
+
+  /// Formats a rating value for display.
+  /// Returns 'New' if rating is null or 0 with no reviews.
+  String _formatRating(dynamic rating, dynamic reviewsCount) {
+    final r = (rating is num) ? rating.toDouble() : 0.0;
+    final rc = (reviewsCount is num) ? reviewsCount.toInt() : 0;
+    if (r <= 0 && rc == 0) return 'New';
+    return r.toStringAsFixed(1);
   }
 
   // ── Mock Hero Cards ──────────────────────────────────────────────
@@ -69,7 +96,7 @@ class _FeedScreenState extends State<FeedScreen> {
     ),
   ];
 
-  // ── Mock Categories (fallback) ───────────────────────────────────
+  // ── Mock Categories (fallback when API fails) ────────────────────
   static const List<_CategoryData> _mockCategories = [
     _CategoryData(name: 'Plumbing', emoji: '🔧'),
     _CategoryData(name: 'Electrical', emoji: '⚡'),
@@ -224,6 +251,8 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               ),
             ),
+
+            // ── Loading state ─────────────────────────────────────
             if (_isLoading)
               const SliverToBoxAdapter(
                 child: Center(
@@ -233,15 +262,47 @@ class _FeedScreenState extends State<FeedScreen> {
                   ),
                 ),
               )
+
+            // ── Error state with retry ────────────────────────────
+            else if (_hasError)
+              SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xxl),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Could not load providers',
+                          style: AppTextStyles.body(color: AppColors.textMuted),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        FilledButton.icon(
+                          onPressed: _loadData,
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+
+            // ── Empty state ───────────────────────────────────────
             else if (_providers.isEmpty)
               const SliverToBoxAdapter(
                 child: Center(
                   child: Padding(
                     padding: EdgeInsets.all(AppSpacing.xxl),
-                    child: Text('No providers nearby'),
+                    child: Text(
+                      'No nearby providers found',
+                      style: TextStyle(color: AppColors.textMuted),
+                    ),
                   ),
                 ),
               )
+
+            // ── Provider list ─────────────────────────────────────
             else
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -250,12 +311,20 @@ class _FeedScreenState extends State<FeedScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 0),
                   itemBuilder: (context, index) {
                     final p = _providers[index];
+                    final displayName = p['displayName'] as String? ?? p['name'] as String? ?? 'Provider';
+                    final category = p['category'] as String?;
+                    final rating = p['rating'];
+                    final reviewsCount = p['reviewsCount'];
+                    final avatarUrl = p['avatarUrl'] as String?;
+                    final distance = p['distance'];
+
                     return ProviderCard(
-                      name: p['displayName'] ?? p['name'] ?? 'Provider',
-                      serviceType: p['category'] ?? '',
-                      rating: (p['rating'] ?? 0.0).toDouble(),
-                      reviewCount: 42,
-                      initials: p['initials'] ?? '?',
+                      name: displayName,
+                      serviceType: (category?.isNotEmpty == true ? category! : 'General'),
+                      rating: (rating is num) ? rating.toDouble() : 0.0,
+                      reviewCount: (reviewsCount is num) ? reviewsCount.toInt() : 0,
+                      initials: _initialsFromName(displayName),
+                      avatarUrl: (avatarUrl != null && avatarUrl.isNotEmpty) ? avatarUrl : null,
                       onTap: () {},
                     );
                   },

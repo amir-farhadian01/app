@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -7,6 +9,7 @@ import '../../core/theme/app_theme.dart';
 /// ProviderCard — Nearby provider card for the customer home screen
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /// Row layout: avatar (48px circle) | info column | arrow icon.
+/// Supports optional [avatarUrl] for network image; falls back to [initials].
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class ProviderCard extends StatelessWidget {
   final String name;
@@ -14,6 +17,7 @@ class ProviderCard extends StatelessWidget {
   final double rating;
   final int reviewCount;
   final String initials;
+  final String? avatarUrl;
   final VoidCallback? onTap;
 
   const ProviderCard({
@@ -23,6 +27,7 @@ class ProviderCard extends StatelessWidget {
     required this.rating,
     required this.reviewCount,
     required this.initials,
+    this.avatarUrl,
     this.onTap,
   });
 
@@ -49,18 +54,25 @@ class ProviderCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // ── Avatar ──────────────────────────────────────────
+              // ── Avatar (network image or initials fallback) ──────
               CircleAvatar(
                 radius: 24,
                 backgroundColor: AppColors.primaryLight,
-                child: Text(
-                  initials,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
-                ),
+                backgroundImage: avatarUrl != null && avatarUrl!.isNotEmpty
+                    ? (avatarUrl!.startsWith('http')
+                        ? NetworkImage(avatarUrl!)
+                        : FileImage(File(avatarUrl!)) as ImageProvider)
+                    : null,
+                child: avatarUrl == null || avatarUrl!.isEmpty
+                    ? Text(
+                        initials,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               // ── Info column ─────────────────────────────────────

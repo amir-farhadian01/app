@@ -31,9 +31,9 @@ class BusinessAvatarChip extends StatelessWidget {
           Container(
             width: 60,
             height: 60,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 colors: [AppColors.primary, AppColors.primaryLight],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -71,7 +71,7 @@ class BusinessAvatarChip extends StatelessWidget {
           const SizedBox(height: 4),
           // Follow badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               gradient: isFollowing
                   ? const LinearGradient(

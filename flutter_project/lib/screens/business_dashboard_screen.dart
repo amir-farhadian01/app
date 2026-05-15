@@ -26,6 +26,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
   final BusinessService _businessService = BusinessService();
 
   bool _isLoading = true;
+  bool _routeInitialized = false;
   Map<String, dynamic> _stats = {};
   List<Map<String, dynamic>> _appointments = [];
 
@@ -44,7 +45,15 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_routeInitialized) {
+      _routeInitialized = true;
+      _loadData();
+    }
   }
 
   Future<void> _loadData() async {

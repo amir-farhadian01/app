@@ -1,68 +1,62 @@
-# Neighborly 2.0 — Master Roadmap
+# Neighborly 2.0 — Master Roadmap (Living Document)
 
-> **Version:** 2.0.0  
-> **Last Updated:** 2026-05-14  
-> **Status:** Living Document — update as phases complete
+**Version:** 2.0.0  
+**Last Updated:** 2026-05-09  
+**Status Legend:** ✅ Done · 🚧 In Progress · ⏳ Planned · ❌ Blocked  
+
+> ⚠️ THIS IS THE SOURCE OF TRUTH.
+> Every agent, every PR, every sprint MUST read this file BEFORE writing code.
+> Run `npm run docs:check` first to detect drift.
 
 ---
 
 ## 1. Product Vision
 
-A social marketplace platform — part Instagram, part TaskRabbit, part Groupon.  
-Regular people and businesses share content (photos/videos), discover services, negotiate terms via chat, generate AI-assisted contracts, and complete payments — all without ever sharing personal contact information.
+Neighborly is a **social marketplace platform** — part Instagram, part TaskRabbit, part Groupon — where:
 
-**Core Principles:**
-- **PII Protection** — No phone numbers or emails shared between users. All communication through platform chat.
-- **Email Uniqueness** — One email = one account. `normalizedEmail` enforced at DB level.
-- **Multi-role** — A person can be a customer, work for multiple businesses, and operate independently.
-- **KYC First** — Every user must complete KYC before activation. Businesses need additional verification.
-- **UI Parity** — React (web) and Flutter (mobile/web) share the same UI design based on the current dark theme on port 8077.
+- **Regular users** browse, discover, and share skills/services like a social feed
+- **Solo providers** list personal services (barbering, gardening, baking, etc.)
+- **Corporate businesses** manage employees, clients, invoices, and bookings
+- **Any business vertical** is supported: beauty, auto repair, home services, transport, food, events, etc.
+- **Transport layer (V2):** Uber-like ride/delivery dispatch (motorbike → truck)
+
+The app is **location-aware** and **interest-filtered**: each user sees a feed tailored to their neighbourhood and preferences.
+
+All users (business and personal) undergo **KYC verification** by admin before activation.
 
 ---
 
 ## 2. User Types
 
-| Role | Description | KYC Required |
-|------|-------------|-------------|
-| `PUBLIC_VIEWER` | Unauthenticated visitor — can browse public feed and explore | No |
-| `CUSTOMER` | Registered user — can book services, chat, order | Level 0 email+phone |
-| `SOLO_PROVIDER` | Individual service provider — offers services under personal brand | Level 1 government ID |
-| `BUSINESS_OWNER` | Company owner — manages employees, services, packages | Level 2 business docs |
-| `EMPLOYEE` | Works for a business — assigned role by owner | Level 1 |
-| `ADMIN` | Platform administrator — manages all users, KYC, content | N/A |
+| Type | Description |
+|------|-------------|
+| `PUBLIC_VIEWER` | Unauthenticated — can browse public feed and search |
+| `CUSTOMER` | Registered user — books services, shares posts |
+| `SOLO_PROVIDER` | Individual offering services under personal brand |
+| `BUSINESS_OWNER` | Corporate account with employees and clients |
+| `EMPLOYEE` | Staff member of a business; may also operate independently |
+| `ADMIN` | Platform operator with full access |
+
+> One person can hold multiple roles across multiple businesses simultaneously.
 
 ---
 
 ## 3. Platform Surfaces
 
-```mermaid
-flowchart TD
-    subgraph Users["User Types"]
-        PV[Public Viewer]
-        CU[Customer]
-        SP[Solo Provider]
-        BO[Business Owner]
-        EM[Employee]
-        AD[Admin]
-    end
-
-    subgraph Surfaces["Platform Surfaces"]
-        WEB[React Web App<br/>Vite + TailwindCSS]
-        MOB[Flutter Mobile App<br/>Android + iOS]
-        FLW[Flutter Web App]
-    end
-
-    subgraph Backend["Backend API"]
-        API[Express + TypeScript<br/>PORT 8077]
-        ADM[Admin API<br/>PORT 9090]
-        PRISMA[Prisma ORM]
-        PG[PostgreSQL]
-    end
-
-    Users --> Surfaces
-    Surfaces --> Backend
-    API --> PRISMA --> PG
-    ADM --> PRISMA --> PG
+```
+┌──────────────────────────────────────────────────────┐
+│  PUBLIC FEED (Social Layer — Instagram-like)         │
+│  Videos · Posts · Stories · Services Discovery      │
+├──────────────────────────────────────────────────────┤
+│  CUSTOMER DASHBOARD                                  │
+│  Browse · Book · Track Orders · Chat · Profile       │
+├──────────────────────────────────────────────────────┤
+│  BUSINESS / PROVIDER DASHBOARD                       │
+│  Services · Clients · Invoices · Schedule · Finance  │
+├──────────────────────────────────────────────────────┤
+│  ADMIN PANEL                                         │
+│  KYC · CRM · Orders · Contracts · Analytics · Media  │
+└──────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -71,73 +65,96 @@ flowchart TD
 
 ### Phase 0 — Cleanup & Frontend Bootstrap
 
-| Task | Status |
-|------|--------|
-| Delete junk files: `repoversion2/`, `temp_version2/`, `scratch/`, stale PNGs, PID files | ⏳ |
-| Update `.gitignore` with `*.pid`, `*.png` exceptions, coverage artifacts | ⏳ |
-| Update `docs/` folder with new ROADMAP, FEATURES, AGENTS | ⏳ |
-| Update `CLAUDE.md` and `README.md` | ⏳ |
-| Set up CI/CD: GitHub Actions workflow + SonarCloud config | ⏳ |
-| Run Prisma migrations to sync schema with database | ⏳ |
-| Fix Redis connection (optional — app works without it) | ⏳ |
+**Goal:** Remove stale files, introduce new React frontend shell alongside existing backend.
+
+| Track | Status | Notes |
+|-------|--------|-------|
+| Delete `repoversion2/`, `temp_version2/`, `scratch/` | ⏳ | Agent task — see AGENTS.md |
+| Delete root-level screenshot PNGs | ⏳ | Agent task |
+| Delete `sync-from-version2.sh`, `.backend.pid`, `.flutter.pid` | ⏳ | Agent task |
+| Archive old `docs/` and replace with this set | ⏳ | Agent task |
+| Scaffold new React frontend in `/frontend/` | ⏳ | Vite + React + TailwindCSS + shadcn/ui |
+| CI/CD pipeline baseline (GitHub Actions) | ⏳ | Lint + Test + Build gate |
+| SonarCloud integration | ⏳ | Quality gate: coverage ≥70%, 0 blockers |
+| Docker Compose unified (backend + frontend + db) | ⏳ | Single `docker-compose up` |
 
 ---
 
 ### Phase 1 — Auth, KYC & Identity
 
-| Feature | Status |
-|---------|--------|
-| JWT auth with refresh token rotation | ✅ |
-| Email/password registration with normalizedEmail uniqueness | ✅ |
-| Google OAuth | ✅ |
-| Multi-level KYC: Level 0 email+phone, Level 1 government ID, Level 2 business docs | ✅ |
-| AI-assisted KYC verification (Gemini) | ✅ |
-| Admin KYC review queue | ✅ |
-| Business KYC flow: sole proprietor vs corporation, license, insurance | ✅ |
-| WebAuthn / Passkey support | ✅ |
+**Goal:** Every user is verified before accessing platform features.
+
+| Track | Customer | Provider | Admin | Status |
+|-------|----------|----------|-------|--------|
+| JWT Auth (register/login/refresh/logout) | ✅ | ✅ | ✅ | ✅ Done |
+| KYC Level 0 (email + phone verify) | ✅ | ✅ | ✅ | ✅ Done |
+| KYC Level 1 (government ID upload) | ✅ | ✅ | ✅ | ✅ Done |
+| KYC Level 2 (business registration docs) | ⏳ | ✅ | ✅ | 🚧 In Progress |
+| Admin KYC review queue | — | — | ✅ | ✅ Done |
+| Profile photo enforcement for providers | ⏳ | ⏳ | — | ⏳ Planned |
+| Multi-role support (person in multiple businesses) | ⏳ | ⏳ | — | ⏳ Planned |
+
+> **Security requirement:** Any service provider who visits a client's location (or receives a client) MUST have a verified profile photo visible to the client for identity confirmation.
 
 ---
 
 ### Phase 2 — Social Feed (Public & Personal)
 
-| Feature | Status |
-|---------|--------|
-| Post creation with media upload (photo/video) | ✅ Backend |
-| Post feed with pagination | ✅ Backend |
-| Post reactions (like/love/laugh) | ✅ Backend |
-| Post comments | ✅ Backend |
-| Stories (24h expiry) | ⏳ |
-| Category-based feed filtering | ⏳ |
-| Save/bookmark posts | ⏳ |
-| Business vs General feed tabs | ⏳ |
-| Feed page in new React frontend | ⏳ |
-| Feed page in Flutter | ⏳ |
+**Goal:** Instagram-like feed with algorithmic content delivery based on location + interests.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Public video/photo posts | ⏳ | Both business and regular users |
+| Personal feed (interest + location filtering) | ⏳ | Gender/interest personalization |
+| Business content sharing (promotional videos) | ⏳ | Links to bookable services |
+| Public utility links (banks, insurance, fuel prices) | ⏳ | Admin-curated, commission-tracked referrals |
+| Follow / Unfollow | ⏳ | |
+| Reactions + Comments | ⏳ | |
+| Stories (24h ephemeral) | ⏳ | |
+| Content moderation queue (admin) | ⏳ | Integrated with video audit DB already in place |
+| Video transcoding pipeline | ⏳ | Mux or equivalent, metadata in DB |
+| Media analytics (views, engagement) | ⏳ | Admin dashboard charts |
 
 ---
 
 ### Phase 3 — Service Catalog & Booking Engine
 
-| Feature | Status |
-|---------|--------|
-| Service catalog with categories tree | ✅ |
-| Dynamic field schemas per service category | ✅ |
-| Three booking modes: Fixed-price, Negotiable, Inventory-based | ✅ |
-| Service packages with Bill of Materials | ✅ |
-| Admin form builder for KYC per business type | ✅ |
-| Booking mode lock at category level (admin override) | ✅ |
+**Goal:** Any business type can configure services with flexible booking modes.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Hierarchical category tree (≤5 levels) | ✅ | Admin manages |
+| Service definition with dynamic field schema | ✅ | Powers booking wizard |
+| Booking mode: **Fixed price** (direct appointment) | ✅ | Like Groupon |
+| Booking mode: **Negotiable** (price + date + details) | ✅ | Like TaskRabbit/Jiffy |
+| Booking mode: **Inventory-based** (custom package) | ✅ | Client selects parts/products |
+| Booking mode: **Hybrid** (negotiable date + fixed inventory) | ⏳ | |
+| Auto-appointment (no negotiation) | ✅ | Business configures per service |
+| Provider sets booking mode per service | ✅ | `lockedBookingMode` in schema |
+| Package builder with BOM (Bill of Materials) | ✅ | |
+| Inventory management (products/parts) | ✅ | |
 
 ---
 
 ### Phase 4 — Order Lifecycle
 
-| Feature | Status |
-|---------|--------|
-| Order creation wizard (7-step) | ✅ |
-| Order status tracking: draft → submitted → matching → matched → contracted → paid → in_progress → completed | ✅ |
-| Order phases: offer → order → job | ✅ |
-| Order reviews and ratings | ✅ |
-| Dispute handling | ✅ |
-| Job records with performance metrics | ✅ |
+**Goal:** Full order journey from creation to review.
+
+| Stage | Status |
+|-------|--------|
+| Order wizard (3 entry points) | ✅ |
+| Draft / autosave | ✅ |
+| Dynamic fields per service | ✅ |
+| Photo attachments | ✅ |
+| Submit + matching trigger | ✅ |
+| Provider notification | ✅ |
+| Negotiation chat | ✅ |
+| Contract generation (AI-assisted) | ✅ |
+| Contract versioning + approval | ✅ |
+| Payment gate (contract must be approved) | ✅ |
+| Order completion + review | ✅ |
+| Dispute filing | ✅ |
+| Admin order management | ✅ |
 
 ---
 
@@ -145,30 +162,31 @@ flowchart TD
 
 | Feature | Status |
 |---------|--------|
-| Auto-book (direct match) | ✅ |
-| Round-robin provider rotation | ✅ |
-| Provider eligibility scoring | ✅ |
-| Offer match attempts with expiry | ✅ |
-| Lost deal feedback collection | ✅ |
-| Broadcast to multiple providers | ✅ |
+| Auto-book matching | ✅ |
+| Round-robin (5 providers) | ✅ |
+| Provider eligibility checks | ✅ |
+| Lazy expiry + re-match | ✅ |
+| Admin override | ✅ |
+| Lost-deal capture | ✅ |
 
 ---
 
 ### Phase 6 — Business (Provider) Dashboard
 
-| Feature | Status |
-|---------|--------|
-| Provider inbox with offer management | ✅ |
-| Provider schedule | ✅ |
-| Provider finance (transactions) | ✅ |
-| Provider inventory management | ✅ |
-| Provider packages management | ✅ |
-| Provider staff management | ✅ |
-| Workspace switching for multi-business users | ✅ |
-| Business dashboard in new React frontend | ✅ |
-| Business dashboard in Flutter | ⏳ |
-| Client CRM | ✅ |
-| Invoice generation | ✅ |
+**Goal:** Full business management suite inside the platform.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Workspace (company) creation | ✅ | |
+| Multi-employee management | ✅ | Staff tab |
+| Client (customer) management | ⏳ | CRM-lite for businesses |
+| Invoice generation + sending | ⏳ | PDF invoices |
+| Schedule/Calendar view | ✅ | Provider pipeline orders |
+| Finance tab (earnings snapshot) | ✅ | Read-only, no gateway yet |
+| Service packages management | ✅ | |
+| Inventory management | ✅ | |
+| Business KYC (corporate + sole trader) | ✅ | |
+| Multiple businesses per person | ⏳ | UI for workspace switching |
 
 ---
 
@@ -176,16 +194,15 @@ flowchart TD
 
 | Feature | Status |
 |---------|--------|
-| Order-scoped chat threads | ✅ |
-| PII detection and masking in chat | ✅ |
-| AI-powered chat translation | ✅ |
-| Contract drafting (AI from chat summary) | ✅ |
-| Contract versioning and approval flow | ✅ |
-| Admin contract review | ✅ |
+| Order-scoped chat | ✅ |
+| PII guard + moderation | ✅ |
+| AI translation layer | ✅ |
+| Contract drafting (AI from chat) | ✅ |
+| Contract templates | ✅ |
 | Payment session (post-contract) | ✅ |
-| Stripe Connect integration | ⏳ |
+| Payment gateway integration (Stripe/etc.) | ⏳ |
 | Payout to providers | ⏳ |
-| Multi-payment method support (PayPal, Interac, Square) | ⏳ |
+| Admin payment ledger | ✅ |
 
 ---
 
@@ -204,16 +221,17 @@ flowchart TD
 | Analytics dashboard | ⏳ |
 | Public utility link management | ⏳ |
 | Commission tracking (referral links) | ⏳ |
-| Business trust score management | ⏳ |
-| Stripe Connect overview | ⏳ |
+| SonarQube report view | ⏳ |
 
 ---
 
 ### Phase 9 — Transport Layer (V2)
 
+**Goal:** Uber-like dispatch for motorbikes, cars, vans, trucks.
+
 | Feature | Status |
 |---------|--------|
-| Vehicle type catalog (motorcycle → truck) | ⏳ |
+| Vehicle type catalog (moto → truck) | ⏳ |
 | Real-time driver location tracking | ⏳ |
 | Ride/delivery request flow | ⏳ |
 | Driver acceptance + dispatch | ⏳ |
@@ -226,44 +244,38 @@ flowchart TD
 
 ## 5. Database Schema Strategy
 
-The Prisma schema already has solid foundations (1073 lines, ~40+ models). Key models:
+The Prisma schema already has solid foundations. Key models to extend:
 
 ```
 User → UserRole[] (multi-role)
-Company → employees[] + clients[] + invoices[]
+Business → employees[] + clients[] + invoices[]
 Post → media[] + location + interests[]
-ServiceCatalog → BookingMode + inventory + dynamicFields
+Service → BookingMode + inventory + dynamicFields
 Order → lifecycle → Contract → Payment
 JobRecord → transport extension (V2)
 AuditLog → all admin actions
-MediaAsset → moderation pipeline
-UtilityLink → referral analytics
-UserAddress → tagged locations
-BusinessVerification → license + insurance
-BusinessTrustScore → KYC + license + insurance + rating
-Invoice → DRAFT → SENT → PAID → OVERDUE → CANCELLED
-WorkspaceSocialRole → social media manager assignment
+AnalyticsEvent → media, referral, feed
 ```
 
 **Extensibility rules:**
 - Never delete columns — use `archivedAt` soft-delete
 - All monetary values stored as integers (cents)
 - All timestamps UTC
-- Media metadata stored in DB, files in object storage
+- Media metadata stored in DB, files in object storage (S3/compatible)
 - Analytics events are append-only (no updates)
 
 ---
 
 ## 6. CI/CD Standards
 
-```yaml
+```
 GitHub Actions Workflow:
   on: [push, pull_request]
   
   jobs:
     lint:      eslint + prettier check
     typecheck: tsc --noEmit
-    test:      vitest (backend + frontend) — coverage >= 70%
+    test:      jest (backend) + vitest (frontend) — coverage ≥70%
     sonar:     SonarCloud analysis — 0 blockers/criticals
     build:     docker build (must succeed)
     deploy:    only on main branch + all gates passed
@@ -282,7 +294,7 @@ GitHub Actions Workflow:
 Every PR must pass:
 1. ESLint (0 errors, 0 warnings)
 2. TypeScript strict mode (0 errors)
-3. Unit tests (new code >= 70% coverage)
+3. Unit tests (new code ≥70% coverage)
 4. SonarCloud quality gate
 5. Docker build success
 6. One peer review approval
@@ -293,26 +305,24 @@ Every PR must pass:
 
 ```
 /
-├── prisma/              ← Database schema (1073 lines, ~40+ models)
-├── server.ts            ← Backend entry point (Express + TypeScript)
-├── routes/              ← 37 API route files
-├── lib/                 ← Shared business logic (matching, contracts, KYC, chat)
-├── src/                 ← OLD React frontend (fully implemented — use as reference)
-│   ├── pages/           ← Admin, Customer, Provider, Auth dashboards
-│   ├── components/      ← All UI components (admin, kyc, orders, provider, crm)
-│   ├── services/        ← API service layer
-│   └── lib/             ← Auth context, stores, utilities
-├── frontend/            ← NEW React frontend (Vite + TailwindCSS + shadcn/ui)
+├── src/              ← Backend (Express + TypeScript)
+│   ├── routes/       ← API route handlers
+│   ├── lib/          ← Business logic
+│   └── middleware/   ← Auth, validation
+├── frontend/         ← NEW React frontend (Vite + Tailwind)
 │   ├── src/
-│   │   ├── pages/       ← Route-level pages (mostly stubs, need implementation)
-│   │   ├── components/  ← Layouts + some order components
-│   │   ├── services/    ← API client (7 files, partial)
-│   │   └── store/       ← Zustand stores (auth, ui)
-├── flutter_project/     ← Flutter mobile/web app (30+ screens)
-├── docker/              ← Docker service configs
-├── docs/                ← Documentation
-├── files/               ← Source plan files (to be moved to docs/)
-└── plans/               ← Execution plans
+│   │   ├── pages/    ← Route-level pages
+│   │   ├── components/
+│   │   │   ├── admin/
+│   │   │   ├── business/
+│   │   │   ├── customer/
+│   │   │   └── social/
+│   │   ├── services/ ← API client layer
+│   │   └── store/    ← Zustand state
+├── flutter_project/  ← Mobile app (Flutter)
+├── prisma/           ← Database schema
+├── docker/           ← Service configs
+└── docs/             ← This documentation set
 ```
 
 ---
@@ -328,4 +338,4 @@ Coming after core platform stability:
 - Real-time GPS tracking
 - Fare rules engine per vehicle class
 
-Built as a first-class service type within the existing catalog/booking framework — not a separate codebase.
+This will be built as a first-class service type within the existing catalog/booking framework, not a separate codebase.

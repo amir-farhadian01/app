@@ -1,33 +1,22 @@
 # Neighborly 2.0
 
-Social marketplace platform — part Instagram, part TaskRabbit, part Groupon.
-Local services booking with social feed, KYC verification, and Stripe Connect payouts.
+A social marketplace platform — part Instagram, part TaskRabbit, part Groupon.
 
 ## Stack
-- **Backend**: Node.js + Express + TypeScript + Prisma + PostgreSQL (port 8077)
-- **Frontend (new)**: React 18 + Vite + TailwindCSS + Zustand (port 5173, in `frontend/`)
-- **Frontend (old)**: React 18 + Vite (served by backend on port 8077, in `src/`)
-- **Mobile**: Flutter (iOS + Android + Web, in `flutter_project/`)
-- **Infrastructure**: Docker + Redis + NATS
+- Backend: Express + TypeScript (PORT 8077)
+- Frontend: React + Vite + TailwindCSS + shadcn/ui (/frontend/)
+- Mobile: Flutter (/flutter_project/)
+- Database: PostgreSQL via Prisma 5.x
+- Admin API: PORT 9090
 
 ## Getting Started
-1. `cp .env.example .env` (fill in required values)
-2. `docker compose up -d` (starts postgres, redis, NATS)
-3. `npx prisma migrate dev`
-4. `npm run dev` (starts backend on port 8077)
-5. `cd frontend && npm run dev` (starts new frontend on port 5173)
+```bash
+npm install && npm run dev               # backend on :8077
+cd frontend && npm install && npm run dev # frontend on :5173
+```
 
 ## Documentation
-Read `docs/ROADMAP.md` first for the full phased execution plan.
-
-## Project Structure
-```
-├── src/              # Old React frontend (served by backend on port 8077)
-├── frontend/         # New React frontend (port 5173)
-├── flutter_project/  # Flutter mobile app
-├── routes/           # Backend API routes
-├── prisma/           # Prisma schema and migrations
-├── docs/             # Documentation
-├── plans/            # Execution plans
-└── docker/           # Docker configuration
-```
+- [ROADMAP.md](docs/ROADMAP.md) — master feature roadmap
+- [FEATURES.md](docs/FEATURES.md) — detailed feature specs
+- [AGENTS.md](docs/AGENTS.md) — agent/contributor instructions
+- [START_HERE.md](docs/START_HERE.md) — onboarding guide

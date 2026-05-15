@@ -1,3 +1,6 @@
+> READ files/AGENTS.md COMPLETELY BEFORE WRITING ANY CODE.
+> Then read files/ROADMAP.md. Then read files/FEATURES.md.
+
 # Neighborly 2.0 — Claude/Cursor Agent Guide
 
 Read these files in this exact order before doing anything:

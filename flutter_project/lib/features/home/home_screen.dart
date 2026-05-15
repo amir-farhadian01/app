@@ -1,248 +1,340 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
+import '../../core/app_theme.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /// Home Screen
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Sections: Header, Search, Category chips, Featured Services, Recent Requests.
+/// Sections: Top Bar, Search, Category Chips, Nearby Services, Community Feed.
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
-  static const List<String> _categories = [
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _selectedCategoryIndex = 0;
+
+  final List<String> _categories = [
     'All',
     'Cleaning',
     'Plumbing',
     'Electrical',
     'Gardening',
     'Moving',
-    'Painting',
-    'Carpentry',
   ];
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColors.background,
+      backgroundColor: NeighborlyColors.bgPrimary,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          padding: const EdgeInsets.symmetric(horizontal: NeighborlySpacing.s16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: NeighborlySpacing.s12),
 
-              // ── SECTION A: Header ──────────────────────────────
+              // ── SECTION A: Top Bar ──────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Hello, Neighbor 👋',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  // Left: avatar + greeting
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 19,
+                        backgroundColor: NeighborlyColors.bgCardLight,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: NeighborlyColors.accentTeal,
+                              width: 2,
+                            ),
+                          ),
+                          child: CircleAvatar(
+                            radius: 17,
+                            backgroundColor: NeighborlyColors.bgCardLight,
+                            child: Text(
+                              'U',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: NeighborlyColors.accentTeal,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: NeighborlySpacing.s12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Good morning,',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: NeighborlyColors.textSecondary,
+                            ),
+                          ),
+                          Text(
+                            'Neighbor',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: NeighborlyColors.textPrimary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  Stack(
+                  // Right: notification + search icons
+                  Row(
                     children: [
                       IconButton(
                         icon: const Icon(Icons.notifications_outlined),
-                        color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
+                        color: NeighborlyColors.textPrimary,
                         onPressed: () {},
                       ),
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+                      IconButton(
+                        icon: const Icon(Icons.search),
+                        color: NeighborlyColors.textPrimary,
+                        onPressed: () {},
                       ),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: NeighborlySpacing.s16),
 
               // ── SECTION B: Search bar ──────────────────────────
               TextField(
-                enabled: false,
                 decoration: InputDecoration(
-                  hintText: 'What service do you need?',
-                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'Search services, providers...',
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: NeighborlyColors.accent,
+                  ),
                   filled: true,
-                  fillColor: isDark ? AppColors.surface : AppColors.surface,
+                  fillColor: NeighborlyColors.bgCard,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    borderRadius: BorderRadius.circular(NeighborlyRadius.xl),
                     borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(NeighborlyRadius.xl),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(NeighborlyRadius.xl),
+                    borderSide: const BorderSide(
+                      color: NeighborlyColors.accent,
+                      width: 1.5,
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: NeighborlySpacing.s12),
 
               // ── SECTION C: Category chips ──────────────────────
               SizedBox(
-                height: 36,
-                child: ListView.separated(
+                height: 40,
+                child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: _categories.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
                   itemBuilder: (context, index) {
-                    final isFirst = index == 0;
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: isFirst
-                            ? AppColors.primary
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(AppRadius.full),
-                        border: Border.all(
-                          color: isFirst
-                              ? AppColors.primary
-                              : AppColors.primary.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        _categories[index],
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: isFirst
-                              ? Colors.white
-                              : AppColors.primary,
+                    final isSelected = index == _selectedCategoryIndex;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: NeighborlySpacing.s12),
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedCategoryIndex = index),
+                        borderRadius: BorderRadius.circular(NeighborlyRadius.lg),
+                        child: Container(
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NeighborlySpacing.s16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? NeighborlyColors.accent
+                                : NeighborlyColors.bgCard,
+                            borderRadius: BorderRadius.circular(NeighborlyRadius.lg),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            _categories[index],
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 13,
+                              fontWeight:
+                                  isSelected ? FontWeight.bold : FontWeight.w500,
+                              color: isSelected
+                                  ? Colors.white
+                                  : NeighborlyColors.textSecondary,
+                            ),
+                          ),
                         ),
                       ),
                     );
                   },
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: NeighborlySpacing.s24),
 
-              // ── SECTION D: Featured Services ───────────────────
-              Text(
-                'Featured Services',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
-                ),
+              // ── SECTION D: Nearby Services ─────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Nearby Services',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: NeighborlyColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {},
+                    child: Text(
+                      'See all',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: NeighborlyColors.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: NeighborlySpacing.s8),
+
+              // Service cards horizontal list
               SizedBox(
-                height: 220,
-                child: ListView.separated(
+                height: 230,
+                child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: 4,
-                  separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
                   itemBuilder: (context, index) {
-                    return _ServiceCard(index: index);
+                    return _buildServiceCard(index);
                   },
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: NeighborlySpacing.s24),
 
-              // ── SECTION E: Recent Requests ─────────────────────
-              Text(
-                'Recent Requests',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
-                ),
+              // ── SECTION E: Community Feed ──────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Community Feed',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: NeighborlyColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {},
+                    child: Text(
+                      'See all',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: NeighborlyColors.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.sm),
-              ...List.generate(3, (index) {
-                return _RequestItem(index: index);
-              }),
-              const SizedBox(height: AppSpacing.xxl),
+              const SizedBox(height: NeighborlySpacing.s8),
+
+              // Feed placeholder items
+              ...List.generate(3, (index) => _buildFeedItem(index)),
+              const SizedBox(height: 80),
             ],
           ),
         ),
       ),
     );
   }
-}
 
-/// Mock service card for Featured Services section.
-class _ServiceCard extends StatelessWidget {
-  const _ServiceCard({required this.index});
-
-  final int index;
-
-  static const _titles = [
-    'Deep Cleaning',
-    'Pipe Repair',
-    'Garden Design',
-    'Electrical Fix',
-  ];
-
-  static const _providers = [
-    'CleanPro',
-    'PipeMaster',
-    'GreenThumb',
-    'SparkElec',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildServiceCard(int index) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final serviceNames = [
+      'Professional Cleaning',
+      'Expert Plumbing',
+      'Electrical Repair',
+      'Garden Design',
+    ];
+    final providerNames = [
+      'CleanPro Inc.',
+      'PipeMaster Co.',
+      'VoltFix Ltd.',
+      'GreenScape',
+    ];
 
     return Container(
       width: 180,
+      margin: const EdgeInsets.only(right: NeighborlySpacing.s12),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.surface : AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        boxShadow: AppColors.cardShadow,
+        color: NeighborlyColors.bgCard,
+        borderRadius: BorderRadius.circular(NeighborlyRadius.md),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Color block top
+          // Top 60% — gradient area
           Container(
-            height: 80,
-            decoration: BoxDecoration(
+            height: 138,
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  AppColors.primary,
-                  AppColors.primary.withValues(alpha: 0.7),
-                ],
+                colors: [NeighborlyColors.accent, NeighborlyColors.accentTeal],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.cleaning_services,
-              size: 36,
-              color: Colors.white.withValues(alpha: 0.8),
+            child: const Center(
+              child: Icon(
+                Icons.cleaning_services,
+                size: 40,
+                color: Colors.white38,
+              ),
             ),
           ),
-          // Content
+          // Bottom 40% — content
           Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: const EdgeInsets.all(NeighborlySpacing.s12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _titles[index],
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontSize: 15,
-                    color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
+                  serviceNames[index],
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: NeighborlyColors.textPrimary,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _providers[index],
+                  providerNames[index],
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: NeighborlyColors.textSecondary,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     const Icon(Icons.star, size: 14, color: Colors.amber),
@@ -250,18 +342,18 @@ class _ServiceCard extends StatelessWidget {
                     Text(
                       '4.8',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: NeighborlyColors.textSecondary,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   'From \$25',
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: theme.textTheme.bodyLarge?.copyWith(
                     fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    color: NeighborlyColors.accent,
                   ),
                 ),
               ],
@@ -271,92 +363,62 @@ class _ServiceCard extends StatelessWidget {
       ),
     );
   }
-}
 
-/// Mock request item for Recent Requests section.
-class _RequestItem extends StatelessWidget {
-  const _RequestItem({required this.index});
-
-  final int index;
-
-  static const _titles = [
-    'Fix leaking faucet',
-    'Clean 2-bedroom apartment',
-    'Paint living room',
-  ];
-
-  static const _subtitles = [
-    'Plumbing • Kitchen',
-    'Cleaning • Downtown',
-    'Painting • 3 rooms',
-  ];
-
-  static const _dates = [
-    'Today, 2:00 PM',
-    'Tomorrow, 10:00 AM',
-    'Jun 5, 9:00 AM',
-  ];
-
-  Color _statusColor(int i) {
-    if (i == 0) return AppColors.accent; // pending
-    if (i == 1) return AppColors.primary; // active
-    return AppColors.primary; // done
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildFeedItem(int index) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final feedUsers = [
+      'Sarah J.',
+      'Mike R.',
+      'Emma L.',
+    ];
+    const feedCategories = [
+      'Plumbing',
+      'Moving',
+      'Electrical',
+    ];
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.surface : AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          boxShadow: AppColors.cardShadow,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: _statusColor(index),
-                shape: BoxShape.circle,
-              ),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: NeighborlySpacing.s12),
+      padding: const EdgeInsets.all(NeighborlySpacing.s12),
+      decoration: BoxDecoration(
+        color: NeighborlyColors.bgCard,
+        borderRadius: BorderRadius.circular(NeighborlyRadius.sm),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: NeighborlyColors.accent.withValues(alpha: 0.15),
+            child: const Icon(
+              Icons.person,
+              size: 20,
+              color: NeighborlyColors.accent,
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _titles[index],
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
-                    ),
+          ),
+          const SizedBox(width: NeighborlySpacing.s8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${feedUsers[index]} posted a request',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: NeighborlyColors.textPrimary,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _subtitles[index],
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${feedCategories[index]} · 2 min ago',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: NeighborlyColors.textSecondary,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Text(
-              _dates[index],
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

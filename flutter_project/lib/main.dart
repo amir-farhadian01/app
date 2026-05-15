@@ -3,12 +3,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 
 import 'core/theme/app_theme.dart';
-import 'core/router/app_router.dart';
+import 'features/shell/main_shell.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Neighborly — Main Entry Point
+/// Neighborly — Main Entry Point (Visual Prototype)
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Uses the design system from [AppTheme] and routes from [AppRoutes].
+/// Opens directly to MainShell with bottom navigation.
+/// No auth, no API calls — all data is hardcoded mock.
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Future<void> main() async {
@@ -36,11 +37,10 @@ class NeighborlyApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      initialRoute: AppRoutes.splash,
-      onGenerateRoute: onGenerateAppRoute,
-      theme: AppTheme.dark,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.dark,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: ThemeMode.light,
+      home: const MainShell(),
     );
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
+import '../../core/app_theme.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /// My Jobs Screen
@@ -19,12 +19,12 @@ class JobsScreen extends StatelessWidget {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: isDark ? AppColors.background : AppColors.background,
+        backgroundColor: isDark ? NeighborlyColors.bgPrimary : NeighborlyColors.bgPrimary,
         appBar: AppBar(
           title: Text(
             'My Jobs',
             style: theme.textTheme.titleMedium?.copyWith(
-              color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
+              color: isDark ? NeighborlyColors.textPrimary : NeighborlyColors.textPrimary,
             ),
           ),
           bottom: const TabBar(
@@ -32,9 +32,9 @@ class JobsScreen extends StatelessWidget {
               Tab(text: 'Posted'),
               Tab(text: 'Received'),
             ],
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
-            indicatorColor: AppColors.primary,
+            labelColor: NeighborlyColors.accent,
+            unselectedLabelColor: NeighborlyColors.textSecondary,
+            indicatorColor: NeighborlyColors.accent,
           ),
         ),
         body: TabBarView(
@@ -59,38 +59,38 @@ class _EmptyJobsTab extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
+        padding: const EdgeInsets.all(NeighborlySpacing.s32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(
               Icons.work_outline,
               size: 64,
-              color: AppColors.textSecondary,
+              color: NeighborlyColors.textSecondary,
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: NeighborlySpacing.s16),
             Text(
               'No jobs yet',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: isDark ? AppColors.textPrimary : AppColors.textPrimary,
+                color: isDark ? NeighborlyColors.textPrimary : NeighborlyColors.textPrimary,
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: NeighborlySpacing.s8),
             Text(
               'Post your first job to get started',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
+                color: NeighborlyColors.textSecondary,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: NeighborlySpacing.s24),
             FilledButton(
               onPressed: () {},
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: NeighborlyColors.accent,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  borderRadius: BorderRadius.circular(NeighborlyRadius.lg),
                 ),
               ),
               child: const Text('Post your first job'),

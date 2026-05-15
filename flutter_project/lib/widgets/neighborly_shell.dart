@@ -210,15 +210,15 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
   /// Auth drawer (right side) — matches Layout.tsx slide-in menu with Navigation, Events Hub, Profile & Business sections.
   Widget _buildAuthDrawer(BuildContext context, NeighborlyApiService api, List<_NavItem> nav, UserModel user) {
     final eventItems = <_DrawerLink>[
-      _DrawerLink('Alerts', LucideIcons.bell, '/notifications'),
-      _DrawerLink('Tickets', LucideIcons.headphones, '/tickets'),
+      const _DrawerLink('Alerts', LucideIcons.bell, '/notifications'),
+      const _DrawerLink('Tickets', LucideIcons.headphones, '/tickets'),
     ];
 
     final profileItems = <_DrawerLink>[
-      _DrawerLink('Account', LucideIcons.user, '/account'),
-      _DrawerLink('My Profile', LucideIcons.user, '/profile'),
-      _DrawerLink('My Requests', LucideIcons.clipboardList, '/dashboard?tab=requests'),
-      _DrawerLink('Spending', LucideIcons.dollarSign, '/dashboard?tab=finance'),
+      const _DrawerLink('Account', LucideIcons.user, '/account'),
+      const _DrawerLink('My Profile', LucideIcons.user, '/profile'),
+      const _DrawerLink('My Requests', LucideIcons.clipboardList, '/dashboard?tab=requests'),
+      const _DrawerLink('Spending', LucideIcons.dollarSign, '/dashboard?tab=finance'),
     ];
 
     return Drawer(
@@ -594,7 +594,7 @@ class _NeighborlyShellState extends State<NeighborlyShell> {
             children: [
               Row(
                 children: [
-                  _LogoMark(),
+                  const _LogoMark(),
                   const SizedBox(width: 8),
                   Text('NEIGHBORLY', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, fontSize: 18)),
                 ],
@@ -667,7 +667,7 @@ class _MobileBottomNavCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final isBusiness = item.isBusiness;
     final activeColor = isBusiness ? _kBusinessOrange : _kPrimaryBlue;
-    final inactiveColor = const Color(0xFF4A4F70);
+    const inactiveColor = Color(0xFF4A4F70);
     final textColor = isBusiness
         ? _kBusinessOrange
         : (active ? _kPrimaryBlue : inactiveColor);
@@ -1202,9 +1202,9 @@ class _HeaderBar extends StatelessWidget {
   String _avatarInitials(UserModel? user) {
     if (user == null) return '?';
     final name = user.displayName;
-    if (name != null && name.isNotEmpty) return name.substring(0, 1).toUpperCase();
+    if (name.isNotEmpty) return name.substring(0, 1).toUpperCase();
     final email = user.email;
-    if (email != null && email.isNotEmpty) return email.substring(0, 1).toUpperCase();
+    if (email.isNotEmpty) return email.substring(0, 1).toUpperCase();
     return '?';
   }
 }

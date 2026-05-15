@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/theme/app_theme.dart';
+import '../core/app_theme.dart';
 import '../screens/home_screen.dart';
 import '../screens/social_screen.dart';
 import '../screens/business_dashboard_screen.dart';
@@ -55,32 +55,32 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   Widget _buildDesktopLayout() {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: NeighborlyColors.bgPrimary,
       body: SafeArea(
         child: Row(
           children: [
             NavigationRail(
-              backgroundColor: AppColors.surface,
+              backgroundColor: NeighborlyColors.bgCard,
               selectedIndex: _currentIndex,
               onDestinationSelected: (index) {
                 setState(() => _currentIndex = index);
               },
               labelType: NavigationRailLabelType.all,
               selectedIconTheme: const IconThemeData(
-                color: AppColors.primary,
+                color: NeighborlyColors.accent,
               ),
               unselectedIconTheme: const IconThemeData(
-                color: AppColors.textSecondary,
+                color: NeighborlyColors.textSecondary,
               ),
               selectedLabelTextStyle: GoogleFonts.plusJakartaSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: AppColors.primary,
+                color: NeighborlyColors.accent,
               ),
               unselectedLabelTextStyle: GoogleFonts.plusJakartaSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+                color: NeighborlyColors.textSecondary,
               ),
               minWidth: 72,
               leading: Padding(
@@ -92,11 +92,11 @@ class _MainScaffoldState extends State<MainScaffold> {
                       height: 40,
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [AppColors.primary, AppColors.primaryLight],
+                          colors: [NeighborlyColors.accent, NeighborlyColors.accent],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        borderRadius: BorderRadius.circular(NeighborlyRadius.md),
                       ),
                       child: const Center(
                         child: Text('🏘️', style: TextStyle(fontSize: 20)),
@@ -108,7 +108,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
+                        color: NeighborlyColors.accent,
                       ),
                     ),
                   ],
@@ -122,7 +122,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                       ))
                   .toList(),
             ),
-            const VerticalDivider(width: 1, color: AppColors.border),
+            VerticalDivider(width: 1, color: NeighborlyColors.textFaint),
             // Content
             Expanded(
               child: IndexedStack(
@@ -140,7 +140,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   Widget _buildMobileLayout() {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: NeighborlyColors.bgPrimary,
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
@@ -149,7 +149,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         decoration: BoxDecoration(
           border: Border(
             top: BorderSide(
-              color: AppColors.border,
+              color: NeighborlyColors.textFaint,
               width: 0.5,
             ),
           ),
@@ -158,19 +158,19 @@ class _MainScaffoldState extends State<MainScaffold> {
           currentIndex: _currentIndex,
           onTap: (index) => setState(() => _currentIndex = index),
           type: BottomNavigationBarType.fixed,
-          backgroundColor: AppColors.surface,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.textSecondary,
+          backgroundColor: NeighborlyColors.bgCard,
+          selectedItemColor: NeighborlyColors.accent,
+          unselectedItemColor: NeighborlyColors.textSecondary,
           elevation: 0,
           selectedLabelStyle: GoogleFonts.plusJakartaSans(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: AppColors.primary,
+            color: NeighborlyColors.accent,
           ),
           unselectedLabelStyle: GoogleFonts.plusJakartaSans(
             fontSize: 10,
             fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
+            color: NeighborlyColors.textSecondary,
           ),
           items: _navItems
               .map((item) => BottomNavigationBarItem(
@@ -202,7 +202,7 @@ class _AccountPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: NeighborlyColors.bgPrimary,
       body: SafeArea(
         child: Center(
           child: Column(
@@ -213,11 +213,11 @@ class _AccountPlaceholder extends StatelessWidget {
                 height: 80,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AppColors.primary, AppColors.primaryLight],
+                    colors: [NeighborlyColors.accent, NeighborlyColors.accent],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(AppRadius.xl),
+                  borderRadius: BorderRadius.circular(NeighborlyRadius.xl),
                 ),
                 child: const Center(
                   child: Icon(Icons.person, size: 40, color: Colors.white),
@@ -229,7 +229,7 @@ class _AccountPlaceholder extends StatelessWidget {
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: NeighborlyColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -238,7 +238,7 @@ class _AccountPlaceholder extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
+                  color: NeighborlyColors.textSecondary,
                 ),
               ),
             ],

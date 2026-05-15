@@ -1,578 +1,441 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/app_theme.dart';
-import '../../core/widgets/skeleton_loader.dart';
-import '../home/home_provider.dart';
-import '../home/models/service_model.dart';
+import '../../core/theme/app_theme.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Explore Screen
+/// Explore Screen (Redesigned)
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Full-screen search + grid of service categories.
+/// Sticky search bar, filter bottom sheet, 2-column results grid.
+/// All data is hardcoded mock.
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-class ExploreScreen extends ConsumerStatefulWidget {
+class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
 
   @override
-  ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
+  State<ExploreScreen> createState() => _ExploreScreenState();
 }
 
-class _ExploreScreenState extends ConsumerState<ExploreScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
+class _ExploreScreenState extends State<ExploreScreen> {
+  // ── Filter state ─────────────────────────────────────────────────
+  final Set<String> _selectedCategories = {'Plumbing'};
+  double _distanceRange = 10;
+  int _minRating = 0;
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  // ── Mock results ─────────────────────────────────────────────────
+  static const List<_ServiceResult> _allResults = [
+    _ServiceResult(name: 'Pipe Repair', provider: 'Mike D.', category: 'Plumbing', price: '\$40/hr', rating: 4.8, icon: Icons.plumbing),
+    _ServiceResult(name: 'Drain Cleaning', provider: 'Sara J.', category: 'Plumbing', price: '\$35/hr', rating: 4.6, icon: Icons.plumbing),
+    _ServiceResult(name: 'Outlet Installation', provider: 'Reza M.', category: 'Electrical', price: '\$50/hr', rating: 4.9, icon: Icons.electrical_services),
+    _ServiceResult(name: 'Wiring Repair', provider: 'Tom K.', category: 'Electrical', price: '\$45/hr', rating: 4.7, icon: Icons.electrical_services),
+    _ServiceResult(name: 'Deep Cleaning', provider: 'Layla K.', category: 'Cleaning', price: '\$25/hr', rating: 4.9, icon: Icons.cleaning_services),
+    _ServiceResult(name: 'Carpet Cleaning', provider: 'Nadia R.', category: 'Cleaning', price: '\$30/hr', rating: 4.5, icon: Icons.cleaning_services),
+    _ServiceResult(name: 'Interior Painting', provider: 'Layla K.', category: 'Painting', price: '\$35/hr', rating: 4.8, icon: Icons.format_paint),
+    _ServiceResult(name: 'Exterior Painting', provider: 'Omar S.', category: 'Painting', price: '\$45/hr', rating: 4.6, icon: Icons.format_paint),
+  ];
+
+  List<_ServiceResult> get _filteredResults {
+    return _allResults.where((r) {
+      if (_selectedCategories.isNotEmpty && !_selectedCategories.contains(r.category)) return false;
+      if (_minRating > 0 && r.rating < _minRating) return false;
+      return true;
+    }).toList();
   }
 
-  void _onSearchChanged(String value) {
-    if (value == _searchQuery) return;
-    _searchQuery = value;
-    // Debounce 500ms
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (_searchQuery == value) {
-        ref.read(searchProvider.notifier).search(value);
-      }
-    });
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _FilterSheet(
+        selectedCategories: Set.from(_selectedCategories),
+        distanceRange: _distanceRange,
+        minRating: _minRating,
+        onApply: (cats, dist, rating) {
+          setState(() {
+            _selectedCategories
+              ..clear()
+              ..addAll(cats);
+            _distanceRange = dist;
+            _minRating = rating;
+          });
+          Navigator.pop(ctx);
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final results = _filteredResults;
 
     return Scaffold(
-      backgroundColor: NeighborlyColors.bgPrimary,
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: NeighborlySpacing.s16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: NeighborlySpacing.s12),
+        child: Column(
+          children: [
+            // ── Sticky Search Bar ──────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm,
+              ),
+              child: SearchBar(
+                hintText: 'Search services in Vaughan...',
+                leading: const Icon(Icons.search, color: AppColors.textMuted),
+                trailing: [
+                  IconButton(
+                    icon: const Icon(Icons.tune, color: AppColors.primary),
+                    onPressed: _showFilterSheet,
+                  ),
+                ],
+                backgroundColor: WidgetStateProperty.all(AppColors.surface),
+                elevation: WidgetStateProperty.all(0),
+                side: WidgetStateProperty.all(
+                  const BorderSide(color: AppColors.border),
+                ),
+                shape: WidgetStateProperty.all(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+                padding: WidgetStateProperty.all(
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                ),
+                textStyle: WidgetStateProperty.all(
+                  const TextStyle(color: AppColors.textPrimary),
+                ),
+                hintStyle: WidgetStateProperty.all(
+                  const TextStyle(color: AppColors.textMuted),
+                ),
+              ),
+            ),
 
-              // ── Top Bar ──────────────────────────────────────────
-              Row(
+            // ── Results count ──────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Row(
                 children: [
                   Text(
-                    'Explore',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: NeighborlyColors.textPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    '${results.length} services found',
+                    style: AppTextStyles.bodySmall(color: AppColors.textMuted),
                   ),
                 ],
               ),
-              const SizedBox(height: NeighborlySpacing.s12),
-
-              // ── Search input ─────────────────────────────────────
-              TextField(
-                controller: _searchController,
-                autofocus: true,
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: 'Search services, providers...',
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: NeighborlyColors.accent,
-                  ),
-                  filled: true,
-                  fillColor: NeighborlyColors.bgCard,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(NeighborlyRadius.xl),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(NeighborlyRadius.xl),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(NeighborlyRadius.xl),
-                    borderSide: const BorderSide(
-                      color: NeighborlyColors.accent,
-                      width: 1.5,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Show search results or original content
-              if (_searchQuery.isNotEmpty)
-                _buildSearchResults()
-              else
-                _buildOriginalContent(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchResults() {
-    final searchAsync = ref.watch(searchProvider);
-
-    return searchAsync.when(
-      data: (results) {
-        if (results.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: NeighborlySpacing.s48),
-                const Icon(
-                  Icons.search_off,
-                  size: 48,
-                  color: NeighborlyColors.textSecondary,
-                ),
-                const SizedBox(height: NeighborlySpacing.s12),
-                Text(
-                  'No results found',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: NeighborlyColors.textSecondary,
-                  ),
-                ),
-              ],
             ),
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: NeighborlySpacing.s16),
-            Text(
-              "Results for '$_searchQuery'",
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: NeighborlyColors.textPrimary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: NeighborlySpacing.s12),
-            ...results.take(3).map(
-              (service) => Padding(
-                padding: const EdgeInsets.only(bottom: NeighborlySpacing.s12),
-                child: _CompactServiceCard(service: service),
-              ),
-            ),
-          ],
-        );
-      },
-      loading: () => Column(
-        children: List.generate(3, (_) => Padding(
-          padding: const EdgeInsets.only(bottom: NeighborlySpacing.s12),
-          child: _SearchResultSkeleton(),
-        )),
-      ),
-      error: (e, __) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: NeighborlySpacing.s48),
-            const Icon(Icons.error_outline, color: NeighborlyColors.error, size: 40),
-            const SizedBox(height: 8),
-            Text(
-              'Search failed. Try again.',
-              style: TextStyle(color: NeighborlyColors.textFaint),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+            const SizedBox(height: AppSpacing.sm),
 
-  Widget _buildOriginalContent() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: NeighborlySpacing.s20),
-
-        // ── Browse Categories ─────────────────────────────────────
-        Text(
-          'Browse Categories',
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: NeighborlyColors.textPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: NeighborlySpacing.s12),
-        _buildCategoryGrid(),
-
-        const SizedBox(height: NeighborlySpacing.s24),
-
-        // ── Top Rated ─────────────────────────────────────────────
-        Text(
-          'Top Rated',
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: NeighborlyColors.textPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: NeighborlySpacing.s12),
-        _buildTopRatedServices(),
-      ],
-    );
-  }
-
-  Widget _buildCategoryGrid() {
-    final categoriesAsync = ref.watch(categoriesProvider);
-
-    return categoriesAsync.when(
-      data: (categories) {
-        // Use static 6 categories as fallback if API returns empty
-        final displayNames = categories.isNotEmpty
-            ? categories.take(6).map((c) => c.name).toList()
-            : _defaultCategories;
-
-        return GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          shrinkWrap: true,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.6,
-          ),
-          itemCount: displayNames.length,
-          itemBuilder: (context, index) {
-            final catName = displayNames[index];
-            return GestureDetector(
-              onTap: () {
-                ref.read(searchProvider.notifier).search('category:${catName.toLowerCase()}');
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [NeighborlyColors.accent, NeighborlyColors.accentTeal],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(NeighborlyRadius.sm),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _iconForCategory(catName),
-                      size: 28,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(height: NeighborlySpacing.s8),
-                    Text(
-                      catName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontSize: 13,
+            // ── Results Grid ───────────────────────────────────────
+            Expanded(
+              child: results.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.search_off, size: 64, color: AppColors.textFaint),
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            'No services found',
+                            style: AppTextStyles.titleMedium(color: AppColors.textMuted),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            'Try adjusting your filters',
+                            style: AppTextStyles.bodySmall(color: AppColors.textMuted),
+                          ),
+                        ],
                       ),
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                      itemCount: results.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: AppSpacing.md,
+                        crossAxisSpacing: AppSpacing.md,
+                        childAspectRatio: 0.85,
+                      ),
+                      itemBuilder: (context, index) {
+                        final item = results[index];
+                        return _ResultCard(item: item);
+                      },
                     ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-      loading: () => GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        shrinkWrap: true,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.6,
-        ),
-        itemCount: 6,
-        itemBuilder: (_, __) => const SkeletonBox(
-          width: double.infinity,
-          height: 60,
-          borderRadius: 12,
+            ),
+          ],
         ),
       ),
-      error: (_, __) => const SizedBox.shrink(),
     );
   }
-
-  Widget _buildTopRatedServices() {
-    final servicesAsync = ref.watch(nearbyServicesProvider);
-
-    return servicesAsync.when(
-      data: (services) {
-        final top = services.take(4).toList();
-        if (top.isEmpty) {
-          // Show static placeholder cards
-          return Column(
-            children: List.generate(4, (index) => Padding(
-              padding: const EdgeInsets.only(bottom: NeighborlySpacing.s12),
-              child: _CompactServiceCard(
-                service: ServiceModel(
-                  id: 'placeholder_$index',
-                  title: _placeholderServices[index]['title']!,
-                  providerName: _placeholderServices[index]['provider']!,
-                  price: 30.0,
-                  rating: 4.9,
-                ),
-              ),
-            )),
-          );
-        }
-        return Column(
-          children: top.map((service) => Padding(
-            padding: const EdgeInsets.only(bottom: NeighborlySpacing.s12),
-            child: _CompactServiceCard(service: service),
-          )).toList(),
-        );
-      },
-      loading: () => Column(
-        children: List.generate(4, (_) => Padding(
-          padding: const EdgeInsets.only(bottom: NeighborlySpacing.s12),
-          child: _TopRatedSkeleton(),
-        )),
-      ),
-      error: (_, __) => const SizedBox.shrink(),
-    );
-  }
-
-  ThemeData get theme => Theme.of(context);
-
-  IconData _iconForCategory(String name) {
-    switch (name.toLowerCase()) {
-      case 'cleaning':
-      case 'home':
-        return Icons.cleaning_services;
-      case 'plumbing':
-        return Icons.plumbing;
-      case 'electrical':
-        return Icons.electrical_services;
-      case 'gardening':
-      case 'yard':
-        return Icons.yard;
-      case 'moving':
-      case 'local_shipping':
-        return Icons.local_shipping;
-      case 'painting':
-      case 'format_paint':
-        return Icons.format_paint;
-      case 'carpentry':
-      case 'handyman':
-        return Icons.handyman;
-      case 'beauty':
-        return Icons.spa;
-      case 'auto':
-        return Icons.directions_car;
-      case 'food':
-        return Icons.restaurant;
-      case 'events':
-        return Icons.celebration;
-      case 'health':
-        return Icons.favorite;
-      case 'education':
-        return Icons.school;
-      case 'tech':
-        return Icons.computer;
-      default:
-        return Icons.miscellaneous_services;
-    }
-  }
-
-  /// Default category names when API returns empty.
-  static const List<String> _defaultCategories = [
-    'Cleaning',
-    'Plumbing',
-    'Electrical',
-    'Gardening',
-    'Moving',
-    'Carpentry',
-  ];
-
-  /// Placeholder services when API returns empty.
-  static const List<Map<String, String>> _placeholderServices = [
-    {'title': 'Professional Cleaning', 'provider': 'CleanPro Inc.'},
-    {'title': 'Expert Plumbing', 'provider': 'PipeMaster Co.'},
-    {'title': 'Electrical Repair', 'provider': 'VoltFix Ltd.'},
-    {'title': 'Garden Design', 'provider': 'GreenScape'},
-  ];
 }
 
-/// Compact service card used in search results and top rated list.
-class _CompactServiceCard extends StatelessWidget {
-  final ServiceModel service;
+/// ── Service Result Model ─────────────────────────────────────────────
+class _ServiceResult {
+  final String name;
+  final String provider;
+  final String category;
+  final String price;
+  final double rating;
+  final IconData icon;
 
-  const _CompactServiceCard({required this.service});
+  const _ServiceResult({
+    required this.name,
+    required this.provider,
+    required this.category,
+    required this.price,
+    required this.rating,
+    required this.icon,
+  });
+}
+
+/// ── Result Card Widget ───────────────────────────────────────────────
+class _ResultCard extends StatelessWidget {
+  final _ServiceResult item;
+
+  const _ResultCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Container(
-      padding: const EdgeInsets.all(NeighborlySpacing.s12),
       decoration: BoxDecoration(
-        color: NeighborlyColors.bgCard,
-        borderRadius: BorderRadius.circular(NeighborlyRadius.sm),
-      ),
-      child: Row(
-        children: [
-          // Image 80x80
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(NeighborlyRadius.xs),
-              gradient: const LinearGradient(
-                colors: [NeighborlyColors.accent, NeighborlyColors.accentTeal],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: service.imageUrl != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(NeighborlyRadius.xs),
-                    child: Image.network(
-                      service.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Icon(
-                          Icons.cleaning_services,
-                          color: Colors.white38,
-                          size: 30,
-                        ),
-                      ),
-                    ),
-                  )
-                : const Center(
-                    child: Icon(
-                      Icons.cleaning_services,
-                      color: Colors.white38,
-                      size: 30,
-                    ),
-                  ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
-          const SizedBox(width: NeighborlySpacing.s12),
-          // Content
-          Expanded(
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Image placeholder ────────────────────────────────────
+          Container(
+            height: 90,
+            width: double.infinity,
+            color: AppColors.primaryLight,
+            child: Icon(item.icon, size: 36, color: AppColors.primary),
+          ),
+          // ── Info ─────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  service.title,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: NeighborlyColors.textPrimary,
-                  ),
+                  item.name,
+                  style: AppTextStyles.titleMedium(color: AppColors.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  service.providerName,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: NeighborlyColors.textSecondary,
-                  ),
+                  item.provider,
+                  style: AppTextStyles.caption(color: AppColors.textMuted),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.star, size: 12, color: Colors.amber),
+                    const Icon(Icons.star, size: 12, color: AppColors.star),
                     const SizedBox(width: 2),
                     Text(
-                      service.rating.toStringAsFixed(1),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: NeighborlyColors.textSecondary,
-                      ),
+                      item.rating.toString(),
+                      style: AppTextStyles.caption(color: AppColors.textSecondary),
                     ),
-                    const SizedBox(width: NeighborlySpacing.s8),
-                    const Icon(Icons.location_on, size: 12, color: NeighborlyColors.textSecondary),
-                    const SizedBox(width: 2),
+                    const Spacer(),
                     Text(
-                      '0.5 km',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: NeighborlyColors.textSecondary,
-                      ),
+                      item.price,
+                      style: AppTextStyles.bodySmall(color: AppColors.primary),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(width: NeighborlySpacing.s8),
-          // Price
+        ],
+      ),
+    );
+  }
+}
+
+/// ── Filter Bottom Sheet ──────────────────────────────────────────────
+class _FilterSheet extends StatefulWidget {
+  final Set<String> selectedCategories;
+  final double distanceRange;
+  final int minRating;
+  final void Function(Set<String> categories, double distance, int rating) onApply;
+
+  const _FilterSheet({
+    required this.selectedCategories,
+    required this.distanceRange,
+    required this.minRating,
+    required this.onApply,
+  });
+
+  @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  late Set<String> _selectedCategories;
+  late double _distanceRange;
+  late int _minRating;
+
+  static const List<String> _allCategories = [
+    'Plumbing', 'Electrical', 'Cleaning', 'Painting', 'Moving', 'Garden',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCategories = Set.from(widget.selectedCategories);
+    _distanceRange = widget.distanceRange;
+    _minRating = widget.minRating;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppSpacing.lg,
+        right: AppSpacing.lg,
+        top: AppSpacing.lg,
+        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.xxl,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Handle ───────────────────────────────────────────────
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+
           Text(
-            service.formattedPrice,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: NeighborlyColors.accent,
-            ),
+            'Filters',
+            style: AppTextStyles.headingSmall(color: AppColors.textPrimary),
           ),
-        ],
-      ),
-    );
-  }
-}
+          const SizedBox(height: AppSpacing.lg),
 
-/// Skeleton for search results.
-class _SearchResultSkeleton extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(NeighborlySpacing.s12),
-      decoration: BoxDecoration(
-        color: NeighborlyColors.bgCard,
-        borderRadius: BorderRadius.circular(NeighborlyRadius.sm),
-      ),
-      child: Row(
-        children: [
-          const SkeletonBox(width: 80, height: 80, borderRadius: 12),
-          const SizedBox(width: NeighborlySpacing.s12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SkeletonBox(width: 140, height: 12, borderRadius: 4),
-                const SizedBox(height: 4),
-                const SkeletonBox(width: 90, height: 10, borderRadius: 4),
-                const SizedBox(height: 4),
-                const SkeletonBox(width: 110, height: 10, borderRadius: 4),
-              ],
-            ),
+          // ── Category ─────────────────────────────────────────────
+          Text(
+            'Category',
+            style: AppTextStyles.titleMedium(color: AppColors.textPrimary),
           ),
-          const SkeletonBox(width: 50, height: 14, borderRadius: 4),
-        ],
-      ),
-    );
-  }
-}
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _allCategories.map((cat) {
+              final selected = _selectedCategories.contains(cat);
+              return FilterChip(
+                label: Text(cat),
+                selected: selected,
+                onSelected: (val) {
+                  setState(() {
+                    if (val) {
+                      _selectedCategories.add(cat);
+                    } else {
+                      _selectedCategories.remove(cat);
+                    }
+                  });
+                },
+                selectedColor: AppColors.primary,
+                checkmarkColor: Colors.white,
+                labelStyle: TextStyle(
+                  color: selected ? Colors.white : AppColors.textPrimary,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+                side: BorderSide.none,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.chip),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: AppSpacing.xl),
 
-/// Skeleton for top rated items.
-class _TopRatedSkeleton extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(NeighborlySpacing.s12),
-      decoration: BoxDecoration(
-        color: NeighborlyColors.bgCard,
-        borderRadius: BorderRadius.circular(NeighborlyRadius.sm),
-      ),
-      child: Row(
-        children: [
-          const SkeletonBox(width: 80, height: 80, borderRadius: 12),
-          const SizedBox(width: NeighborlySpacing.s12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SkeletonBox(width: 140, height: 12, borderRadius: 4),
-                const SizedBox(height: 4),
-                const SkeletonBox(width: 90, height: 10, borderRadius: 4),
-                const SizedBox(height: 4),
-                const SkeletonBox(width: 110, height: 10, borderRadius: 4),
-              ],
+          // ── Distance ─────────────────────────────────────────────
+          Text(
+            'Distance: ${_distanceRange.toInt()} km',
+            style: AppTextStyles.titleMedium(color: AppColors.textPrimary),
+          ),
+          Slider(
+            value: _distanceRange,
+            min: 0,
+            max: 20,
+            divisions: 20,
+            activeColor: AppColors.primary,
+            inactiveColor: AppColors.border,
+            label: '${_distanceRange.toInt()} km',
+            onChanged: (val) => setState(() => _distanceRange = val),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // ── Min Rating ───────────────────────────────────────────
+          Text(
+            'Minimum Rating',
+            style: AppTextStyles.titleMedium(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: 8,
+            children: [0, 3, 4, 5].map((rating) {
+              final selected = _minRating == rating;
+              String label;
+              if (rating == 0) {
+                label = 'Any';
+              } else {
+                label = '$rating★';
+              }
+              return ChoiceChip(
+                label: Text(label),
+                selected: selected,
+                onSelected: (val) {
+                  if (val) setState(() => _minRating = rating);
+                },
+                selectedColor: AppColors.primary,
+                labelStyle: TextStyle(
+                  color: selected ? Colors.white : AppColors.textPrimary,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+                side: BorderSide.none,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.chip),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+
+          // ── Apply Button ─────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => widget.onApply(
+                _selectedCategories,
+                _distanceRange,
+                _minRating,
+              ),
+              child: const Text('Apply Filters'),
             ),
           ),
-          const SkeletonBox(width: 50, height: 14, borderRadius: 4),
         ],
       ),
     );

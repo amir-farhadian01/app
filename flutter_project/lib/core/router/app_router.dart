@@ -1,75 +1,49 @@
-import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../features/splash/splash_screen.dart';
-import '../../features/onboarding/onboarding_screen.dart';
-import '../../screens/auth_screen.dart';
-import '../../screens/booking_screen.dart';
-import '../../screens/business_profile_screen.dart';
-import '../../widgets/main_scaffold.dart';
+import '../../screens/splash_screen.dart';
+import '../../screens/onboarding_screen.dart';
+import '../../screens/login_screen.dart';
+import '../../screens/register_screen.dart';
+import '../../screens/home_screen.dart';
+import '../../screens/explore_screen.dart';
+import '../../screens/bookings_screen.dart';
+import '../../screens/profile_screen.dart';
+import '../../screens/service_detail_screen.dart';
+import '../../screens/order_detail_screen.dart';
+import '../../screens/business_dashboard_screen.dart';
+import '../../screens/business_services_screen.dart';
+import '../../screens/admin_dashboard_screen.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Neighborly App Router
+/// Neighborly App Router — go_router
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// Named routes used with [Navigator.pushNamed].
-///
-/// Routes:
-///   /                → SplashScreen
-///   /onboarding      → OnboardingScreen
-///   /auth            → AuthScreen (3-step phone/otp/username)
-///   /home            → MainScaffold (bottom nav / sidebar)
-///   /business-profile → BusinessProfileScreen
-///   /booking         → BookingScreen (Phase 3 entry point)
-/// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-abstract final class AppRoutes {
-  static const String splash           = '/';
-  static const String onboarding       = '/onboarding';
-  static const String auth             = '/auth';
-  static const String home             = '/home';
-  static const String businessProfile  = '/business-profile';
-  static const String booking          = '/booking';
-}
-
-/// Generate a [Route] for a given [RouteSettings].
-///
-/// Usage: Pass this as [MaterialApp.onGenerateRoute].
-Route<dynamic>? onGenerateAppRoute(RouteSettings settings) {
-  switch (settings.name) {
-    case AppRoutes.splash:
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => const SplashScreen(),
-      );
-    case AppRoutes.onboarding:
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => const OnboardingScreen(),
-      );
-    case AppRoutes.auth:
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => const AuthScreen(),
-      );
-    case AppRoutes.home:
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => const MainScaffold(),
-      );
-    case AppRoutes.businessProfile:
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => const BusinessProfileScreen(),
-      );
-    case AppRoutes.booking:
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => const BookingScreen(),
-      );
-    default:
-      // Fallback to splash
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => const SplashScreen(),
-      );
-  }
+abstract final class AppRouter {
+  static final GoRouter router = GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
+      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
+      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
+      GoRoute(path: '/explore', builder: (_, __) => const ExploreScreen()),
+      GoRoute(path: '/bookings', builder: (_, __) => const BookingsScreen()),
+      GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+      GoRoute(
+        path: '/service/:id',
+        builder: (_, state) => ServiceDetailScreen(
+          serviceId: state.pathParameters['id'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/order/:id',
+        builder: (_, state) => OrderDetailScreen(
+          orderId: state.pathParameters['id'] ?? '',
+        ),
+      ),
+      GoRoute(path: '/business/dashboard', builder: (_, __) => const BusinessDashboardScreen()),
+      GoRoute(path: '/business/services', builder: (_, __) => const BusinessServicesScreen()),
+      GoRoute(path: '/admin/dashboard', builder: (_, __) => const AdminDashboardScreen()),
+    ],
+  );
 }

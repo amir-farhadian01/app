@@ -13,10 +13,10 @@ String get apiOrigin {
   if (trimmed.isNotEmpty) return trimmed;
   if (kIsWeb) {
     // Flutter dev server origin has no API — without this, every request fails.
-    if (kDebugMode) return 'http://localhost:8077';
+    if (kDebugMode) return 'http://localhost:3000';
     return Uri.base.origin;
   }
-  return 'http://10.0.2.2:8077';
+  return 'http://10.0.2.2:3000';
 }
 
 class ApiException implements Exception {

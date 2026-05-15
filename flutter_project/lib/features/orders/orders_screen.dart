@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../services/api_service.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /// Orders Screen (Redesigned)
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// TabBar: Active | Completed | Cancelled. All data is hardcoded mock.
+/// TabBar: Active | Completed | Cancelled. Orders loaded from API.
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class OrdersScreen extends StatefulWidget {
@@ -19,16 +20,47 @@ class _OrdersScreenState extends State<OrdersScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _orders = [];
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_onTabChanged);
+    Future.microtask(() => _loadOrders('active'));
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    const statuses = ['active', 'completed', 'cancelled'];
+    _loadOrders(statuses[_tabController.index]);
+  }
+
+  Future<void> _loadOrders(String status) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final result = await ApiService.getOrdersByStatus(status);
+      if (!mounted) return;
+      setState(() {
+        _orders = result.cast<Map<String, dynamic>>();
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connection error')),
+      );
+    }
   }
 
   @override
@@ -74,19 +106,22 @@ class _OrdersScreenState extends State<OrdersScreen>
                 controller: _tabController,
                 children: [
                   _OrdersList(
-                    orders: _activeOrders,
+                    orders: _orders,
+                    isLoading: _isLoading,
                     emptyIcon: Icons.pending_actions,
                     emptyMessage: 'No active orders',
                     emptySubtitle: 'Book a service to get started',
                   ),
                   _OrdersList(
-                    orders: _completedOrders,
+                    orders: _orders,
+                    isLoading: _isLoading,
                     emptyIcon: Icons.check_circle_outline,
                     emptyMessage: 'No completed orders',
                     emptySubtitle: 'Your completed orders will appear here',
                   ),
                   _OrdersList(
-                    orders: _cancelledOrders,
+                    orders: _orders,
+                    isLoading: _isLoading,
                     emptyIcon: Icons.cancel_outlined,
                     emptyMessage: 'No cancelled orders',
                     emptySubtitle: 'You have no cancelled orders',
@@ -101,101 +136,17 @@ class _OrdersScreenState extends State<OrdersScreen>
   }
 }
 
-// ── Mock Data ─────────────────────────────────────────────────────────
-
-const List<_OrderData> _activeOrders = [
-  _OrderData(
-    id: '#1042',
-    service: 'Pipe Repair',
-    provider: 'Mike D.',
-    initials: 'M.D.',
-    dateTime: 'Tomorrow, 10:00 AM',
-    status: 'Confirmed',
-    statusColor: Color(0xFF01696F),
-  ),
-  _OrderData(
-    id: '#1045',
-    service: 'Electrical Wiring',
-    provider: 'Reza M.',
-    initials: 'R.M.',
-    dateTime: 'Fri, May 18, 2:00 PM',
-    status: 'In Progress',
-    statusColor: Color(0xFFF59E0B),
-  ),
-];
-
-const List<_OrderData> _completedOrders = [
-  _OrderData(
-    id: '#1038',
-    service: 'Home Cleaning',
-    provider: 'Layla K.',
-    initials: 'L.K.',
-    dateTime: 'May 10, 2026',
-    status: 'Completed',
-    statusColor: Color(0xFF437A22),
-  ),
-  _OrderData(
-    id: '#1035',
-    service: 'Interior Painting',
-    provider: 'Layla K.',
-    initials: 'L.K.',
-    dateTime: 'Apr 28, 2026',
-    status: 'Completed',
-    statusColor: Color(0xFF437A22),
-  ),
-  _OrderData(
-    id: '#1030',
-    service: 'Outlet Installation',
-    provider: 'Reza M.',
-    initials: 'R.M.',
-    dateTime: 'Apr 15, 2026',
-    status: 'Completed',
-    statusColor: Color(0xFF437A22),
-  ),
-];
-
-const List<_OrderData> _cancelledOrders = [
-  _OrderData(
-    id: '#1025',
-    service: 'Garden Maintenance',
-    provider: 'Omar S.',
-    initials: 'O.S.',
-    dateTime: 'Mar 20, 2026',
-    status: 'Cancelled',
-    statusColor: Color(0xFFA12C7B),
-  ),
-];
-
-/// ── Order Data Model ─────────────────────────────────────────────────
-class _OrderData {
-  final String id;
-  final String service;
-  final String provider;
-  final String initials;
-  final String dateTime;
-  final String status;
-  final Color statusColor;
-
-  const _OrderData({
-    required this.id,
-    required this.service,
-    required this.provider,
-    required this.initials,
-    required this.dateTime,
-    required this.status,
-    required this.statusColor,
-  });
-}
-
 /// ── Orders List Widget ───────────────────────────────────────────────
 class _OrdersList extends StatelessWidget {
-  final List<_OrderData> orders;
+  final List<Map<String, dynamic>> orders;
+  final bool isLoading;
   final IconData emptyIcon;
   final String emptyMessage;
   final String emptySubtitle;
 
   const _OrdersList({
     required this.orders,
+    required this.isLoading,
     required this.emptyIcon,
     required this.emptyMessage,
     required this.emptySubtitle,
@@ -203,6 +154,10 @@ class _OrdersList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     if (orders.isEmpty) {
       return Center(
         child: Padding(
@@ -247,14 +202,15 @@ class _OrdersList extends StatelessWidget {
 
 /// ── Order Card Widget ────────────────────────────────────────────────
 class _OrderCard extends StatelessWidget {
-  final _OrderData order;
+  final Map<String, dynamic> order;
 
   const _OrderCard({required this.order});
 
   @override
   Widget build(BuildContext context) {
-    final isCancelled = order.status == 'Cancelled';
-    final isCompleted = order.status == 'Completed';
+    final status = order['status'] as String? ?? '';
+    final isCancelled = status == 'Cancelled' || status == 'cancelled';
+    final isCompleted = status == 'Completed' || status == 'completed';
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -281,7 +237,7 @@ class _OrderCard extends StatelessWidget {
                 radius: 20,
                 backgroundColor: AppColors.primaryLight,
                 child: Text(
-                  order.initials,
+                  order['initials'] ?? '?',
                   style: AppTextStyles.bodySmall(color: AppColors.primary),
                 ),
               ),
@@ -292,12 +248,12 @@ class _OrderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      order.service,
+                      order['service'] ?? order['id'] ?? 'Order',
                       style: AppTextStyles.titleMedium(color: AppColors.textPrimary),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${order.provider} • ${order.id}',
+                      '${order['provider'] ?? ''} • ${order['id'] ?? ''}',
                       style: AppTextStyles.caption(color: AppColors.textMuted),
                     ),
                   ],
@@ -307,12 +263,12 @@ class _OrderCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: order.statusColor.withValues(alpha: 0.1),
+                  color: _statusColor(status).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  order.status,
-                  style: AppTextStyles.caption(color: order.statusColor),
+                  status,
+                  style: AppTextStyles.caption(color: _statusColor(status)),
                 ),
               ),
             ],
@@ -325,7 +281,7 @@ class _OrderCard extends StatelessWidget {
               const Icon(Icons.schedule, size: 14, color: AppColors.textMuted),
               const SizedBox(width: 6),
               Text(
-                order.dateTime,
+                order['createdAt'] ?? order['dateTime'] ?? '',
                 style: AppTextStyles.bodySmall(color: AppColors.textSecondary),
               ),
             ],
@@ -369,5 +325,21 @@ class _OrderCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Color _statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'active':
+      case 'confirmed':
+        return const Color(0xFF01696F);
+      case 'in progress':
+        return const Color(0xFFF59E0B);
+      case 'completed':
+        return const Color(0xFF437A22);
+      case 'cancelled':
+        return const Color(0xFFA12C7B);
+      default:
+        return AppColors.textMuted;
+    }
   }
 }

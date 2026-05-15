@@ -75,17 +75,17 @@ class ServiceCardSkeleton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Image placeholder
-          const SkeletonBox(
+          SkeletonBox(
             width: 180,
             height: 80,
             borderRadius: 0,
           ),
           // Content padding
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,11 +121,11 @@ class PostCardSkeleton extends StatelessWidget {
             : Colors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header: avatar + name + time
-          const Row(
+          Row(
             children: [
               SkeletonBox(width: 40, height: 40, borderRadius: 20),
               SizedBox(width: 12),
@@ -141,21 +141,21 @@ class PostCardSkeleton extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           // Content lines
-          const SkeletonBox(width: double.infinity, height: 10, borderRadius: 4),
-          const SizedBox(height: 4),
-          const SkeletonBox(width: 150, height: 10, borderRadius: 4),
-          const SizedBox(height: 12),
+          SkeletonBox(width: double.infinity, height: 10, borderRadius: 4),
+          SizedBox(height: 4),
+          SkeletonBox(width: 150, height: 10, borderRadius: 4),
+          SizedBox(height: 12),
           // Image placeholder
-          const SkeletonBox(
+          SkeletonBox(
             width: double.infinity,
             height: 160,
             borderRadius: 8,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           // Action row
-          const Row(
+          Row(
             children: [
               SkeletonBox(width: 40, height: 14, borderRadius: 4),
               SizedBox(width: 16),

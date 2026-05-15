@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../services/api_service.dart';
 import '../../widgets/home/provider_card.dart';
 import '../../widgets/home/service_card.dart';
 
@@ -8,11 +9,47 @@ import '../../widgets/home/service_card.dart';
 /// Feed Screen — Home Tab (Redesigned)
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /// Location chip, greeting, hero cards, categories, providers, services.
-/// All data is hardcoded mock.
+/// Providers and categories loaded from API; hero cards and services are mock.
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-class FeedScreen extends StatelessWidget {
+class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
+
+  @override
+  State<FeedScreen> createState() => _FeedScreenState();
+}
+
+class _FeedScreenState extends State<FeedScreen> {
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _providers = [];
+  List<Map<String, dynamic>> _categories = [];
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => _loadData());
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final providers = await ApiService.getNearbyProviders(43.8, -79.5);
+      final categories = await ApiService.getCategories();
+      if (!mounted) return;
+      setState(() {
+        _providers = providers.cast<Map<String, dynamic>>();
+        _categories = categories.cast<Map<String, dynamic>>();
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connection error')),
+      );
+    }
+  }
 
   // ── Mock Hero Cards ──────────────────────────────────────────────
   static const List<_HeroCardData> _heroCards = [
@@ -32,8 +69,8 @@ class FeedScreen extends StatelessWidget {
     ),
   ];
 
-  // ── Mock Categories ──────────────────────────────────────────────
-  static const List<_CategoryData> _categories = [
+  // ── Mock Categories (fallback) ───────────────────────────────────
+  static const List<_CategoryData> _mockCategories = [
     _CategoryData(name: 'Plumbing', emoji: '🔧'),
     _CategoryData(name: 'Electrical', emoji: '⚡'),
     _CategoryData(name: 'Cleaning', emoji: '🧹'),
@@ -42,14 +79,8 @@ class FeedScreen extends StatelessWidget {
     _CategoryData(name: 'Garden', emoji: '🌿'),
   ];
 
-  // ── Mock Nearby Providers ────────────────────────────────────────
-  static const List<_ProviderData> _providers = [
-    _ProviderData(name: 'Mike D.', initials: 'M.D.', category: 'Plumber', rating: 4.8, distance: '1.2 km'),
-    _ProviderData(name: 'Layla K.', initials: 'L.K.', category: 'Painter', rating: 4.9, distance: '0.8 km'),
-    _ProviderData(name: 'Reza M.', initials: 'R.M.', category: 'Electrician', rating: 4.7, distance: '3.1 km'),
-  ];
-
   // ── Mock Recent Services ─────────────────────────────────────────
+  // TODO: implement endpoint GET /api/services/recent
   static const List<_ServiceData> _services = [
     _ServiceData(name: 'Pipe Repair', icon: Icons.plumbing, priceRange: '\$40–\$80', status: 'Available', statusColor: Color(0xFF437A22)),
     _ServiceData(name: 'Outlet Installation', icon: Icons.electrical_services, priceRange: '\$35–\$60', status: 'Busy', statusColor: Color(0xFFF59E0B)),
@@ -83,7 +114,7 @@ class FeedScreen extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.location_on, size: 16, color: AppColors.primary),
+                          const Icon(Icons.location_on, size: 16, color: AppColors.primary),
                           const SizedBox(width: 4),
                           Text(
                             'Vaughan, ON',
@@ -142,12 +173,18 @@ class FeedScreen extends StatelessWidget {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  itemCount: _categories.length,
+                  itemCount: _categories.isNotEmpty ? _categories.length : _mockCategories.length,
                   separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
                   itemBuilder: (context, index) {
-                    final cat = _categories[index];
+                    String label;
+                    if (_categories.isNotEmpty) {
+                      final cat = _categories[index];
+                      label = cat['name'] ?? 'Category';
+                    } else {
+                      label = '${_mockCategories[index].emoji} ${_mockCategories[index].name}';
+                    }
                     return FilterChip(
-                      label: Text('${cat.emoji} ${cat.name}'),
+                      label: Text(label),
                       selected: index == 0,
                       onSelected: (_) {},
                       selectedColor: AppColors.primary,
@@ -187,24 +224,43 @@ class FeedScreen extends StatelessWidget {
                 ),
               ),
             ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              sliver: SliverList.separated(
-                itemCount: _providers.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 0),
-                itemBuilder: (context, index) {
-                  final p = _providers[index];
-                  return ProviderCard(
-                    name: p.name,
-                    serviceType: p.category,
-                    rating: p.rating,
-                    reviewCount: 42,
-                    initials: p.initials,
-                    onTap: () {},
-                  );
-                },
+            if (_isLoading)
+              const SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.xxl),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+              )
+            else if (_providers.isEmpty)
+              const SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.xxl),
+                    child: Text('No providers nearby'),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                sliver: SliverList.separated(
+                  itemCount: _providers.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 0),
+                  itemBuilder: (context, index) {
+                    final p = _providers[index];
+                    return ProviderCard(
+                      name: p['displayName'] ?? p['name'] ?? 'Provider',
+                      serviceType: p['category'] ?? '',
+                      rating: (p['rating'] ?? 0.0).toDouble(),
+                      reviewCount: 42,
+                      initials: p['initials'] ?? '?',
+                      onTap: () {},
+                    );
+                  },
+                ),
               ),
-            ),
             const SizedBox(height: AppSpacing.lg),
 
             // ── Recent Services Section ────────────────────────────
@@ -260,23 +316,6 @@ class _CategoryData {
   final String emoji;
 
   const _CategoryData({required this.name, required this.emoji});
-}
-
-/// ── Provider Data Model ──────────────────────────────────────────────
-class _ProviderData {
-  final String name;
-  final String initials;
-  final String category;
-  final double rating;
-  final String distance;
-
-  const _ProviderData({
-    required this.name,
-    required this.initials,
-    required this.category,
-    required this.rating,
-    required this.distance,
-  });
 }
 
 /// ── Service Data Model ───────────────────────────────────────────────

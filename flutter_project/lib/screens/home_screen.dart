@@ -141,7 +141,7 @@ class _HomeContentState extends State<_HomeContent> {
           ),
           child: Row(
             children: [
-              Icon(Icons.search, color: AppColors.textMuted, size: 20),
+              const Icon(Icons.search, color: AppColors.textMuted, size: 20),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 'Search services...',
@@ -337,11 +337,11 @@ class _HomeContentState extends State<_HomeContent> {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             child: Row(
               children: [
-                Icon(Icons.favorite_border, size: 20, color: AppColors.textPrimary),
+                const Icon(Icons.favorite_border, size: 20, color: AppColors.textPrimary),
                 const SizedBox(width: AppSpacing.xs),
                 Text('${post.likes}', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textMuted)),
                 const SizedBox(width: AppSpacing.lg),
-                Icon(Icons.chat_bubble_outline, size: 20, color: AppColors.textPrimary),
+                const Icon(Icons.chat_bubble_outline, size: 20, color: AppColors.textPrimary),
                 const SizedBox(width: AppSpacing.xs),
                 Text('${post.comments}', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textMuted)),
               ],

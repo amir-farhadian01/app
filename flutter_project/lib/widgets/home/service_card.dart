@@ -94,7 +94,7 @@ class ServiceCard extends StatelessWidget {
                   // Rating row
                   Row(
                     children: [
-                      Icon(Icons.star, size: 14, color: Colors.amber),
+                      const Icon(Icons.star, size: 14, color: Colors.amber),
                       const SizedBox(width: 2),
                       Text(
                         rating.toStringAsFixed(1),

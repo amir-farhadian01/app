@@ -122,7 +122,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                       ))
                   .toList(),
             ),
-            VerticalDivider(width: 1, color: NeighborlyColors.textFaint),
+            const VerticalDivider(width: 1, color: NeighborlyColors.textFaint),
             // Content
             Expanded(
               child: IndexedStack(
@@ -146,7 +146,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         children: _screens,
       ),
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           border: Border(
             top: BorderSide(
               color: NeighborlyColors.textFaint,

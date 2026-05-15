@@ -189,7 +189,7 @@ class ServiceDetailScreen extends StatelessWidget {
                             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                             child: Row(
                               children: [
-                                Icon(
+                                const Icon(
                                   Icons.check_circle,
                                   size: 20,
                                   color: AppColors.success,

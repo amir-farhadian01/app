@@ -36,7 +36,7 @@ class _ProfileContent extends StatelessWidget {
             // ── Cover Area ───────────────────────────────────────
             Container(
               height: 120,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     AppColors.primary,

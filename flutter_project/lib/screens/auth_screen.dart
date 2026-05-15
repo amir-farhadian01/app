@@ -318,8 +318,8 @@ class _AuthScreenState extends State<AuthScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  decoration: BoxDecoration(
-                    border: const Border(
+                  decoration: const BoxDecoration(
+                    border: Border(
                       right: BorderSide(color: NeighborlyColors.textFaint),
                     ),
                   ),

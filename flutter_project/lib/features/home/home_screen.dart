@@ -116,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TextField(
                 decoration: InputDecoration(
                   hintText: 'Search services, providers...',
-                  prefixIcon: Icon(
+                  prefixIcon: const Icon(
                     Icons.search,
                     color: NeighborlyColors.accent,
                   ),

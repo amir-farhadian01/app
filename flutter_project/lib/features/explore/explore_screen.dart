@@ -133,7 +133,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.search_off, size: 64, color: AppColors.textFaint),
+                          const Icon(Icons.search_off, size: 64, color: AppColors.textFaint),
                           const SizedBox(height: AppSpacing.md),
                           Text(
                             'No services found',

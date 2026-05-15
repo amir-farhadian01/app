@@ -39,7 +39,7 @@ class RatingBar extends StatelessWidget {
         if (count > 0) ...[
           const SizedBox(width: 4),
           Text(
-            '(${count})',
+            '($count)',
             style: GoogleFonts.plusJakartaSans(
               fontSize: size - 2,
               fontWeight: FontWeight.w400,

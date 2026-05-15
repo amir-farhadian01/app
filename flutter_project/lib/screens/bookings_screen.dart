@@ -172,7 +172,7 @@ class _BookingsContentState extends State<_BookingsContent>
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(AppRadius.button),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.calendar_today,
                 color: AppColors.primary,
                 size: 22,

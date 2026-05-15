@@ -13,7 +13,7 @@ String get apiOrigin {
   if (trimmed.isNotEmpty) return trimmed;
   if (kIsWeb) {
     // Flutter dev server origin has no API — without this, every request fails.
-    if (kDebugMode) return 'http://localhost:3000';
+    if (kDebugMode) return 'http://localhost:8080';
     return Uri.base.origin;
   }
   return 'http://10.0.2.2:3000';
@@ -207,4 +207,38 @@ class ApiService {
       get('/api/categories', params: {
         if (parentId != null) 'parentId': parentId,
       }).then((v) => v as List);
+
+  // ─── Nearby Providers ──────────────────────────────────────────────────────
+  static Future<List<dynamic>> getNearbyProviders(double lat, double lng) async {
+    try {
+      final result = await get('/api/providers/nearby', params: {
+        'lat': lat.toString(),
+        'lng': lng.toString(),
+      });
+      return result as List;
+    } catch (_) {
+      return [];
+    }
+    // TODO: implement endpoint GET /api/providers/nearby?lat=&lng=
+  }
+
+  // ─── Orders ────────────────────────────────────────────────────────────────
+  // status: 'active' | 'completed' | 'cancelled'
+  static Future<List<dynamic>> getOrdersByStatus(String status) async {
+    try {
+      final result = await get('/api/orders', params: {'status': status});
+      return result as List;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ─── Profile ───────────────────────────────────────────────────────────────
+  static Future<Map<String, dynamic>?> getMyProfile() async {
+    try {
+      return await get('/api/auth/me') as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
 }

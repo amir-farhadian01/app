@@ -54,7 +54,7 @@ class _ExploreContent extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.search, color: AppColors.textMuted, size: 20),
+                  const Icon(Icons.search, color: AppColors.textMuted, size: 20),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
@@ -71,7 +71,7 @@ class _ExploreContent extends StatelessWidget {
                     color: AppColors.divider,
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  Icon(Icons.tune, color: AppColors.textMuted, size: 20),
+                  const Icon(Icons.tune, color: AppColors.textMuted, size: 20),
                 ],
               ),
             ),

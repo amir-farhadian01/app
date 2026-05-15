@@ -1,16 +1,46 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../services/api_service.dart';
 
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /// Profile Screen (Redesigned)
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /// Hero section, stats row, menu sections with ListTiles.
-/// All data is hardcoded mock.
+/// Name, email, and stats loaded from API.
 /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _isLoading = true;
+  Map<String, dynamic>? _profileData;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => _loadProfile());
+  }
+
+  Future<void> _loadProfile() async {
+    if (!mounted) return;
+    final data = await ApiService.getMyProfile();
+    if (!mounted) return;
+    setState(() {
+      _profileData = data;
+      _isLoading = false;
+    });
+    if (data == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connection error')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,19 +73,35 @@ class ProfileScreen extends StatelessWidget {
                     CircleAvatar(
                       radius: 36,
                       backgroundColor: AppColors.primary,
-                      child: Text(
-                        'A.F.',
-                        style: AppTextStyles.headingLarge(color: Colors.white),
-                      ),
+                      child: _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : Text(
+                              _profileData?['displayName'] != null
+                                  ? _initials(_profileData!['displayName'])
+                                  : '?',
+                              style: AppTextStyles.headingLarge(color: Colors.white),
+                            ),
                     ),
                     const SizedBox(height: AppSpacing.md),
 
                     // Name
                     Text(
-                      'Amir F.',
+                      _isLoading
+                          ? ''
+                          : _profileData?['displayName'] ?? 'User',
                       style: AppTextStyles.headingSmall(color: AppColors.textPrimary),
                     ),
                     const SizedBox(height: AppSpacing.sm),
+
+                    // Email
+                    if (!_isLoading && _profileData?['email'] != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: Text(
+                          _profileData!['email'],
+                          style: AppTextStyles.bodySmall(color: AppColors.textMuted),
+                        ),
+                      ),
 
                     // Role badge
                     Container(
@@ -68,7 +114,7 @@ class ProfileScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'Customer',
+                        _profileData?['role'] ?? 'Customer',
                         style: AppTextStyles.caption(color: AppColors.primary),
                       ),
                     ),
@@ -84,19 +130,38 @@ class ProfileScreen extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _StatItem(value: '12', label: 'Orders'),
+                          _StatItem(
+                            value: _isLoading
+                                ? '—'
+                                : (_profileData?['stats']?['rating']?.toString() ??
+                                    _profileData?['rating']?.toString() ??
+                                    '—'),
+                            label: 'Rating',
+                          ),
                           Container(
                             width: 1,
                             height: 32,
                             color: AppColors.divider,
                           ),
-                          _StatItem(value: '3', label: 'Reviews'),
+                          _StatItem(
+                            value: _isLoading
+                                ? '—'
+                                : (_profileData?['stats']?['completedRequests']?.toString() ??
+                                    '—'),
+                            label: 'Orders',
+                          ),
                           Container(
                             width: 1,
                             height: 32,
                             color: AppColors.divider,
                           ),
-                          _StatItem(value: '2024', label: 'Member since'),
+                          _StatItem(
+                            value: _isLoading
+                                ? '—'
+                                : (_profileData?['stats']?['reviewsCount']?.toString() ??
+                                    '—'),
+                            label: 'Reviews',
+                          ),
                         ],
                       ),
                     ),
@@ -124,7 +189,7 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: AppSpacing.xxl),
 
               // ── Account Section ──────────────────────────────────
-              _SectionHeader(title: 'Account'),
+              const _SectionHeader(title: 'Account'),
               _MenuTile(
                 icon: Icons.location_on_outlined,
                 title: 'My Addresses',
@@ -138,11 +203,11 @@ class ProfileScreen extends StatelessWidget {
               const Divider(height: 1, indent: AppSpacing.lg, color: AppColors.divider),
 
               // ── Preferences Section ──────────────────────────────
-              _SectionHeader(title: 'Preferences'),
+              const _SectionHeader(title: 'Preferences'),
               _MenuTile(
                 icon: Icons.notifications_outlined,
                 title: 'Notifications',
-                trailing: _ToggleChip(value: true),
+                trailing: const _ToggleChip(value: true),
                 onTap: () {},
               ),
               _MenuTile(
@@ -157,13 +222,13 @@ class ProfileScreen extends StatelessWidget {
               _MenuTile(
                 icon: Icons.dark_mode_outlined,
                 title: 'Theme',
-                trailing: _ToggleChip(value: false),
+                trailing: const _ToggleChip(value: false),
                 onTap: () {},
               ),
               const Divider(height: 1, indent: AppSpacing.lg, color: AppColors.divider),
 
               // ── Support Section ──────────────────────────────────
-              _SectionHeader(title: 'Support'),
+              const _SectionHeader(title: 'Support'),
               _MenuTile(
                 icon: Icons.help_outline,
                 title: 'Help Center',
@@ -189,6 +254,14 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+    }
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 }
 
